@@ -35,6 +35,35 @@ PxRaycastHit* allocateRaycastHitBuffers(PxU32 nb) {
   return myArray;
 }
 
+struct PxSweepCallbackWrapper : public wrapper<PxSweepCallback> {
+  EMSCRIPTEN_WRAPPER(PxSweepCallbackWrapper)
+  PxAgain processTouches(const PxSweepHit *buffer, PxU32 nbHits) {
+    for (PxU32 i = 0; i < nbHits; i++) {
+      bool again = call<PxAgain>("processTouches", buffer[i]);
+      if (!again) {
+        return false;
+      }
+    }
+    return true;
+  }
+};
+
+PxSweepHit* allocateSweepHitBuffers(PxU32 nb) {
+  PxSweepHit *myArray = new PxSweepHit[nb];
+  return myArray;
+}
+
+struct PxQueryFilterCallbackWrapper : public wrapper<PxQueryFilterCallback> {
+  EMSCRIPTEN_WRAPPER(PxQueryFilterCallbackWrapper)
+  PxQueryHitType::Enum postFilter(const PxFilterData &filterData, const PxQueryHit &hit) {
+    return call<PxQueryHitType::Enum>("postFilter", filterData, hit);
+  }
+  PxQueryHitType::Enum preFilter(const PxFilterData &filterData, const PxShape *shape, const PxRigidActor *actor, PxHitFlags&) {
+    PxQueryHitType::Enum hitType = call<PxQueryHitType::Enum>("preFilter", filterData, shape, actor);
+    return hitType;
+  }
+};
+
 struct PxSimulationEventCallbackWrapper : public wrapper<PxSimulationEventCallback> {
   EMSCRIPTEN_WRAPPER(PxSimulationEventCallbackWrapper)
   void onConstraintBreak(PxConstraintInfo *, PxU32) {}
@@ -272,7 +301,8 @@ EMSCRIPTEN_BINDINGS(physx)
                                       bool fetched = scene.fetchResults(block);
                                       return fetched;
                                     }))
-      .function("raycast", &PxScene::raycast, allow_raw_pointers());
+      .function("raycast", &PxScene::raycast, allow_raw_pointers())
+      .function("sweep", &PxScene::sweep, allow_raw_pointers());
 
   class_<PxLocationHit>("PxLocationHit")
       .property("position", &PxLocationHit::position)
@@ -291,6 +321,23 @@ EMSCRIPTEN_BINDINGS(physx)
 
   function("allocateRaycastHitBuffers", &allocateRaycastHitBuffers, allow_raw_pointers());
 
+  class_<PxSweepHit, base<PxLocationHit>>("PxSweepHit").constructor<>()
+      .function("getShape", optional_override(
+                                [](PxSweepHit &block){
+                                  return block.shape;
+                                }), allow_raw_pointers())
+      .function("getActor", optional_override(
+                                [](PxSweepHit &block){
+                                  return block.actor;
+                                }), allow_raw_pointers());
+  class_<PxSweepCallback>("PxSweepCallback")
+      .property("block", &PxSweepCallback::block)
+      .property("hasBlock", &PxSweepCallback::hasBlock)
+      .allow_subclass<PxSweepCallbackWrapper>("PxSweepCallbackWrapper", constructor<PxSweepHit*, PxU32>());
+  class_<PxSweepBuffer, base<PxSweepCallback>>("PxSweepBuffer").constructor<>();
+
+  function("allocateSweepHitBuffers", &allocateSweepHitBuffers, allow_raw_pointers());
+
   class_<PxHitFlags>("PxHitFlags").constructor<int>();
   enum_<PxHitFlag::Enum>("PxHitFlag")
       .value("eDEFAULT", PxHitFlag::Enum::eDEFAULT)
@@ -305,8 +352,13 @@ EMSCRIPTEN_BINDINGS(physx)
       .value("eDYNAMIC", PxQueryFlag::Enum::eDYNAMIC)
       .value("eSTATIC", PxQueryFlag::Enum::eSTATIC)
       .value("eNO_BLOCK", PxQueryFlag::Enum::eNO_BLOCK);
+  enum_<PxQueryHitType::Enum>("PxQueryHitType")
+      .value("eNONE", PxQueryHitType::Enum::eNONE)
+      .value("eBLOCK", PxQueryHitType::Enum::eBLOCK)
+      .value("eTOUCH", PxQueryHitType::Enum::eTOUCH);
 
-  class_<PxQueryFilterCallback>("PxQueryFilterCallback");
+  class_<PxQueryFilterCallback>("PxQueryFilterCallback")
+      .allow_subclass<PxQueryFilterCallbackWrapper>("PxQueryFilterCallbackWrapper", constructor<>());
   class_<PxQueryCache>("PxQueryCache");
 
   class_<PxMaterial>("PxMaterial")
@@ -323,6 +375,9 @@ EMSCRIPTEN_BINDINGS(physx)
       .function("getBoxGeometry", &PxShape::getBoxGeometry, allow_raw_pointers())
       .function("getSphereGeometry", &PxShape::getSphereGeometry, allow_raw_pointers())
       .function("getPlaneGeometry", &PxShape::getPlaneGeometry, allow_raw_pointers())
+      .function("setSimulationFilterData", &PxShape::setSimulationFilterData, allow_raw_pointers())
+      .function("setQueryFilterData", &PxShape::setQueryFilterData)
+      .function("getQueryFilterData", &PxShape::getQueryFilterData, allow_raw_pointers())
       .function("setMaterials", optional_override(
                                     [](PxShape &shape, std::vector<PxMaterial *> materials) {
                                       return shape.setMaterials(materials.data(), materials.size());
@@ -402,6 +457,8 @@ EMSCRIPTEN_BINDINGS(physx)
       .function("setAngularVelocity", &PxRigidBody::setAngularVelocity)
       .function("getAngularVelocity", &PxRigidBody::getAngularVelocity)
       .function("setMass", &PxRigidBody::setMass)
+      .function("getMass", &PxRigidBody::getMass)
+      .function("setCMassLocalPose", &PxRigidBody::setCMassLocalPose, allow_raw_pointers())
       .function("setLinearVelocity", &PxRigidBody::setLinearVelocity)
       .function("getLinearVelocity", &PxRigidBody::getLinearVelocity)
       .function("addForceAtPos", optional_override(
@@ -531,9 +588,18 @@ EMSCRIPTEN_BINDINGS(physx)
       .function("shiftOrigin", &PxControllerManager::shiftOrigin);
     
   class_<PxController>("PxController")
+      .function("release", &PxController::release)
       .function("move", &PxController::move, allow_raw_pointers())
       .function("setPosition", &PxController::setPosition)
-      .function("getPosition", &PxController::getPosition);
+      .function("getPosition", &PxController::getPosition)
+      .function("setSimulationFilterData", optional_override(
+          [](PxController &ctrl, PxFilterData &data) {
+            PxRigidDynamic* actor = ctrl.getActor();
+            PxShape* shape;
+            actor->getShapes(&shape, 1);
+            shape->setSimulationFilterData(data);
+            return;
+          }));
 
   class_<PxControllerDesc>("PxControllerDesc")
       .function("isValid", &PxControllerDesc::isValid)
@@ -565,7 +631,8 @@ EMSCRIPTEN_BINDINGS(physx)
   class_<PxObstacleContext>("PxObstacleContext");
 
   class_<PxControllerFilters>("PxControllerFilters")
-      .constructor<const PxFilterData*, PxQueryFilterCallback*, PxControllerFilterCallback*>();
+      .constructor<const PxFilterData*, PxQueryFilterCallback*, PxControllerFilterCallback*>()
+      .property("mFilterFlags", &PxControllerFilters::mFilterFlags);
 
 	class_<PxControllerFilterCallback>("ControllerFilterCallback");
 
