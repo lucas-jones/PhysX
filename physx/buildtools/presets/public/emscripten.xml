@@ -8,5 +8,6 @@
   </CMakeSwitches>
   <CMakeParams>
     <cmakeParam name="CMAKE_INSTALL_PREFIX" value="install/emscripten/PhysX" comment="Install path relative to PhysX SDK root" />
+    <cmakeParam name="CMAKE_CXX_FLAGS_RELEASE" value="'-DNDEBUG -O3'" comment="Releas compiler flags" />
   </CMakeParams>
 </preset>

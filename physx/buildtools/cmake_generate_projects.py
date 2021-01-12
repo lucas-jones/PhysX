@@ -297,7 +297,7 @@ class CMakePreset:
         elif self.targetPlatform == 'emscripten':
             outString = outString + ' -DTARGET_BUILD_PLATFORM=emscripten'
             outString = outString + ' -DCMAKE_TOOLCHAIN_FILE=\"' + \
-                os.path.join(os.environ['EMSCRIPTEN'] + '/cmake/Modules/Platform/Emscripten.cmake\"')
+                os.path.join(os.environ['EMSDK'] + '/upstream/emscripten/cmake/Modules/Platform/Emscripten.cmake\"')
             return outString
         return ''
 
