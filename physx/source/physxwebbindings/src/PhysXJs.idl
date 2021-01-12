@@ -1,0 +1,553 @@
+
+/****************************************
+ * Static methods / fields
+ ****************************************/
+
+interface PxTopLevelFunctions {
+    void PxTopLevelFunctions();
+
+    static readonly attribute long PHYSICS_VERSION;
+
+    static PxCooking CreateCooking(long version, [Ref] PxFoundation foundation, [Const, Ref] PxCookingParams scale);
+    static PxFoundation CreateFoundation(long version, [Ref] PxDefaultAllocator allocator, [Ref] PxDefaultErrorCallback errorCallback);
+    static PxPhysics CreatePhysics(long version, [Ref] PxFoundation foundation, [Const, Ref] PxTolerancesScale params);
+    static PxDefaultCpuDispatcher DefaultCpuDispatcherCreate(long numThreads);
+    [Value] static PxSimulationFilterShader DefaultFilterShader();
+    static boolean InitExtensions([Ref] PxPhysics physics);
+    static PxRevoluteJoint RevoluteJointCreate([Ref] PxPhysics physics, PxRigidActor actor0, [Ref] PxTransform localFrame0, PxRigidActor actor1, [Ref] PxTransform localFrame1);
+
+    static long getU8At(any pointer, long index);
+    [Value] static PxVec3 getVec3At(any pointer, long index);
+};
+
+/****************************************
+ * Physics
+ ****************************************/
+
+[Prefix="physx::", NoDelete]
+interface PxActor {
+    physx_PxActorType getType();
+    PxScene getScene();
+    void setName(DOMString name);
+    [Const] DOMString getName();
+    [Value] PxBounds3 getWorldBounds(optional float inflation);
+    void setActorFlags([Ref] PxActorFlags flags);
+    [Value] PxActorFlags getActorFlags();
+    void setDominanceGroup(byte dominanceGroup);
+    byte getDominanceGroup();
+    void setOwnerClient(byte inClient);
+    byte getOwnerClient();
+};
+PxActor implements PxBase;
+
+enum physx_PxActorFlag {
+    "physx_PxActorFlag::eVISUALIZATION",
+    "physx_PxActorFlag::eDISABLE_GRAVITY",
+    "physx_PxActorFlag::eSEND_SLEEP_NOTIFIES",
+    "physx_PxActorFlag::eDISABLE_SIMULATION"
+};
+
+[Prefix="physx::"]
+interface PxActorFlags {
+    void PxActorFlags(long flags);
+    boolean isSet(physx_PxActorFlag flag);
+    void set(physx_PxActorFlag flag);
+    void clear(physx_PxActorFlag flag);
+};
+
+enum physx_PxActorType {
+    "physx_PxActorType::eRIGID_STATIC",
+    "physx_PxActorType::eRIGID_DYNAMIC",
+    "physx_PxActorType::eARTICULATION_LINK",
+    "physx_PxActorType::eACTOR_COUNT",
+    "physx_PxActorType::eACTOR_FORCE_DWORD",
+};
+
+[Prefix="physx::"]
+interface PxFilterData {
+    void PxFilterData();
+    void PxFilterData(long w0, long w1, long w2, long w3);
+    attribute long word0;
+    attribute long word1;
+    attribute long word2;
+    attribute long word3;
+};
+
+enum physx_PxForceMode {
+    "physx_PxForceMode::eFORCE",
+    "physx_PxForceMode::eIMPULSE",
+    "physx_PxForceMode::eVELOCITY_CHANGE",
+    "physx_PxForceMode::eACCELERATION"
+};
+
+[Prefix="physx::", NoDelete]
+interface PxMaterial { };
+PxMaterial implements PxBase;
+
+[Prefix="physx::"]
+interface PxPhysics {
+    // Basics
+    [Ref] PxFoundation getFoundation();
+    [Const, Ref] PxTolerancesScale getTolerancesScale();
+    // Scenes
+    PxScene createScene([Const, Ref] PxSceneDesc sceneDesc);
+    // Actors
+    PxRigidStatic createRigidStatic([Const, Ref] PxTransform pose);
+    PxRigidDynamic createRigidDynamic([Const, Ref] PxTransform pose);
+    // Shapes
+    PxShape createShape([Const, Ref] PxGeometry geometry, [Const, Ref] PxMaterial material, optional boolean isExclusive, [Ref] optional PxShapeFlags shapeFlags);
+    long getNbShapes();
+    // Materials
+    PxMaterial createMaterial(float staticFriction, float dynamicFriction, float restitution);
+    // Deletion Listeners
+    [Ref] PxPhysicsInsertionCallback getPhysicsInsertionCallback();
+};
+
+[Prefix="physx::", NoDelete]
+interface PxRigidActor {
+    // Global Pose Manipulation
+    [Value] PxTransform getGlobalPose();
+    void setGlobalPose([Const, Ref] PxTransform pose, optional boolean autowake);
+
+    // Shapes
+    boolean attachShape([Ref] PxShape shape);
+    void detachShape([Ref] PxShape shape, optional boolean wakeOnLostTouch);
+    long getNbShapes();
+    long getShapes(PxShape[] userBuffer, long bufferSize, long startIndex);
+};
+PxRigidActor implements PxActor;
+
+[Prefix="physx::", NoDelete]
+interface PxRigidBody {
+    // Mass Manipulation
+    void setCMassLocalPose([Const, Ref] PxTransform pose);
+    [Value] PxTransform getCMassLocalPose();
+    void setMass(float mass);
+    float getMass();
+    float getInvMass();
+    void setMassSpaceInertiaTensor([Const, Ref] PxVec3 m);
+    [Value] PxVec3 getMassSpaceInertiaTensor();
+    [Value] PxVec3 getMassSpaceInvInertiaTensor();
+
+    // Damping
+    void setLinearDamping(float linDamp);
+    float getLinearDamping();
+    void setAngularDamping(float angDamp);
+    float getAngularDamping();
+
+    // Velocity
+    [Value] PxVec3 getLinearVelocity();
+    void setLinearVelocity([Const, Ref] PxVec3 linVel, optional boolean autowake);
+    [Value] PxVec3 getAngularVelocity();
+    void setAngularVelocity([Const, Ref] PxVec3 angVel, optional boolean autowake);
+    float getMaxLinearVelocity();
+    void setMaxLinearVelocity(float maxLinVel);
+    float getMaxAngularVelocity();
+    void setMaxAngularVelocity(float maxAngVel);
+
+    // Forces
+    void addForce([Const, Ref] PxVec3 force, optional physx_PxForceMode mode, optional boolean autowake);
+    void addTorque([Const, Ref] PxVec3 torque, optional physx_PxForceMode mode, optional boolean autowake);
+    void clearForce(physx_PxForceMode mode);
+    void clearTorque(physx_PxForceMode mode);
+    void setForceAndTorque([Const, Ref] PxVec3 force, [Const, Ref] PxVec3 torque, optional physx_PxForceMode mode);
+
+    void setRigidBodyFlag(physx_PxRigidBodyFlag flag, boolean value);
+    void setRigidBodyFlags([Ref] PxRigidBodyFlags inFlags);
+    [Value] PxRigidBodyFlags getRigidBodyFlags();
+    void setMinCCDAdvanceCoefficient(float advanceCoefficient);
+    float getMinCCDAdvanceCoefficient();
+    void setMaxDepenetrationVelocity(float biasClamp);
+    float getMaxDepenetrationVelocity();
+    void setMaxContactImpulse(float maxImpulse);
+    float getMaxContactImpulse();
+    long getInternalIslandNodeIndex();
+};
+PxRigidBody implements PxRigidActor;
+
+enum physx_PxRigidBodyFlag {
+    "physx_PxRigidBodyFlag::eKINEMATIC",
+    "physx_PxRigidBodyFlag::eUSE_KINEMATIC_TARGET_FOR_SCENE_QUERIES",
+    "physx_PxRigidBodyFlag::eENABLE_CCD",
+    "physx_PxRigidBodyFlag::eENABLE_CCD_FRICTION",
+    "physx_PxRigidBodyFlag::eENABLE_POSE_INTEGRATION_PREVIEW",
+    "physx_PxRigidBodyFlag::eENABLE_SPECULATIVE_CCD",
+    "physx_PxRigidBodyFlag::eENABLE_CCD_MAX_CONTACT_IMPULSE",
+    "physx_PxRigidBodyFlag::eRETAIN_ACCELERATIONS"
+};
+
+[Prefix="physx::"]
+interface PxRigidBodyFlags {
+    void PxRigidBodyFlags(long flags);
+    boolean isSet(physx_PxRigidBodyFlag flag);
+    void set(physx_PxRigidBodyFlag flag);
+    void clear(physx_PxRigidBodyFlag flag);
+};
+
+[Prefix="physx::", NoDelete]
+interface PxRigidDynamic { };
+PxRigidDynamic implements PxRigidBody;
+
+[Prefix="physx::", NoDelete]
+interface PxRigidStatic { };
+PxRigidStatic implements PxRigidActor;
+
+[Prefix="physx::", NoDelete]
+interface PxScene {
+    void addActor([Ref] PxActor actor, [Const] optional PxBVHStructure bvhStructure);
+    void removeActor([Ref] PxActor actor, optional boolean wakeOnLostTouch);
+    // Simulation
+    void simulate(float elapsedTime, optional PxBaseTask completionTask, optional any scratchMemBlock, optional long scratchMemBlockSize, optional boolean controlSimulation);
+    boolean fetchResults(optional boolean block);
+    void setGravity([Const, Ref] PxVec3 vec);
+    [Value] PxVec3 getGravity();
+};
+
+[Prefix="physx::"]
+interface PxSceneDesc {
+    void PxSceneDesc([Const, Ref] PxTolerancesScale scale);
+    [Value] attribute PxVec3 gravity;
+    [Value] attribute PxSimulationFilterShader filterShader;
+    attribute PxCpuDispatcher cpuDispatcher;
+    [Value] attribute PxSceneFlags flags;
+};
+
+enum physx_PxSceneFlag {
+    "physx_PxSceneFlag::eENABLE_ACTIVE_ACTORS",
+    "physx_PxSceneFlag::eENABLE_CCD",
+    "physx_PxSceneFlag::eDISABLE_CCD_RESWEEP",
+    "physx_PxSceneFlag::eADAPTIVE_FORCE",
+    "physx_PxSceneFlag::eENABLE_PCM",
+    "physx_PxSceneFlag::eDISABLE_CONTACT_REPORT_BUFFER_RESIZE",
+    "physx_PxSceneFlag::eDISABLE_CONTACT_CACHE",
+    "physx_PxSceneFlag::eREQUIRE_RW_LOCK",
+    "physx_PxSceneFlag::eENABLE_STABILIZATION",
+    "physx_PxSceneFlag::eENABLE_AVERAGE_POINT",
+    "physx_PxSceneFlag::eEXCLUDE_KINEMATICS_FROM_ACTIVE_ACTORS",
+    "physx_PxSceneFlag::eENABLE_GPU_DYNAMICS",
+    "physx_PxSceneFlag::eENABLE_ENHANCED_DETERMINISM",
+    "physx_PxSceneFlag::eENABLE_FRICTION_EVERY_ITERATION",
+    "physx_PxSceneFlag::eMUTABLE_FLAGS"
+};
+
+[Prefix="physx::"]
+interface PxSceneFlags {
+    void PxSceneFlags(long flags);
+    boolean isSet(physx_PxSceneFlag flag);
+    void set(physx_PxSceneFlag flag);
+    void clear(physx_PxSceneFlag flag);
+};
+
+[Prefix="physx::", NoDelete]
+interface PxShape {
+    // Pose Manipulation
+    void setLocalPose([Const, Ref] PxTransform pose);
+    [Value] PxTransform getLocalPose(); 
+    // Collision Filtering
+    void setSimulationFilterData([Const, Ref] PxFilterData data);
+    [Value] PxFilterData getSimulationFilterData();
+};
+PxShape implements PxBase;
+
+enum physx_PxShapeFlag {
+    "physx_PxShapeFlag::eSIMULATION_SHAPE",
+    "physx_PxShapeFlag::eSCENE_QUERY_SHAPE",
+    "physx_PxShapeFlag::eTRIGGER_SHAPE",
+    "physx_PxShapeFlag::eVISUALIZATION"
+};
+
+[Prefix="physx::"]
+interface PxShapeFlags {
+    void PxShapeFlags(long flags);
+    boolean isSet(physx_PxShapeFlag flag);
+    void set(physx_PxShapeFlag flag);
+    void clear(physx_PxShapeFlag flag);
+};
+
+[Prefix="physx::"]
+interface PxSimulationFilterShader { };
+
+/****************************************
+ * Geomutils
+ ****************************************/
+
+[Prefix="physx::"]
+interface PxBoxGeometry {
+    void PxBoxGeometry(float hx, float hy, float hz);
+};
+PxBoxGeometry implements PxGeometry;
+
+[Prefix="physx::", NoDelete]
+interface PxBVHStructure { };
+PxBVHStructure implements PxBase;
+
+[Prefix="physx::"]
+interface PxCapsuleGeometry {
+    void PxCapsuleGeometry(float radius, float halfHeight);
+};
+PxCapsuleGeometry implements PxGeometry;
+
+[Prefix="physx::", NoDelete]
+interface PxConvexMesh {
+    long getNbVertices();
+    [Const] any getVertices();
+    [Const] any getIndexBuffer();
+    long getNbPolygons();
+    boolean getPolygonData(long index, [Ref] PxHullPolygon data);
+};
+PxConvexMesh implements PxBase;
+
+[Prefix="physx::"]
+interface PxConvexMeshGeometry {
+    void PxConvexMeshGeometry(PxConvexMesh mesh, [Const, Ref] optional PxMeshScale scaling, [Ref] optional PxConvexMeshGeometryFlags flags);
+};
+PxConvexMeshGeometry implements PxGeometry;
+
+enum physx_PxConvexMeshGeometryFlag {
+    "physx_PxConvexMeshGeometryFlag::eTIGHT_BOUNDS"
+};
+
+[Prefix="physx::"]
+interface PxConvexMeshGeometryFlags {
+    void PxConvexMeshGeometryFlags(byte flags);
+    boolean isSet(physx_PxConvexMeshGeometryFlag flag);
+    void set(physx_PxConvexMeshGeometryFlag flag);
+    void clear(physx_PxConvexMeshGeometryFlag flag);
+};
+
+[Prefix="physx::"]
+interface PxGeometry { };
+
+[Prefix="physx::"]
+interface PxHullPolygon {
+    void PxHullPolygon();
+    attribute float[] mPlane;
+    attribute short mNbVerts;
+    attribute short mIndexBase;
+};
+
+[Prefix="physx::"]
+interface PxMeshScale {
+    void PxMeshScale();
+    void PxMeshScale(float r);
+    void PxMeshScale([Const, Ref] PxVec3 s, [Const, Ref] PxQuat r);
+};
+
+[Prefix="physx::"]
+interface PxPlaneGeometry {
+    void PxPlaneGeometry();
+};
+PxPlaneGeometry implements PxGeometry;
+
+[Prefix="physx::"]
+interface PxSphereGeometry {
+    void PxSphereGeometry(float ir);
+};
+PxSphereGeometry implements PxGeometry;
+
+/****************************************
+ * Cooking
+ ****************************************/
+
+enum physx_PxConvexFlag {
+    "physx_PxConvexFlag::e16_BIT_INDICES",
+    "physx_PxConvexFlag::eCOMPUTE_CONVEX",
+    "physx_PxConvexFlag::eCHECK_ZERO_AREA_TRIANGLES",
+    "physx_PxConvexFlag::eQUANTIZE_INPUT",
+    "physx_PxConvexFlag::eDISABLE_MESH_VALIDATION",
+    "physx_PxConvexFlag::ePLANE_SHIFTING",
+    "physx_PxConvexFlag::eFAST_INERTIA_COMPUTATION",
+    "physx_PxConvexFlag::eGPU_COMPATIBLE",
+    "physx_PxConvexFlag::eSHIFT_VERTICES"
+};
+
+[Prefix="physx::"]
+interface PxConvexFlags {
+    void PxConvexFlags(long flags);
+    boolean isSet(physx_PxConvexFlag flag);
+    void set(physx_PxConvexFlag flag);
+    void clear(physx_PxConvexFlag flag);
+};
+
+[Prefix="physx::"]
+interface PxConvexMeshDesc {
+    void PxConvexMeshDesc();
+    [Value] attribute PxBoundedData points;
+    [Value] attribute PxConvexFlags flags;
+};
+
+[Prefix="physx::", NoDelete]
+interface PxCooking {
+    PxConvexMesh createConvexMesh([Const, Ref] PxConvexMeshDesc desc, [Ref] PxPhysicsInsertionCallback insertionCallback);
+};
+
+[Prefix="physx::"]
+interface PxCookingParams {
+    void PxCookingParams([Const, Ref] PxTolerancesScale sc);
+};
+
+/****************************************
+ * Common / Foundation
+ ****************************************/
+
+[Prefix="physx::", NoDelete]
+interface PxBase {
+    void release();
+    [Const] DOMString getConcreteTypeName();
+    long getConcreteType();
+    void setBaseFlag(physx_PxBaseFlag flag, boolean value);
+    void setBaseFlags([Ref] PxBaseFlags inFlags);
+    [Value] PxBaseFlags getBaseFlags();
+    boolean isReleasable();
+};
+
+enum physx_PxBaseFlag {
+    "physx_PxBaseFlag::eOWNS_MEMORY",
+    "physx_PxBaseFlag::eIS_RELEASABLE"
+};
+
+[Prefix="physx::"]
+interface PxBaseFlags {
+    void PxBaseFlags(long flags);
+    boolean isSet(physx_PxBaseFlag flag);
+    void set(physx_PxBaseFlag flag);
+    void clear(physx_PxBaseFlag flag);
+};
+
+[Prefix="physx::"]
+interface PxBaseTask { };
+
+[Prefix="physx::"]
+interface PxBoundedData {
+    attribute long count;
+    attribute long stride;
+    [Const] attribute any data;
+};
+
+[Prefix="physx::"]
+interface PxBounds3 {
+    void PxBounds3();
+    void PxBounds3([Const, Ref] PxVec3 minimum, [Const, Ref] PxVec3 maximum);
+    void setEmpty();
+    void setMaximal();
+    void include([Const, Ref] PxVec3 v);
+    boolean isEmpty();
+    boolean intersects([Const, Ref] PxBounds3 b);
+    boolean intersects1D([Const, Ref] PxBounds3 b, long axis);
+    boolean contains([Const, Ref] PxVec3 v);
+    boolean isInside([Const, Ref] PxBounds3 box);
+    [Value] PxVec3 getCenter();
+    [Value] PxVec3 getDimensions();
+    [Value] PxVec3 getExtents();
+    void scaleSafe(float scale);
+    void scaleFast(float scale);
+    void fattenSafe(float distance);
+    void fattenFast(float distance);
+    boolean isFinite();
+    boolean isValid();
+    [Value] attribute PxVec3 minimum;
+    [Value] attribute PxVec3 maximum;
+};
+
+[Prefix="physx::"]
+interface PxCpuDispatcher { };
+
+[Prefix="physx::"]
+interface PxDefaultErrorCallback {
+    void PxDefaultErrorCallback();
+};
+
+[Prefix="physx::", NoDelete]
+interface PxFoundation { };
+
+[Prefix="physx::", NoDelete]
+interface PxPhysicsInsertionCallback { };
+
+[Prefix="physx::"]
+interface PxQuat {
+    void PxQuat();
+    void PxQuat(float x, float y, float z, float w);
+    attribute float x;
+    attribute float y;
+    attribute float z;
+    attribute float w;
+};
+
+[Prefix="physx::"]
+interface PxTolerancesScale {
+    void PxTolerancesScale();
+};
+
+[Prefix="physx::"]
+interface PxTransform {
+    void PxTransform();
+    void PxTransform([Const, Ref] PxVec3 p0, [Const, Ref] PxQuat q0);
+    [Value] attribute PxQuat q;
+    [Value] attribute PxVec3 p;
+};
+
+[Prefix="physx::"]
+interface PxVec3 {
+    void PxVec3();
+    void PxVec3(float x, float y, float z);
+    attribute float x;
+    attribute float y;
+    attribute float z;
+};
+
+/****************************************
+ * Extensions
+ ****************************************/
+
+[Prefix="physx::"]
+interface PxDefaultAllocator {
+    void PxDefaultAllocator();
+};
+
+[Prefix="physx::"]
+interface PxDefaultCpuDispatcher { };
+PxDefaultCpuDispatcher implements PxCpuDispatcher;
+
+[Prefix="physx::", NoDelete]
+interface PxJoint { };
+PxJoint implements PxBase;
+
+[Prefix="physx::"]
+interface PxRevoluteJoint {
+    void setDriveVelocity(float velocity, optional boolean autowake);
+    float getDriveVelocity();
+
+    void setDriveForceLimit(float limit);
+    float getDriveForceLimit();
+
+    void setDriveGearRatio(float ratio);
+    float getDriveGearRatio();
+
+    void setRevoluteJointFlags([Ref] PxRevoluteJointFlags flags);
+    [Value] PxRevoluteJointFlags getRevoluteJointFlags();
+};
+
+enum physx_PxRevoluteJointFlag {
+    "physx_PxRevoluteJointFlag::eLIMIT_ENABLED",
+    "physx_PxRevoluteJointFlag::eDRIVE_ENABLED",
+    "physx_PxRevoluteJointFlag::eDRIVE_FREESPIN"
+};
+
+[Prefix="physx::"]
+interface PxRevoluteJointFlags {
+    void PxRevoluteJointFlags(long flags);
+    boolean isSet(physx_PxRevoluteJointFlag flag);
+    void set(physx_PxRevoluteJointFlag flag);
+    void clear(physx_PxRevoluteJointFlag flag);
+};
+
+/****************************************
+ * Object lists / arrays
+ ****************************************/
+
+interface VectorPxVec3 {
+    void VectorPxVec3();
+    any data();
+    long size();
+    void push_back([Ref] PxVec3 vec3);
+};

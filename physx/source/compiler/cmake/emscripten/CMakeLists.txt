@@ -27,10 +27,11 @@
 
 STRING(TOLOWER "${CMAKE_BUILD_TYPE}" CMAKE_BUILD_TYPE_LOWERCASE)
 
-SET(CLANG_WARNINGS "-ferror-limit=0 -Wall -Wextra -Werror -Wstrict-aliasing=2  -Weverything -Wno-uninitialized-const-reference -Wno-deprecated-copy-dtor -Wno-deprecated-copy -Wno-suggest-override -Wno-suggest-destructor-override -Wno-documentation-deprecated-sync -Wno-documentation-unknown-command -Wno-gnu-anonymous-struct -Wno-undef -Wno-unused-function -Wno-nested-anon-types -Wno-float-equal -Wno-padded -Wno-weak-vtables -Wno-cast-align -Wno-conversion -Wno-missing-noreturn -Wno-missing-variable-declarations -Wno-shift-sign-overflow -Wno-covered-switch-default -Wno-exit-time-destructors -Wno-global-constructors -Wno-missing-prototypes -Wno-unreachable-code -Wno-unused-macros -Wno-unused-member-function -Wno-used-but-marked-unused -Wno-weak-template-vtables -Wno-deprecated -Wno-non-virtual-dtor -Wno-invalid-noreturn -Wno-return-type-c-linkage -Wno-reserved-id-macro -Wno-c++98-compat-pedantic -Wno-unused-local-typedef -Wno-old-style-cast -Wno-newline-eof -Wno-unused-private-field -Wno-format-nonliteral -Wno-implicit-fallthrough -Wno-undefined-reinterpret-cast -Wno-disabled-macro-expansion -Wno-zero-as-null-pointer-constant -Wno-shadow -Wno-unknown-warning-option -Wno-atomic-implicit-seq-cst -Wno-extra-semi-stmt -Wno-dollar-in-identifier-extension -Wno-alloca -Wno-misleading-indentation -Wno-anon-enum-enum-conversion")
+SET(EMCC_ARGS "-s ALLOW_TABLE_GROWTH=1 -s MODULARIZE=1 -s EXPORT_NAME='PhysX' -s NO_EXIT_RUNTIME=1 -s NO_FILESYSTEM=1 -s ALLOW_MEMORY_GROWTH=0 -s TOTAL_MEMORY=268435456 -s WASM=1 -s ENVIRONMENT='web' --closure 1 -s IGNORE_CLOSURE_COMPILER_ERRORS=1 -s BINARYEN_IGNORE_IMPLICIT_TRAPS=1")
+SET(CLANG_WARNINGS "-ferror-limit=0 -Wall -Wextra -Werror -Wstrict-aliasing=2 -Weverything -Wno-uninitialized-const-reference -Wno-deprecated-copy-dtor -Wno-deprecated-copy -Wno-suggest-override -Wno-suggest-destructor-override -Wno-documentation-deprecated-sync -Wno-documentation-unknown-command -Wno-gnu-anonymous-struct -Wno-undef -Wno-unused-function -Wno-nested-anon-types -Wno-float-equal -Wno-padded -Wno-weak-vtables -Wno-cast-align -Wno-conversion -Wno-missing-noreturn -Wno-missing-variable-declarations -Wno-shift-sign-overflow -Wno-covered-switch-default -Wno-exit-time-destructors -Wno-global-constructors -Wno-missing-prototypes -Wno-unreachable-code -Wno-unused-macros -Wno-unused-member-function -Wno-used-but-marked-unused -Wno-weak-template-vtables -Wno-deprecated -Wno-non-virtual-dtor -Wno-invalid-noreturn -Wno-return-type-c-linkage -Wno-reserved-id-macro -Wno-c++98-compat-pedantic -Wno-unused-local-typedef -Wno-old-style-cast -Wno-newline-eof -Wno-unused-private-field -Wno-format-nonliteral -Wno-implicit-fallthrough -Wno-undefined-reinterpret-cast -Wno-disabled-macro-expansion -Wno-zero-as-null-pointer-constant -Wno-shadow -Wno-unknown-warning-option -Wno-atomic-implicit-seq-cst -Wno-extra-semi-stmt -Wno-dollar-in-identifier-extension -Wno-alloca -Wno-misleading-indentation -Wno-anon-enum-enum-conversion")
 SET(CMAKE_STATIC_LIBRARY_PREFIX "")
 
-SET(PHYSX_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11 -fno-exceptions -ffunction-sections -fdata-sections -fstrict-aliasing ${CLANG_WARNINGS}" CACHE INTERNAL "PhysX CXX")
+SET(PHYSX_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11 -fno-exceptions -ffunction-sections -fdata-sections -fstrict-aliasing ${EMCC_ARGS} ${CLANG_WARNINGS}" CACHE INTERNAL "PhysX CXX")
 
 SET(CMAKE_CXX_FLAGS ${PHYSX_CXX_FLAGS})
 
@@ -83,8 +84,7 @@ SET_PROPERTY(TARGET PhysXWebBindings PROPERTY FOLDER "PhysX SDK")
 SET(PHYSXDISTRO_LIBS PhysXFoundation PhysX PhysXCharacterKinematic PhysXPvdSDK PhysXCommon PhysXCooking PhysXExtensions PhysXVehicle PhysXWebBindings)
 
 INSTALL(
-	TARGETS ${PHYSXDISTRO_LIBS}
-	EXPORT PhysXSDK
-	DESTINATION $<$<CONFIG:debug>:${PX_ROOT_LIB_DIR}/debug>$<$<CONFIG:release>:${PX_ROOT_LIB_DIR}/release>$<$<CONFIG:checked>:${PX_ROOT_LIB_DIR}/checked>$<$<CONFIG:profile>:${PX_ROOT_LIB_DIR}/profile>	
-	)
+		FILES ${CMAKE_CURRENT_BINARY_DIR}/physx-js.wasm.js ${CMAKE_CURRENT_BINARY_DIR}/physx-js.wasm.wasm
+		DESTINATION $<$<CONFIG:debug>:${PX_ROOT_LIB_DIR}/debug>$<$<CONFIG:release>:${PX_ROOT_LIB_DIR}/release>$<$<CONFIG:checked>:${PX_ROOT_LIB_DIR}/checked>$<$<CONFIG:profile>:${PX_ROOT_LIB_DIR}/profile>
+)
 
