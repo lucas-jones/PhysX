@@ -101,7 +101,7 @@ Ext::SharedQueueEntryPool<Alloc>::SharedQueueEntryPool(PxU32 poolSize, const All
 
 
 template <class Alloc>
-Ext::SharedQueueEntryPool<Alloc>::~SharedQueueEntryPool()
+Ext::SharedQueueEntryPool<Alloc>::~SharedQueueEntryPool<Alloc>()
 {
 	if (mTaskEntryPool)
 	{
