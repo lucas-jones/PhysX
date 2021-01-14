@@ -81,16 +81,9 @@ FOREACH(_TARGET ${PHYSX_TARGETS})
 ENDFOREACH()
 
 ADD_CUSTOM_COMMAND(
-		OUTPUT physx-js.wasm.js physx-js.wasm.wasm
-		COMMAND emcc glue.o ${PHYSX_LIBS} ${EMCC_WASM_ARGS} -o physx-js.wasm.js
+		OUTPUT physx-js-webidl.wasm.js physx-js-webidl.wasm.wasm
+		COMMAND emcc glue.o ${PHYSX_LIBS} ${EMCC_WASM_ARGS} -o physx-js-webidl.wasm.js
 		DEPENDS physx-js-bindings ${PHYSXJS_FRONT_MATTER_FILE} ${PHYSXJS_ONLOAD_FILE} ${PHYSX_TARGETS}
 		COMMENT "Building PhysX-js webassembly"
 		VERBATIM)
-ADD_CUSTOM_TARGET(PhysXWebBindings ALL DEPENDS physx-js.wasm.js physx-js.wasm.wasm)
-
-# Copy generated .js and .wasm file into top level build dir, where they are easier to locate
-ADD_CUSTOM_COMMAND(TARGET PhysXWebBindings
-		POST_BUILD
-		COMMAND cp ${CMAKE_CURRENT_BINARY_DIR}/physx-js.wasm.js ${CMAKE_BINARY_DIR}
-		COMMAND cp ${CMAKE_CURRENT_BINARY_DIR}/physx-js.wasm.wasm ${CMAKE_BINARY_DIR}
-		VERBATIM)
+ADD_CUSTOM_TARGET(PhysXWebBindings ALL DEPENDS physx-js-webidl.wasm.js physx-js-webidl.wasm.wasm)

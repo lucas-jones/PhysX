@@ -84,7 +84,7 @@ SET_PROPERTY(TARGET PhysXWebBindings PROPERTY FOLDER "PhysX SDK")
 SET(PHYSXDISTRO_LIBS PhysXFoundation PhysX PhysXCharacterKinematic PhysXPvdSDK PhysXCommon PhysXCooking PhysXExtensions PhysXVehicle PhysXWebBindings)
 
 INSTALL(
-		FILES ${CMAKE_CURRENT_BINARY_DIR}/physx-js.wasm.js ${CMAKE_CURRENT_BINARY_DIR}/physx-js.wasm.wasm
+		FILES ${CMAKE_CURRENT_BINARY_DIR}/physx-js-webidl.wasm.js ${CMAKE_CURRENT_BINARY_DIR}/physx-js-webidl.wasm.wasm
 		DESTINATION $<$<CONFIG:debug>:${PX_ROOT_LIB_DIR}/debug>$<$<CONFIG:release>:${PX_ROOT_LIB_DIR}/release>$<$<CONFIG:checked>:${PX_ROOT_LIB_DIR}/checked>$<$<CONFIG:profile>:${PX_ROOT_LIB_DIR}/profile>
 )
 
