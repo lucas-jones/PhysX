@@ -49,9 +49,9 @@ SET(EMCC_WASM_ARGS
 		-s NO_FILESYSTEM=1
 		-s ALLOW_TABLE_GROWTH=1
 		-s ALLOW_MEMORY_GROWTH=0
-		-s TOTAL_MEMORY=268435456
-		--closure 1
-		-s IGNORE_CLOSURE_COMPILER_ERRORS=1)
+		-s TOTAL_MEMORY=268435456)
+#		--closure 1
+#		-s IGNORE_CLOSURE_COMPILER_ERRORS=1)
 
 SET(EMCC_GLUE_ARGS
 		-c
@@ -65,13 +65,13 @@ ADD_CUSTOM_COMMAND(
 		BYPRODUCTS parser.out WebIDLGrammar.pkl
 		COMMAND ${PYTHON} ${WEBIDL_BINDER_SCRIPT} ${PHYSXJS_IDL_FILE} glue
 		DEPENDS ${PHYSXJS_IDL_FILE}
-		COMMENT "Generating PhysX-js bindings"
+		COMMENT "Generating physx-js-webidl bindings"
 		VERBATIM)
 ADD_CUSTOM_COMMAND(
 		OUTPUT glue.o
 		COMMAND emcc glue.cpp ${EMCC_GLUE_ARGS} -o glue.o
 		DEPENDS glue.cpp ${PHYSXJS_HEADER_FILE}
-		COMMENT "Building PhysX-js bindings"
+		COMMENT "Building physx-js-webidl bindings"
 		VERBATIM)
 ADD_CUSTOM_TARGET(physx-js-bindings ALL DEPENDS glue.js glue.o)
 
@@ -84,6 +84,6 @@ ADD_CUSTOM_COMMAND(
 		OUTPUT physx-js-webidl.wasm.js physx-js-webidl.wasm.wasm
 		COMMAND emcc glue.o ${PHYSX_LIBS} ${EMCC_WASM_ARGS} -o physx-js-webidl.wasm.js
 		DEPENDS physx-js-bindings ${PHYSXJS_FRONT_MATTER_FILE} ${PHYSXJS_ONLOAD_FILE} ${PHYSX_TARGETS}
-		COMMENT "Building PhysX-js webassembly"
+		COMMENT "Building physx-js-webidl webassembly"
 		VERBATIM)
 ADD_CUSTOM_TARGET(PhysXWebBindings ALL DEPENDS physx-js-webidl.wasm.js physx-js-webidl.wasm.wasm)
