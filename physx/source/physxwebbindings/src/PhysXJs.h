@@ -2,33 +2,36 @@
 #include <vector>
 
 // enums within namespaces are not supported by webidl binder, as a hack we can use typedefs
-typedef physx::PxActorFlag::Enum physx_PxActorFlag;
-typedef physx::PxActorType::Enum physx_PxActorType;
-typedef physx::PxBaseFlag::Enum physx_PxBaseFlag;
-typedef physx::PxConvexFlag::Enum physx_PxConvexFlag;
-typedef physx::PxConvexMeshGeometryFlag::Enum physx_PxConvexMeshGeometryFlag;
-typedef physx::PxForceMode::Enum physx_PxForceMode;
-typedef physx::PxHitFlag::Enum physx_PxHitFlag;
-typedef physx::PxRigidBodyFlag::Enum physx_PxRigidBodyFlag;
-typedef physx::PxRigidDynamicLockFlag::Enum physx_PxRigidDynamicLockFlag;
-typedef physx::PxSceneFlag::Enum physx_PxSceneFlag;
-typedef physx::PxShapeFlag::Enum physx_PxShapeFlag;
-typedef physx::PxRevoluteJointFlag::Enum physx_PxRevoluteJointFlag;
-typedef physx::PxVehicleClutchAccuracyMode::Enum physx_PxVehicleClutchAccuracyMode;
-typedef physx::PxVehicleDifferential4WData::Enum physx_PxVehicleDifferential4WData;
-typedef physx::PxVehicleDrive4WControl::Enum physx_PxVehicleDrive4WControl;
-typedef physx::PxVehicleGearsData::Enum physx_PxVehicleGear;
-typedef physx::PxVehicleUpdateMode::Enum physx_PxVehicleUpdateMode;
-typedef physx::PxVehicleWheelsSimFlag::Enum physx_PxVehicleWheelsSimFlag;
+typedef physx::PxActorFlag::Enum PxActorFlagEnum;
+typedef physx::PxActorType::Enum PxActorTypeEnum;
+typedef physx::PxBaseFlag::Enum PxBaseFlagEnum;
+typedef physx::PxConvexFlag::Enum PxConvexFlagEnum;
+typedef physx::PxConvexMeshGeometryFlag::Enum PxConvexMeshGeometryFlagEnum;
+typedef physx::PxForceMode::Enum PxForceModeEnum;
+typedef physx::PxHitFlag::Enum PxHitFlagEnum;
+typedef physx::PxIDENTITY PxIDENTITYEnum;
+typedef physx::PxRigidBodyFlag::Enum PxRigidBodyFlagEnum;
+typedef physx::PxRigidDynamicLockFlag::Enum PxRigidDynamicLockFlagEnum;
+typedef physx::PxSceneFlag::Enum PxSceneFlagEnum;
+typedef physx::PxShapeFlag::Enum PxShapeFlagEnum;
+typedef physx::PxRevoluteJointFlag::Enum PxRevoluteJointFlagEnum;
+typedef physx::PxVehicleClutchAccuracyMode::Enum PxVehicleClutchAccuracyModeEnum;
+typedef physx::PxVehicleDifferential4WData::Enum PxVehicleDifferential4WDataEnum;
+typedef physx::PxVehicleDrive4WControl::Enum PxVehicleDrive4WControlEnum;
+typedef physx::PxVehicleGearsData::Enum PxVehicleGearEnum;
+typedef physx::PxVehicleUpdateMode::Enum PxVehicleUpdateModeEnum;
+typedef physx::PxVehicleWheelsSimFlag::Enum PxVehicleWheelsSimFlagEnum;
 
 // typedefs for pointer types
 typedef const physx::PxU8* PxU8Ptr;
+typedef const physx::PxMaterial* PxMaterialPtr;
 typedef physx::PxReal* PxRealPtr;
 typedef physx::PxVehicleWheels* PxVehicleWheelsPtr;
 
 // template classes are not supported by webidl binder, as a hack we can use typedefs
 typedef physx::PxFixedSizeLookupTable<physx::PxVehicleEngineData::eMAX_NB_ENGINE_TORQUE_CURVE_ENTRIES> PxEngineTorqueLookupTable;
 
+typedef std::vector<PxMaterialPtr> Vector_PxMaterial;
 typedef std::vector<physx::PxRaycastHit> Vector_PxRaycastHit;
 typedef std::vector<physx::PxRaycastQueryResult> Vector_PxRaycastQueryResult;
 typedef std::vector<physx::PxSweepHit> Vector_PxSweepHit;
