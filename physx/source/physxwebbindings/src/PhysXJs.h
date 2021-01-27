@@ -96,12 +96,12 @@ class SimplePxSimulationEventCallback : physx::PxSimulationEventCallback {
         // todo: for now this is only a test callback
         virtual void cbFun(physx::PxU32 count) = 0;
 
-        void onConstraintBreak(physx::PxConstraintInfo* constraints, physx::PxU32 count) { }
-        void onWake(physx::PxActor** actors, physx::PxU32 count) { }
-        void onSleep(physx::PxActor** actors, physx::PxU32 count) { }
-        void onContact(const physx::PxContactPairHeader& pairHeader, const physx::PxContactPair* pairs, physx::PxU32 nbPairs) { cbFun(nbPairs); }
-        void onTrigger(physx::PxTriggerPair* pairs, physx::PxU32 count) { }
-        void onAdvance(const physx::PxRigidBody *const *bodyBuffer, const physx::PxTransform* poseBuffer, physx::PxU32 count) { }
+        void onConstraintBreak(physx::PxConstraintInfo*, physx::PxU32) { }
+        void onWake(physx::PxActor**, physx::PxU32) { }
+        void onSleep(physx::PxActor**, physx::PxU32) { }
+        void onContact(const physx::PxContactPairHeader&, const physx::PxContactPair*, physx::PxU32 nbPairs) { cbFun(nbPairs); }
+        void onTrigger(physx::PxTriggerPair*, physx::PxU32) { }
+        void onAdvance(const physx::PxRigidBody *const *, const physx::PxTransform*, const physx::PxU32) { }
 };
 
 // top-level functions are not supported by webidl binder, we need to wrap them in a class
@@ -167,12 +167,12 @@ class PxVehicleTopLevelFunctions {
         }
         
         static void PxVehicleSuspensionRaycasts(physx::PxBatchQuery* batchQuery, Vector_PxVehicleWheels& vehicles, physx::PxU32 nbSceneQueryResults, physx::PxRaycastQueryResult* sceneQueryResults) {
-            physx::PxVehicleSuspensionRaycasts(batchQuery, vehicles.size(), vehicles.data(), nbSceneQueryResults, sceneQueryResults);
+            physx::PxVehicleSuspensionRaycasts(batchQuery, physx::PxU32(vehicles.size()), vehicles.data(), nbSceneQueryResults, sceneQueryResults);
         }
 
         static void PxVehicleUpdates(const physx::PxReal timestep, const physx::PxVec3& gravity, const physx::PxVehicleDrivableSurfaceToTireFrictionPairs& vehicleDrivableSurfaceToTireFrictionPairs,
                                      Vector_PxVehicleWheels& vehicles, physx::PxVehicleWheelQueryResult* vehicleWheelQueryResults) {
-            physx::PxVehicleUpdates(timestep, gravity, vehicleDrivableSurfaceToTireFrictionPairs, vehicles.size(), vehicles.data(), vehicleWheelQueryResults);
+            physx::PxVehicleUpdates(timestep, gravity, vehicleDrivableSurfaceToTireFrictionPairs, physx::PxU32(vehicles.size()), vehicles.data(), vehicleWheelQueryResults);
         }
 
         static void VehicleSetBasisVectors(const physx::PxVec3& up, const physx::PxVec3& forward) {

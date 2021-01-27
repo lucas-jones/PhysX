@@ -299,6 +299,11 @@ class CMakePreset:
             outString = outString + ' -DCMAKE_TOOLCHAIN_FILE=\"' + \
                 os.path.join(os.environ['EMSDK'] + '/upstream/emscripten/cmake/Modules/Platform/Emscripten.cmake\"')
             return outString
+        elif self.targetPlatform == 'jni':
+            outString = outString + ' -Ax64'
+            outString = outString + ' -DTARGET_BUILD_PLATFORM=jni_windows'
+            outString = outString + ' -DPX_OUTPUT_ARCH=x86'
+            return outString
         return ''
 
 

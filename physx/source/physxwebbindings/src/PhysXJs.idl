@@ -50,7 +50,7 @@ enum PxActorFlagEnum {
 
 [Prefix="physx::"]
 interface PxActorFlags {
-    void PxActorFlags(unsigned long flags);
+    void PxActorFlags(octet flags);
     boolean isSet(PxActorFlagEnum flag);
     void set(PxActorFlagEnum flag);
     void clear(PxActorFlagEnum flag);
@@ -146,7 +146,7 @@ enum PxHitFlagEnum {
 
 [Prefix="physx::"]
 interface PxHitFlags {
-    void PxHitFlags(unsigned long flags);
+    void PxHitFlags(unsigned short flags);
     boolean isSet(PxHitFlagEnum flag);
     void set(PxHitFlagEnum flag);
     void clear(PxHitFlagEnum flag);
@@ -164,7 +164,7 @@ PxLocationHit implements PxQueryHit;
 
 [Prefix="physx::"]
 interface PxOverlapHit { };
-PxRaycastHit implements PxQueryHit;
+PxOverlapHit implements PxQueryHit;
 
 [Prefix="physx::"]
 interface PxOverlapQueryResult {
@@ -237,7 +237,7 @@ interface PxRigidActor {
     boolean attachShape([Ref] PxShape shape);
     void detachShape([Ref] PxShape shape, optional boolean wakeOnLostTouch);
     long getNbShapes();
-    long getShapes(PxShape[] userBuffer, unsigned long bufferSize, unsigned long startIndex);
+    //long getShapes(PxShape[] userBuffer, unsigned long bufferSize, unsigned long startIndex);
 };
 PxRigidActor implements PxActor;
 
@@ -302,7 +302,7 @@ enum PxRigidBodyFlagEnum {
 
 [Prefix="physx::"]
 interface PxRigidBodyFlags {
-    void PxRigidBodyFlags(unsigned long flags);
+    void PxRigidBodyFlags(octet flags);
     boolean isSet(PxRigidBodyFlagEnum flag);
     void set(PxRigidBodyFlagEnum flag);
     void clear(PxRigidBodyFlagEnum flag);
@@ -339,7 +339,7 @@ enum PxRigidDynamicLockFlagEnum {
 
 [Prefix="physx::"]
 interface PxRigidDynamicLockFlags {
-    void PxRigidDynamicLockFlags(unsigned long flags);
+    void PxRigidDynamicLockFlags(octet flags);
     boolean isSet(PxRigidDynamicLockFlagEnum flag);
     void set(PxRigidDynamicLockFlagEnum flag);
     void clear(PxRigidDynamicLockFlagEnum flag);
@@ -422,7 +422,7 @@ enum PxShapeFlagEnum {
 
 [Prefix="physx::"]
 interface PxShapeFlags {
-    void PxShapeFlags(unsigned long flags);
+    void PxShapeFlags(octet flags);
     boolean isSet(PxShapeFlagEnum flag);
     void set(PxShapeFlagEnum flag);
     void clear(PxShapeFlagEnum flag);
@@ -436,11 +436,11 @@ interface SimplePxSimulationEventCallback {
 };
 SimplePxSimulationEventCallback implements PxSimulationEventCallback;
 
-[JSImplementation="SimplePxSimulationEventCallback"]
-interface JsPxSimulationEventCallback {
-    void JsPxSimulationEventCallback();
-    void cbFun(unsigned long count);
-};
+//[JSImplementation="SimplePxSimulationEventCallback"]
+//interface JsPxSimulationEventCallback {
+//    void JsPxSimulationEventCallback();
+//    void cbFun(unsigned long count);
+//};
 
 [Prefix="physx::"]
 interface PxSimulationFilterShader { };
@@ -1031,7 +1031,7 @@ enum PxConvexFlagEnum {
 
 [Prefix="physx::"]
 interface PxConvexFlags {
-    void PxConvexFlags(unsigned long flags);
+    void PxConvexFlags(unsigned short flags);
     boolean isSet(PxConvexFlagEnum flag);
     void set(PxConvexFlagEnum flag);
     void clear(PxConvexFlagEnum flag);
@@ -1076,7 +1076,7 @@ enum PxBaseFlagEnum {
 
 [Prefix="physx::"]
 interface PxBaseFlags {
-    void PxBaseFlags(unsigned long flags);
+    void PxBaseFlags(unsigned short flags);
     boolean isSet(PxBaseFlagEnum flag);
     void set(PxBaseFlagEnum flag);
     void clear(PxBaseFlagEnum flag);
@@ -1212,7 +1212,7 @@ enum PxRevoluteJointFlagEnum {
 
 [Prefix="physx::"]
 interface PxRevoluteJointFlags {
-    void PxRevoluteJointFlags(unsigned long flags);
+    void PxRevoluteJointFlags(unsigned short flags);
     boolean isSet(PxRevoluteJointFlagEnum flag);
     void set(PxRevoluteJointFlagEnum flag);
     void clear(PxRevoluteJointFlagEnum flag);
