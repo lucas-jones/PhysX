@@ -120,7 +120,9 @@ class CMakePreset:
             return False
         elif self.targetPlatform == 'android':
             return False
-        if self.targetPlatform == 'emscripten':
+        elif self.targetPlatform == 'emscripten':
+            return False
+        elif self.targetPlatform == 'jni_linux':
             return False
         return True
 
@@ -299,7 +301,13 @@ class CMakePreset:
             outString = outString + ' -DCMAKE_TOOLCHAIN_FILE=\"' + \
                 os.path.join(os.environ['EMSDK'] + '/upstream/emscripten/cmake/Modules/Platform/Emscripten.cmake\"')
             return outString
-        elif self.targetPlatform == 'jni':
+        elif self.targetPlatform == 'jni_linux':
+            outString = outString + ' -DTARGET_BUILD_PLATFORM=jni_linux'
+            outString = outString + ' -DPX_OUTPUT_ARCH=x86'
+            outString = outString + ' -DCMAKE_C_COMPILER=clang'
+            outString = outString + ' -DCMAKE_CXX_COMPILER=clang++'
+            return outString
+        elif self.targetPlatform == 'jni_win64':
             outString = outString + ' -Ax64'
             outString = outString + ' -DTARGET_BUILD_PLATFORM=jni_windows'
             outString = outString + ' -DPX_OUTPUT_ARCH=x86'

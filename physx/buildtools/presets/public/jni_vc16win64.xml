@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <preset name="jni_vc16win64" comment="VC16 Win64 PhysX JNI wrapper general settings">
-  <platform targetPlatform="jni" compiler="vc16" />
+  <platform targetPlatform="jni_win64" compiler="vc16" />
   <CMakeSwitches>
     <cmakeSwitch name="PX_BUILDSNIPPETS" value="False" comment="Generate the snippets" />
     <cmakeSwitch name="PX_BUILDPUBLICSAMPLES" value="False" comment="Generate the samples projects" />
