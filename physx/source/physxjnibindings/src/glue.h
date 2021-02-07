@@ -107,6 +107,13 @@ JNIEXPORT jboolean JNICALL Java_physx_common_PxBase__1isReleasable(JNIEnv* env, 
 }
 
 // PxBaseFlags
+JNIEXPORT jint JNICALL Java_physx_common_PxBaseFlags__1_1sizeOf(JNIEnv*, jclass) {
+    return sizeof(physx::PxBaseFlags);
+}
+JNIEXPORT void JNICALL Java_physx_common_PxBaseFlags__1_1placement_1new_1PxBaseFlags(JNIEnv* env, jclass, jlong __placement_address, jshort flags) {
+    (void) env;    // avoid unused parameter warning / error
+    new((void*)__placement_address) physx::PxBaseFlags(flags);
+}
 JNIEXPORT jlong JNICALL Java_physx_common_PxBaseFlags__1PxBaseFlags(JNIEnv* env, jclass, jshort flags) {
     (void) env;    // avoid unused parameter warning / error
     return (jlong) new physx::PxBaseFlags(flags);
@@ -309,10 +316,26 @@ JNIEXPORT void JNICALL Java_physx_common_PxDefaultErrorCallback__1delete_1native
 }
 
 // PxFoundation
+JNIEXPORT void JNICALL Java_physx_common_PxFoundation__1release(JNIEnv* env, jclass, jlong address) {
+    (void) env;    // avoid unused parameter warning / error
+    physx::PxFoundation* self = (physx::PxFoundation*) address;
+    self->release();
+}
 
 // PxPhysicsInsertionCallback
 
 // PxQuat
+JNIEXPORT jint JNICALL Java_physx_common_PxQuat__1_1sizeOf(JNIEnv*, jclass) {
+    return sizeof(physx::PxQuat);
+}
+JNIEXPORT void JNICALL Java_physx_common_PxQuat__1_1placement_1new_1PxQuat__J(JNIEnv* env, jclass, jlong __placement_address) {
+    (void) env;    // avoid unused parameter warning / error
+    new((void*)__placement_address) physx::PxQuat();
+}
+JNIEXPORT void JNICALL Java_physx_common_PxQuat__1_1placement_1new_1PxQuat__JFFFF(JNIEnv* env, jclass, jlong __placement_address, jfloat x, jfloat y, jfloat z, jfloat w) {
+    (void) env;    // avoid unused parameter warning / error
+    new((void*)__placement_address) physx::PxQuat(x, y, z, w);
+}
 JNIEXPORT jlong JNICALL Java_physx_common_PxQuat__1PxQuat__(JNIEnv* env, jclass) {
     (void) env;    // avoid unused parameter warning / error
     return (jlong) new physx::PxQuat();
@@ -375,6 +398,17 @@ JNIEXPORT void JNICALL Java_physx_common_PxTolerancesScale__1delete_1native_1ins
 }
 
 // PxTransform
+JNIEXPORT jint JNICALL Java_physx_common_PxTransform__1_1sizeOf(JNIEnv*, jclass) {
+    return sizeof(physx::PxTransform);
+}
+JNIEXPORT void JNICALL Java_physx_common_PxTransform__1_1placement_1new_1PxTransform__JI(JNIEnv* env, jclass, jlong __placement_address, jint r) {
+    (void) env;    // avoid unused parameter warning / error
+    new((void*)__placement_address) physx::PxTransform((PxIDENTITYEnum) r);
+}
+JNIEXPORT void JNICALL Java_physx_common_PxTransform__1_1placement_1new_1PxTransform__JJJ(JNIEnv* env, jclass, jlong __placement_address, jlong p0, jlong q0) {
+    (void) env;    // avoid unused parameter warning / error
+    new((void*)__placement_address) physx::PxTransform(*((physx::PxVec3*) p0), *((physx::PxQuat*) q0));
+}
 JNIEXPORT jlong JNICALL Java_physx_common_PxTransform__1PxTransform__I(JNIEnv* env, jclass, jint r) {
     (void) env;    // avoid unused parameter warning / error
     return (jlong) new physx::PxTransform((PxIDENTITYEnum) r);
@@ -418,6 +452,17 @@ JNIEXPORT void JNICALL Java_physx_common_PxU8Ptr__1delete_1native_1instance(JNIE
 }
 
 // PxVec3
+JNIEXPORT jint JNICALL Java_physx_common_PxVec3__1_1sizeOf(JNIEnv*, jclass) {
+    return sizeof(physx::PxVec3);
+}
+JNIEXPORT void JNICALL Java_physx_common_PxVec3__1_1placement_1new_1PxVec3__J(JNIEnv* env, jclass, jlong __placement_address) {
+    (void) env;    // avoid unused parameter warning / error
+    new((void*)__placement_address) physx::PxVec3();
+}
+JNIEXPORT void JNICALL Java_physx_common_PxVec3__1_1placement_1new_1PxVec3__JFFF(JNIEnv* env, jclass, jlong __placement_address, jfloat x, jfloat y, jfloat z) {
+    (void) env;    // avoid unused parameter warning / error
+    new((void*)__placement_address) physx::PxVec3(x, y, z);
+}
 JNIEXPORT jlong JNICALL Java_physx_common_PxVec3__1PxVec3__(JNIEnv* env, jclass) {
     (void) env;    // avoid unused parameter warning / error
     return (jlong) new physx::PxVec3();
@@ -474,6 +519,13 @@ JNIEXPORT jint JNICALL Java_physx_common_PxIDENTITYEnum__1getPxIdentity(JNIEnv*,
 }
 
 // PxConvexFlags
+JNIEXPORT jint JNICALL Java_physx_cooking_PxConvexFlags__1_1sizeOf(JNIEnv*, jclass) {
+    return sizeof(physx::PxConvexFlags);
+}
+JNIEXPORT void JNICALL Java_physx_cooking_PxConvexFlags__1_1placement_1new_1PxConvexFlags(JNIEnv* env, jclass, jlong __placement_address, jshort flags) {
+    (void) env;    // avoid unused parameter warning / error
+    new((void*)__placement_address) physx::PxConvexFlags(flags);
+}
 JNIEXPORT jlong JNICALL Java_physx_cooking_PxConvexFlags__1PxConvexFlags(JNIEnv* env, jclass, jshort flags) {
     (void) env;    // avoid unused parameter warning / error
     return (jlong) new physx::PxConvexFlags(flags);
@@ -628,6 +680,11 @@ JNIEXPORT void JNICALL Java_physx_extensions_PxRevoluteJoint__1setRevoluteJointF
     physx::PxRevoluteJoint* self = (physx::PxRevoluteJoint*) address;
     self->setRevoluteJointFlags(*((physx::PxRevoluteJointFlags*) flags));
 }
+JNIEXPORT void JNICALL Java_physx_extensions_PxRevoluteJoint__1setRevoluteJointFlag(JNIEnv* env, jclass, jlong address, jint flag, jboolean value) {
+    (void) env;    // avoid unused parameter warning / error
+    physx::PxRevoluteJoint* self = (physx::PxRevoluteJoint*) address;
+    self->setRevoluteJointFlag((PxRevoluteJointFlagEnum) flag, value);
+}
 JNIEXPORT jlong JNICALL Java_physx_extensions_PxRevoluteJoint__1getRevoluteJointFlags(JNIEnv* env, jclass, jlong address) {
     (void) env;    // avoid unused parameter warning / error
     static physx::PxRevoluteJointFlags cache;
@@ -640,6 +697,13 @@ JNIEXPORT void JNICALL Java_physx_extensions_PxRevoluteJoint__1delete_1native_1i
 }
 
 // PxRevoluteJointFlags
+JNIEXPORT jint JNICALL Java_physx_extensions_PxRevoluteJointFlags__1_1sizeOf(JNIEnv*, jclass) {
+    return sizeof(physx::PxRevoluteJointFlags);
+}
+JNIEXPORT void JNICALL Java_physx_extensions_PxRevoluteJointFlags__1_1placement_1new_1PxRevoluteJointFlags(JNIEnv* env, jclass, jlong __placement_address, jshort flags) {
+    (void) env;    // avoid unused parameter warning / error
+    new((void*)__placement_address) physx::PxRevoluteJointFlags(flags);
+}
 JNIEXPORT jlong JNICALL Java_physx_extensions_PxRevoluteJointFlags__1PxRevoluteJointFlags(JNIEnv* env, jclass, jshort flags) {
     (void) env;    // avoid unused parameter warning / error
     return (jlong) new physx::PxRevoluteJointFlags(flags);
@@ -763,6 +827,13 @@ JNIEXPORT void JNICALL Java_physx_geomutils_PxConvexMeshGeometry__1delete_1nativ
 }
 
 // PxConvexMeshGeometryFlags
+JNIEXPORT jint JNICALL Java_physx_geomutils_PxConvexMeshGeometryFlags__1_1sizeOf(JNIEnv*, jclass) {
+    return sizeof(physx::PxConvexMeshGeometryFlags);
+}
+JNIEXPORT void JNICALL Java_physx_geomutils_PxConvexMeshGeometryFlags__1_1placement_1new_1PxConvexMeshGeometryFlags(JNIEnv* env, jclass, jlong __placement_address, jbyte flags) {
+    (void) env;    // avoid unused parameter warning / error
+    new((void*)__placement_address) physx::PxConvexMeshGeometryFlags(flags);
+}
 JNIEXPORT jlong JNICALL Java_physx_geomutils_PxConvexMeshGeometryFlags__1PxConvexMeshGeometryFlags(JNIEnv* env, jclass, jbyte flags) {
     (void) env;    // avoid unused parameter warning / error
     return (jlong) new physx::PxConvexMeshGeometryFlags(flags);
@@ -939,6 +1010,13 @@ JNIEXPORT jbyte JNICALL Java_physx_physics_PxActor__1getOwnerClient(JNIEnv* env,
 }
 
 // PxActorFlags
+JNIEXPORT jint JNICALL Java_physx_physics_PxActorFlags__1_1sizeOf(JNIEnv*, jclass) {
+    return sizeof(physx::PxActorFlags);
+}
+JNIEXPORT void JNICALL Java_physx_physics_PxActorFlags__1_1placement_1new_1PxActorFlags(JNIEnv* env, jclass, jlong __placement_address, jbyte flags) {
+    (void) env;    // avoid unused parameter warning / error
+    new((void*)__placement_address) physx::PxActorFlags(flags);
+}
 JNIEXPORT jlong JNICALL Java_physx_physics_PxActorFlags__1PxActorFlags(JNIEnv* env, jclass, jbyte flags) {
     (void) env;    // avoid unused parameter warning / error
     return (jlong) new physx::PxActorFlags(flags);
@@ -1203,6 +1281,17 @@ JNIEXPORT void JNICALL Java_physx_physics_PxBatchQueryPreFilterShader__1delete_1
 }
 
 // PxFilterData
+JNIEXPORT jint JNICALL Java_physx_physics_PxFilterData__1_1sizeOf(JNIEnv*, jclass) {
+    return sizeof(physx::PxFilterData);
+}
+JNIEXPORT void JNICALL Java_physx_physics_PxFilterData__1_1placement_1new_1PxFilterData__J(JNIEnv* env, jclass, jlong __placement_address) {
+    (void) env;    // avoid unused parameter warning / error
+    new((void*)__placement_address) physx::PxFilterData();
+}
+JNIEXPORT void JNICALL Java_physx_physics_PxFilterData__1_1placement_1new_1PxFilterData__JIIII(JNIEnv* env, jclass, jlong __placement_address, jint w0, jint w1, jint w2, jint w3) {
+    (void) env;    // avoid unused parameter warning / error
+    new((void*)__placement_address) physx::PxFilterData(w0, w1, w2, w3);
+}
 JNIEXPORT jlong JNICALL Java_physx_physics_PxFilterData__1PxFilterData__(JNIEnv* env, jclass) {
     (void) env;    // avoid unused parameter warning / error
     return (jlong) new physx::PxFilterData();
@@ -1256,6 +1345,13 @@ JNIEXPORT void JNICALL Java_physx_physics_PxFilterData__1setWord3(JNIEnv* env, j
 }
 
 // PxHitFlags
+JNIEXPORT jint JNICALL Java_physx_physics_PxHitFlags__1_1sizeOf(JNIEnv*, jclass) {
+    return sizeof(physx::PxHitFlags);
+}
+JNIEXPORT void JNICALL Java_physx_physics_PxHitFlags__1_1placement_1new_1PxHitFlags(JNIEnv* env, jclass, jlong __placement_address, jshort flags) {
+    (void) env;    // avoid unused parameter warning / error
+    new((void*)__placement_address) physx::PxHitFlags(flags);
+}
 JNIEXPORT jlong JNICALL Java_physx_physics_PxHitFlags__1PxHitFlags(JNIEnv* env, jclass, jshort flags) {
     (void) env;    // avoid unused parameter warning / error
     return (jlong) new physx::PxHitFlags(flags);
@@ -1407,6 +1503,11 @@ JNIEXPORT void JNICALL Java_physx_physics_PxOverlapQueryResult__1setHasBlock(JNI
 // PxMaterial
 
 // PxPhysics
+JNIEXPORT void JNICALL Java_physx_physics_PxPhysics__1release(JNIEnv* env, jclass, jlong address) {
+    (void) env;    // avoid unused parameter warning / error
+    physx::PxPhysics* self = (physx::PxPhysics*) address;
+    self->release();
+}
 JNIEXPORT jlong JNICALL Java_physx_physics_PxPhysics__1getFoundation(JNIEnv* env, jclass, jlong address) {
     (void) env;    // avoid unused parameter warning / error
     physx::PxPhysics* self = (physx::PxPhysics*) address;
@@ -1849,6 +1950,13 @@ JNIEXPORT jint JNICALL Java_physx_physics_PxRigidBody__1getInternalIslandNodeInd
 }
 
 // PxRigidBodyFlags
+JNIEXPORT jint JNICALL Java_physx_physics_PxRigidBodyFlags__1_1sizeOf(JNIEnv*, jclass) {
+    return sizeof(physx::PxRigidBodyFlags);
+}
+JNIEXPORT void JNICALL Java_physx_physics_PxRigidBodyFlags__1_1placement_1new_1PxRigidBodyFlags(JNIEnv* env, jclass, jlong __placement_address, jbyte flags) {
+    (void) env;    // avoid unused parameter warning / error
+    new((void*)__placement_address) physx::PxRigidBodyFlags(flags);
+}
 JNIEXPORT jlong JNICALL Java_physx_physics_PxRigidBodyFlags__1PxRigidBodyFlags(JNIEnv* env, jclass, jbyte flags) {
     (void) env;    // avoid unused parameter warning / error
     return (jlong) new physx::PxRigidBodyFlags(flags);
@@ -1957,6 +2065,13 @@ JNIEXPORT void JNICALL Java_physx_physics_PxRigidDynamic__1setContactReportThres
 }
 
 // PxRigidDynamicLockFlags
+JNIEXPORT jint JNICALL Java_physx_physics_PxRigidDynamicLockFlags__1_1sizeOf(JNIEnv*, jclass) {
+    return sizeof(physx::PxRigidDynamicLockFlags);
+}
+JNIEXPORT void JNICALL Java_physx_physics_PxRigidDynamicLockFlags__1_1placement_1new_1PxRigidDynamicLockFlags(JNIEnv* env, jclass, jlong __placement_address, jbyte flags) {
+    (void) env;    // avoid unused parameter warning / error
+    new((void*)__placement_address) physx::PxRigidDynamicLockFlags(flags);
+}
 JNIEXPORT jlong JNICALL Java_physx_physics_PxRigidDynamicLockFlags__1PxRigidDynamicLockFlags(JNIEnv* env, jclass, jbyte flags) {
     (void) env;    // avoid unused parameter warning / error
     return (jlong) new physx::PxRigidDynamicLockFlags(flags);
@@ -2055,6 +2170,33 @@ JNIEXPORT jlong JNICALL Java_physx_physics_PxScene__1createBatchQuery(JNIEnv* en
     physx::PxScene* self = (physx::PxScene*) address;
     return (jlong) self->createBatchQuery(*((physx::PxBatchQueryDesc*) desc));
 }
+JNIEXPORT void JNICALL Java_physx_physics_PxScene__1release(JNIEnv* env, jclass, jlong address) {
+    (void) env;    // avoid unused parameter warning / error
+    physx::PxScene* self = (physx::PxScene*) address;
+    self->release();
+}
+JNIEXPORT void JNICALL Java_physx_physics_PxScene__1setFlag(JNIEnv* env, jclass, jlong address, jint flag, jboolean value) {
+    (void) env;    // avoid unused parameter warning / error
+    physx::PxScene* self = (physx::PxScene*) address;
+    self->setFlag((PxSceneFlagEnum) flag, value);
+}
+JNIEXPORT jlong JNICALL Java_physx_physics_PxScene__1getFlags(JNIEnv* env, jclass, jlong address) {
+    (void) env;    // avoid unused parameter warning / error
+    static physx::PxSceneFlags cache;
+    physx::PxScene* self = (physx::PxScene*) address;
+    cache = self->getFlags();
+    return (jlong) &cache;
+}
+JNIEXPORT jlong JNICALL Java_physx_physics_PxScene__1getPhysics(JNIEnv* env, jclass, jlong address) {
+    (void) env;    // avoid unused parameter warning / error
+    physx::PxScene* self = (physx::PxScene*) address;
+    return (jlong) &self->getPhysics();
+}
+JNIEXPORT jint JNICALL Java_physx_physics_PxScene__1getTimestamp(JNIEnv* env, jclass, jlong address) {
+    (void) env;    // avoid unused parameter warning / error
+    physx::PxScene* self = (physx::PxScene*) address;
+    return (jint) self->getTimestamp();
+}
 
 // PxSceneDesc
 JNIEXPORT jlong JNICALL Java_physx_physics_PxSceneDesc__1PxSceneDesc(JNIEnv* env, jclass, jlong scale) {
@@ -2116,6 +2258,13 @@ JNIEXPORT void JNICALL Java_physx_physics_PxSceneDesc__1setFlags(JNIEnv* env, jc
 }
 
 // PxSceneFlags
+JNIEXPORT jint JNICALL Java_physx_physics_PxSceneFlags__1_1sizeOf(JNIEnv*, jclass) {
+    return sizeof(physx::PxSceneFlags);
+}
+JNIEXPORT void JNICALL Java_physx_physics_PxSceneFlags__1_1placement_1new_1PxSceneFlags(JNIEnv* env, jclass, jlong __placement_address, jint flags) {
+    (void) env;    // avoid unused parameter warning / error
+    new((void*)__placement_address) physx::PxSceneFlags(flags);
+}
 JNIEXPORT jlong JNICALL Java_physx_physics_PxSceneFlags__1PxSceneFlags(JNIEnv* env, jclass, jint flags) {
     (void) env;    // avoid unused parameter warning / error
     return (jlong) new physx::PxSceneFlags(flags);
@@ -2178,6 +2327,13 @@ JNIEXPORT jlong JNICALL Java_physx_physics_PxShape__1getQueryFilterData(JNIEnv* 
 }
 
 // PxShapeFlags
+JNIEXPORT jint JNICALL Java_physx_physics_PxShapeFlags__1_1sizeOf(JNIEnv*, jclass) {
+    return sizeof(physx::PxShapeFlags);
+}
+JNIEXPORT void JNICALL Java_physx_physics_PxShapeFlags__1_1placement_1new_1PxShapeFlags(JNIEnv* env, jclass, jlong __placement_address, jbyte flags) {
+    (void) env;    // avoid unused parameter warning / error
+    new((void*)__placement_address) physx::PxShapeFlags(flags);
+}
 JNIEXPORT jlong JNICALL Java_physx_physics_PxShapeFlags__1PxShapeFlags(JNIEnv* env, jclass, jbyte flags) {
     (void) env;    // avoid unused parameter warning / error
     return (jlong) new physx::PxShapeFlags(flags);

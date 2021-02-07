@@ -185,6 +185,7 @@ PxMaterial implements PxBase;
 [Prefix="physx::"]
 interface PxPhysics {
     // Basics
+    void release();
     [Ref] PxFoundation getFoundation();
     [Const, Ref] PxTolerancesScale getTolerancesScale();
     // Scenes
@@ -362,6 +363,13 @@ interface PxScene {
 
     // Scene Query
     PxBatchQuery createBatchQuery([Const, Ref] PxBatchQueryDesc desc);
+
+    // Basics
+    void release();
+    void setFlag(PxSceneFlagEnum flag, boolean value);
+    [Value] PxSceneFlags getFlags();
+    [Ref] PxPhysics getPhysics();
+    unsigned long getTimestamp();
 };
 
 [Prefix="physx::"]
@@ -1126,7 +1134,9 @@ interface PxDefaultErrorCallback {
 };
 
 [Prefix="physx::", NoDelete]
-interface PxFoundation { };
+interface PxFoundation {
+    void release();
+};
 
 enum PxIDENTITYEnum {
     "PxIDENTITYEnum::PxIdentity"
@@ -1200,6 +1210,7 @@ interface PxRevoluteJoint {
     float getDriveGearRatio();
 
     void setRevoluteJointFlags([Ref] PxRevoluteJointFlags flags);
+    void setRevoluteJointFlag(PxRevoluteJointFlagEnum flag, boolean value);
     [Value] PxRevoluteJointFlags getRevoluteJointFlags();
 };
 PxRevoluteJoint implements PxJoint;
