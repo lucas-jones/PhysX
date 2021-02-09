@@ -11,13 +11,16 @@ interface PxTopLevelFunctions {
     [Value] static PxBatchQueryPostFilterShader DefaultWheelSceneQueryPostFilterBlocking();
 
     static PxCooking CreateCooking(unsigned long version, [Ref] PxFoundation foundation, [Const, Ref] PxCookingParams scale);
-    static PxFoundation CreateFoundation(unsigned long version, [Ref] PxDefaultAllocator allocator, [Ref] PxDefaultErrorCallback errorCallback);
+    static PxFoundation CreateFoundation(unsigned long version, [Ref] PxDefaultAllocator allocator, [Ref] PxErrorCallback errorCallback);
     static PxPhysics CreatePhysics(unsigned long version, [Ref] PxFoundation foundation, [Const, Ref] PxTolerancesScale params);
     static PxDefaultCpuDispatcher DefaultCpuDispatcherCreate(unsigned long numThreads);
     static boolean InitExtensions([Ref] PxPhysics physics);
     static PxRevoluteJoint RevoluteJointCreate([Ref] PxPhysics physics, PxRigidActor actor0, [Ref] PxTransform localFrame0, PxRigidActor actor1, [Ref] PxTransform localFrame1);
 
-    static long getU8At([Ref] PxU8Ptr base, long index);
+    static octet getU8At([Ref] PxU8Ptr base, long index);
+    static unsigned short getU16At([Ref] PxU16Ptr base, long index);
+    static unsigned long getU32At([Ref] PxU32Ptr base, long index);
+    static float getRealAt([Ref] PxRealPtr base, long index);
     [Value] static PxVec3 getVec3At(PxVec3 base, long index);
 };
 
@@ -1002,6 +1005,31 @@ interface PxHullPolygon {
     attribute short mIndexBase;
 };
 
+enum PxMeshFlagEnum {
+    "PxMeshFlagEnum::eFLIPNORMALS",
+    "PxMeshFlagEnum::e16_BIT_INDICES"
+};
+
+[Prefix="physx::"]
+interface PxMeshFlags {
+    void PxMeshFlags(octet flags);
+    boolean isSet(PxMeshFlagEnum flag);
+    void set(PxMeshFlagEnum flag);
+    void clear(PxMeshFlagEnum flag);
+};
+
+enum PxMeshGeometryFlagEnum {
+    "PxMeshGeometryFlagEnum::eDOUBLE_SIDED"
+};
+
+[Prefix="physx::"]
+interface PxMeshGeometryFlags {
+    void PxMeshGeometryFlags(octet flags);
+    boolean isSet(PxMeshGeometryFlagEnum flag);
+    void set(PxMeshGeometryFlagEnum flag);
+    void clear(PxMeshGeometryFlagEnum flag);
+};
+
 [Prefix="physx::"]
 interface PxMeshScale {
     void PxMeshScale();
@@ -1016,14 +1044,79 @@ interface PxPlaneGeometry {
 PxPlaneGeometry implements PxGeometry;
 
 [Prefix="physx::"]
+interface PxSimpleTriangleMesh {
+    void PxSimpleTriangleMesh();
+    void setToDefault();
+    boolean isValid();
+    [Value] attribute PxBoundedData points;
+    [Value] attribute PxBoundedData triangles;
+    [Value] attribute PxMeshFlags flags;
+};
+
+[Prefix="physx::"]
 interface PxSphereGeometry {
     void PxSphereGeometry(float ir);
 };
 PxSphereGeometry implements PxGeometry;
 
+[Prefix="physx::", NoDelete]
+interface PxTriangleMesh {
+    unsigned long getNbVertices();
+    [Const] PxVec3 getVertices();
+    PxVec3 getVerticesForModification();
+    [Value] PxBounds3 refitBVH();
+    unsigned long getNbTriangles();
+    [Const] VoidPtr getTriangles();
+    [Value] PxTriangleMeshFlags getTriangleMeshFlags();
+    [Const] PxU32Ptr getTrianglesRemap();
+    unsigned short getTriangleMaterialIndex(unsigned long triangleIndex);
+    [Value] PxBounds3 getLocalBounds();
+    unsigned long getReferenceCount();
+    void acquireReference();
+
+};
+PxTriangleMesh implements PxBase;
+
+enum PxTriangleMeshFlagEnum {
+    "PxTriangleMeshFlagEnum::e16_BIT_INDICES",
+    "PxTriangleMeshFlagEnum::eADJACENCY_INFO"
+};
+
+[Prefix="physx::"]
+interface PxTriangleMeshFlags {
+    void PxTriangleMeshFlags(octet flags);
+    boolean isSet(PxTriangleMeshFlagEnum flag);
+    void set(PxTriangleMeshFlagEnum flag);
+    void clear(PxTriangleMeshFlagEnum flag);
+};
+
+[Prefix="physx::"]
+interface PxTriangleMeshGeometry {
+    void PxTriangleMeshGeometry(PxTriangleMesh mesh, [Const, Ref] optional PxMeshScale scaling, [Ref] optional PxMeshGeometryFlags flags);
+    boolean isValid();
+};
+PxTriangleMeshGeometry implements PxGeometry;
+
 /****************************************
  * [package=cooking]
  ****************************************/
+
+[Prefix="physx::"]
+interface PxBVH33MidphaseDesc {
+    void setToDefault();
+    boolean isValid();
+
+    attribute float meshSizePerformanceTradeOff;
+    attribute PxMeshCookingHintEnum meshCookingHint;
+};
+
+[Prefix="physx::"]
+interface PxBVH34MidphaseDesc {
+    void setToDefault();
+    boolean isValid();
+
+    attribute unsigned long numPrimsPerLeaf;
+};
 
 enum PxConvexFlagEnum {
     "PxConvexFlagEnum::e16_BIT_INDICES",
@@ -1052,15 +1145,77 @@ interface PxConvexMeshDesc {
     [Value] attribute PxConvexFlags flags;
 };
 
+enum PxConvexMeshCookingTypeEnum {
+    "PxConvexMeshCookingTypeEnum::eQUICKHULL"
+};
+
 [Prefix="physx::", NoDelete]
 interface PxCooking {
     PxConvexMesh createConvexMesh([Const, Ref] PxConvexMeshDesc desc, [Ref] PxPhysicsInsertionCallback insertionCallback);
+    PxTriangleMesh createTriangleMesh([Const, Ref] PxTriangleMeshDesc desc, [Ref] PxPhysicsInsertionCallback insertionCallback);
 };
 
 [Prefix="physx::"]
 interface PxCookingParams {
     void PxCookingParams([Const, Ref] PxTolerancesScale sc);
+    attribute float areaTestEpsilon;
+    attribute float planeTolerance;
+    attribute PxConvexMeshCookingTypeEnum convexMeshCookingType;
+    attribute boolean suppressTriangleMeshRemapTable;
+    attribute boolean buildTriangleAdjacencies;
+    attribute boolean buildGPUData;
+    [Value] attribute PxTolerancesScale scale;
+    [Value] attribute PxMeshPreprocessingFlags meshPreprocessParams;
+    attribute float meshWeldTolerance;
+    [Value] attribute PxMidphaseDesc midphaseDesc;
+    attribute unsigned long gaussMapLimit;
 };
+
+enum PxMeshCookingHintEnum {
+    "PxMeshCookingHintEnum::eSIM_PERFORMANCE",
+    "PxMeshCookingHintEnum::eCOOKING_PERFORMANCE"
+};
+
+enum PxMeshPreprocessingFlagEnum {
+    "PxMeshPreprocessingFlagEnum::eWELD_VERTICES",
+    "PxMeshPreprocessingFlagEnum::eDISABLE_CLEAN_MESH",
+    "PxMeshPreprocessingFlagEnum::eDISABLE_ACTIVE_EDGES_PRECOMPUTE",
+    "PxMeshPreprocessingFlagEnum::eFORCE_32BIT_INDICES"
+};
+
+[Prefix="physx::"]
+interface PxMeshPreprocessingFlags {
+    void PxMeshPreprocessingFlags(unsigned long flags);
+    boolean isSet(PxMeshPreprocessingFlagEnum flag);
+    void set(PxMeshPreprocessingFlagEnum flag);
+    void clear(PxMeshPreprocessingFlagEnum flag);
+};
+
+[Prefix="physx::"]
+interface PxMidphaseDesc {
+    void PxMidphaseDesc();
+    PxMeshMidPhaseEnum getType();
+    void setToDefault(PxMeshMidPhaseEnum type);
+    boolean isValid();
+
+    [Value] attribute PxBVH33MidphaseDesc mBVH33Desc;
+    [Value] attribute PxBVH34MidphaseDesc mBVH34Desc;
+};
+
+enum PxMeshMidPhaseEnum {
+    "PxMeshMidPhaseEnum::eBVH33",
+    "PxMeshMidPhaseEnum::eBVH34"
+};
+
+[Prefix="physx::"]
+interface PxTriangleMeshDesc {
+    void PxTriangleMeshDesc();
+    void setToDefault();
+    boolean isValid();
+
+    [Value] attribute PxU16StridedData materialIndices;
+};
+PxTriangleMeshDesc implements PxSimpleTriangleMesh;
 
 /****************************************
  * [package=common]
@@ -1095,6 +1250,7 @@ interface PxBaseTask { };
 
 [Prefix="physx::"]
 interface PxBoundedData {
+    void PxBoundedData();
     attribute unsigned long count;
     attribute unsigned long stride;
     [Const] attribute VoidPtr data;
@@ -1132,6 +1288,10 @@ interface PxCpuDispatcher { };
 interface PxDefaultErrorCallback {
     void PxDefaultErrorCallback();
 };
+PxDefaultErrorCallback implements PxErrorCallback;
+
+[Prefix="physx::"]
+interface PxErrorCallback { };
 
 [Prefix="physx::", NoDelete]
 interface PxFoundation {
@@ -1168,9 +1328,10 @@ interface PxTransform {
     [Value] attribute PxVec3 p;
 };
 
-interface PxRealPtr { };
-
-interface PxU8Ptr { };
+interface PxU16StridedData {
+    attribute unsigned long stride;
+    [Const, Value] attribute PxU16Ptr data;
+};
 
 [Prefix="physx::"]
 interface PxVec3 {
@@ -1235,6 +1396,14 @@ interface PxRevoluteJointFlags {
 
 interface PxMaterialPtr { };
 
+interface PxRealPtr { };
+
+interface PxU8Ptr { };
+
+interface PxU16Ptr { };
+
+interface PxU32Ptr { };
+
 interface Vector_PxMaterial {
     void Vector_PxMaterial();
     void Vector_PxMaterial(unsigned long size);
@@ -1248,9 +1417,27 @@ interface Vector_PxReal {
     void Vector_PxReal();
     void Vector_PxReal(unsigned long size);
     float at(unsigned long index);
-    [Value] PxRealPtr data();
+    VoidPtr data();
     unsigned long size();
     void push_back(float value);
+};
+
+interface Vector_PxU16 {
+    void Vector_PxU16();
+    void Vector_PxU16(unsigned long size);
+    unsigned short at(unsigned long index);
+    VoidPtr data();
+    unsigned long size();
+    void push_back(unsigned short value);
+};
+
+interface Vector_PxU32 {
+    void Vector_PxU32();
+    void Vector_PxU32(unsigned long size);
+    unsigned long at(unsigned long index);
+    VoidPtr data();
+    unsigned long size();
+    void push_back(unsigned long value);
 };
 
 interface Vector_PxVec3 {

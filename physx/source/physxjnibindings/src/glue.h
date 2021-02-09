@@ -31,7 +31,7 @@ JNIEXPORT jlong JNICALL Java_physx_PxTopLevelFunctions__1CreateCooking(JNIEnv* e
 }
 JNIEXPORT jlong JNICALL Java_physx_PxTopLevelFunctions__1CreateFoundation(JNIEnv* env, jclass, jint version, jlong allocator, jlong errorCallback) {
     (void) env;    // avoid unused parameter warning / error
-    return (jlong) PxTopLevelFunctions::CreateFoundation(version, *((physx::PxDefaultAllocator*) allocator), *((physx::PxDefaultErrorCallback*) errorCallback));
+    return (jlong) PxTopLevelFunctions::CreateFoundation(version, *((physx::PxDefaultAllocator*) allocator), *((physx::PxErrorCallback*) errorCallback));
 }
 JNIEXPORT jlong JNICALL Java_physx_PxTopLevelFunctions__1CreatePhysics(JNIEnv* env, jclass, jint version, jlong foundation, jlong params) {
     (void) env;    // avoid unused parameter warning / error
@@ -49,9 +49,21 @@ JNIEXPORT jlong JNICALL Java_physx_PxTopLevelFunctions__1RevoluteJointCreate(JNI
     (void) env;    // avoid unused parameter warning / error
     return (jlong) PxTopLevelFunctions::RevoluteJointCreate(*((physx::PxPhysics*) physics), (physx::PxRigidActor*) actor0, *((physx::PxTransform*) localFrame0), (physx::PxRigidActor*) actor1, *((physx::PxTransform*) localFrame1));
 }
-JNIEXPORT jint JNICALL Java_physx_PxTopLevelFunctions__1getU8At(JNIEnv* env, jclass, jlong base, jint index) {
+JNIEXPORT jbyte JNICALL Java_physx_PxTopLevelFunctions__1getU8At(JNIEnv* env, jclass, jlong base, jint index) {
     (void) env;    // avoid unused parameter warning / error
-    return (jint) PxTopLevelFunctions::getU8At(*((PxU8Ptr*) base), index);
+    return (jbyte) PxTopLevelFunctions::getU8At(*((PxU8Ptr*) base), index);
+}
+JNIEXPORT jshort JNICALL Java_physx_PxTopLevelFunctions__1getU16At(JNIEnv* env, jclass, jlong base, jint index) {
+    (void) env;    // avoid unused parameter warning / error
+    return (jshort) PxTopLevelFunctions::getU16At(*((PxU16Ptr*) base), index);
+}
+JNIEXPORT jint JNICALL Java_physx_PxTopLevelFunctions__1getU32At(JNIEnv* env, jclass, jlong base, jint index) {
+    (void) env;    // avoid unused parameter warning / error
+    return (jint) PxTopLevelFunctions::getU32At(*((PxU32Ptr*) base), index);
+}
+JNIEXPORT jfloat JNICALL Java_physx_PxTopLevelFunctions__1getRealAt(JNIEnv* env, jclass, jlong base, jint index) {
+    (void) env;    // avoid unused parameter warning / error
+    return (jfloat) PxTopLevelFunctions::getRealAt(*((PxRealPtr*) base), index);
 }
 JNIEXPORT jlong JNICALL Java_physx_PxTopLevelFunctions__1getVec3At(JNIEnv* env, jclass, jlong base, jint index) {
     (void) env;    // avoid unused parameter warning / error
@@ -143,6 +155,17 @@ JNIEXPORT void JNICALL Java_physx_common_PxBaseTask__1delete_1native_1instance(J
 }
 
 // PxBoundedData
+JNIEXPORT jint JNICALL Java_physx_common_PxBoundedData__1_1sizeOf(JNIEnv*, jclass) {
+    return sizeof(physx::PxBoundedData);
+}
+JNIEXPORT void JNICALL Java_physx_common_PxBoundedData__1_1placement_1new_1PxBoundedData(JNIEnv* env, jclass, jlong __placement_address) {
+    (void) env;    // avoid unused parameter warning / error
+    new((void*)__placement_address) physx::PxBoundedData();
+}
+JNIEXPORT jlong JNICALL Java_physx_common_PxBoundedData__1PxBoundedData(JNIEnv* env, jclass) {
+    (void) env;    // avoid unused parameter warning / error
+    return (jlong) new physx::PxBoundedData();
+}
 JNIEXPORT void JNICALL Java_physx_common_PxBoundedData__1delete_1native_1instance(JNIEnv*, jclass, jlong address) {
     delete (physx::PxBoundedData*) address;
 }
@@ -178,6 +201,17 @@ JNIEXPORT void JNICALL Java_physx_common_PxBoundedData__1setData(JNIEnv* env, jc
 }
 
 // PxBounds3
+JNIEXPORT jint JNICALL Java_physx_common_PxBounds3__1_1sizeOf(JNIEnv*, jclass) {
+    return sizeof(physx::PxBounds3);
+}
+JNIEXPORT void JNICALL Java_physx_common_PxBounds3__1_1placement_1new_1PxBounds3__J(JNIEnv* env, jclass, jlong __placement_address) {
+    (void) env;    // avoid unused parameter warning / error
+    new((void*)__placement_address) physx::PxBounds3();
+}
+JNIEXPORT void JNICALL Java_physx_common_PxBounds3__1_1placement_1new_1PxBounds3__JJJ(JNIEnv* env, jclass, jlong __placement_address, jlong minimum, jlong maximum) {
+    (void) env;    // avoid unused parameter warning / error
+    new((void*)__placement_address) physx::PxBounds3(*((physx::PxVec3*) minimum), *((physx::PxVec3*) maximum));
+}
 JNIEXPORT jlong JNICALL Java_physx_common_PxBounds3__1PxBounds3__(JNIEnv* env, jclass) {
     (void) env;    // avoid unused parameter warning / error
     return (jlong) new physx::PxBounds3();
@@ -315,6 +349,11 @@ JNIEXPORT void JNICALL Java_physx_common_PxDefaultErrorCallback__1delete_1native
     delete (physx::PxDefaultErrorCallback*) address;
 }
 
+// PxErrorCallback
+JNIEXPORT void JNICALL Java_physx_common_PxErrorCallback__1delete_1native_1instance(JNIEnv*, jclass, jlong address) {
+    delete (physx::PxErrorCallback*) address;
+}
+
 // PxFoundation
 JNIEXPORT void JNICALL Java_physx_common_PxFoundation__1release(JNIEnv* env, jclass, jlong address) {
     (void) env;    // avoid unused parameter warning / error
@@ -441,14 +480,29 @@ JNIEXPORT void JNICALL Java_physx_common_PxTransform__1setP(JNIEnv* env, jclass,
     self->p = *((physx::PxVec3*) value);
 }
 
-// PxRealPtr
-JNIEXPORT void JNICALL Java_physx_common_PxRealPtr__1delete_1native_1instance(JNIEnv*, jclass, jlong address) {
-    delete (PxRealPtr*) address;
+// PxU16StridedData
+JNIEXPORT void JNICALL Java_physx_common_PxU16StridedData__1delete_1native_1instance(JNIEnv*, jclass, jlong address) {
+    delete (PxU16StridedData*) address;
 }
-
-// PxU8Ptr
-JNIEXPORT void JNICALL Java_physx_common_PxU8Ptr__1delete_1native_1instance(JNIEnv*, jclass, jlong address) {
-    delete (PxU8Ptr*) address;
+JNIEXPORT jint JNICALL Java_physx_common_PxU16StridedData__1getStride(JNIEnv* env, jclass, jlong address) {
+    (void) env;    // avoid unused parameter warning / error
+    PxU16StridedData* self = (PxU16StridedData*) address;
+    return (jint) self->stride;
+}
+JNIEXPORT void JNICALL Java_physx_common_PxU16StridedData__1setStride(JNIEnv* env, jclass, jlong address, jint value) {
+    (void) env;    // avoid unused parameter warning / error
+    PxU16StridedData* self = (PxU16StridedData*) address;
+    self->stride = value;
+}
+JNIEXPORT jlong JNICALL Java_physx_common_PxU16StridedData__1getData(JNIEnv* env, jclass, jlong address) {
+    (void) env;    // avoid unused parameter warning / error
+    PxU16StridedData* self = (PxU16StridedData*) address;
+    return (jlong) &self->data;
+}
+JNIEXPORT void JNICALL Java_physx_common_PxU16StridedData__1setData(JNIEnv* env, jclass, jlong address, jlong value) {
+    (void) env;    // avoid unused parameter warning / error
+    PxU16StridedData* self = (PxU16StridedData*) address;
+    self->data = *((PxU16Ptr*) value);
 }
 
 // PxVec3
@@ -518,6 +572,66 @@ JNIEXPORT jint JNICALL Java_physx_common_PxIDENTITYEnum__1getPxIdentity(JNIEnv*,
     return PxIDENTITYEnum::PxIdentity;
 }
 
+// PxBVH33MidphaseDesc
+JNIEXPORT void JNICALL Java_physx_cooking_PxBVH33MidphaseDesc__1setToDefault(JNIEnv* env, jclass, jlong address) {
+    (void) env;    // avoid unused parameter warning / error
+    physx::PxBVH33MidphaseDesc* self = (physx::PxBVH33MidphaseDesc*) address;
+    self->setToDefault();
+}
+JNIEXPORT jboolean JNICALL Java_physx_cooking_PxBVH33MidphaseDesc__1isValid(JNIEnv* env, jclass, jlong address) {
+    (void) env;    // avoid unused parameter warning / error
+    physx::PxBVH33MidphaseDesc* self = (physx::PxBVH33MidphaseDesc*) address;
+    return (jboolean) self->isValid();
+}
+JNIEXPORT void JNICALL Java_physx_cooking_PxBVH33MidphaseDesc__1delete_1native_1instance(JNIEnv*, jclass, jlong address) {
+    delete (physx::PxBVH33MidphaseDesc*) address;
+}
+JNIEXPORT jfloat JNICALL Java_physx_cooking_PxBVH33MidphaseDesc__1getMeshSizePerformanceTradeOff(JNIEnv* env, jclass, jlong address) {
+    (void) env;    // avoid unused parameter warning / error
+    physx::PxBVH33MidphaseDesc* self = (physx::PxBVH33MidphaseDesc*) address;
+    return (jfloat) self->meshSizePerformanceTradeOff;
+}
+JNIEXPORT void JNICALL Java_physx_cooking_PxBVH33MidphaseDesc__1setMeshSizePerformanceTradeOff(JNIEnv* env, jclass, jlong address, jfloat value) {
+    (void) env;    // avoid unused parameter warning / error
+    physx::PxBVH33MidphaseDesc* self = (physx::PxBVH33MidphaseDesc*) address;
+    self->meshSizePerformanceTradeOff = value;
+}
+JNIEXPORT jint JNICALL Java_physx_cooking_PxBVH33MidphaseDesc__1getMeshCookingHint(JNIEnv* env, jclass, jlong address) {
+    (void) env;    // avoid unused parameter warning / error
+    physx::PxBVH33MidphaseDesc* self = (physx::PxBVH33MidphaseDesc*) address;
+    return (PxMeshCookingHintEnum) self->meshCookingHint;
+}
+JNIEXPORT void JNICALL Java_physx_cooking_PxBVH33MidphaseDesc__1setMeshCookingHint(JNIEnv* env, jclass, jlong address, jint value) {
+    (void) env;    // avoid unused parameter warning / error
+    physx::PxBVH33MidphaseDesc* self = (physx::PxBVH33MidphaseDesc*) address;
+    self->meshCookingHint = (PxMeshCookingHintEnum) value;
+}
+
+// PxBVH34MidphaseDesc
+JNIEXPORT void JNICALL Java_physx_cooking_PxBVH34MidphaseDesc__1setToDefault(JNIEnv* env, jclass, jlong address) {
+    (void) env;    // avoid unused parameter warning / error
+    physx::PxBVH34MidphaseDesc* self = (physx::PxBVH34MidphaseDesc*) address;
+    self->setToDefault();
+}
+JNIEXPORT jboolean JNICALL Java_physx_cooking_PxBVH34MidphaseDesc__1isValid(JNIEnv* env, jclass, jlong address) {
+    (void) env;    // avoid unused parameter warning / error
+    physx::PxBVH34MidphaseDesc* self = (physx::PxBVH34MidphaseDesc*) address;
+    return (jboolean) self->isValid();
+}
+JNIEXPORT void JNICALL Java_physx_cooking_PxBVH34MidphaseDesc__1delete_1native_1instance(JNIEnv*, jclass, jlong address) {
+    delete (physx::PxBVH34MidphaseDesc*) address;
+}
+JNIEXPORT jint JNICALL Java_physx_cooking_PxBVH34MidphaseDesc__1getNumPrimsPerLeaf(JNIEnv* env, jclass, jlong address) {
+    (void) env;    // avoid unused parameter warning / error
+    physx::PxBVH34MidphaseDesc* self = (physx::PxBVH34MidphaseDesc*) address;
+    return (jint) self->numPrimsPerLeaf;
+}
+JNIEXPORT void JNICALL Java_physx_cooking_PxBVH34MidphaseDesc__1setNumPrimsPerLeaf(JNIEnv* env, jclass, jlong address, jint value) {
+    (void) env;    // avoid unused parameter warning / error
+    physx::PxBVH34MidphaseDesc* self = (physx::PxBVH34MidphaseDesc*) address;
+    self->numPrimsPerLeaf = value;
+}
+
 // PxConvexFlags
 JNIEXPORT jint JNICALL Java_physx_cooking_PxConvexFlags__1_1sizeOf(JNIEnv*, jclass) {
     return sizeof(physx::PxConvexFlags);
@@ -550,6 +664,13 @@ JNIEXPORT void JNICALL Java_physx_cooking_PxConvexFlags__1delete_1native_1instan
 }
 
 // PxConvexMeshDesc
+JNIEXPORT jint JNICALL Java_physx_cooking_PxConvexMeshDesc__1_1sizeOf(JNIEnv*, jclass) {
+    return sizeof(physx::PxConvexMeshDesc);
+}
+JNIEXPORT void JNICALL Java_physx_cooking_PxConvexMeshDesc__1_1placement_1new_1PxConvexMeshDesc(JNIEnv* env, jclass, jlong __placement_address) {
+    (void) env;    // avoid unused parameter warning / error
+    new((void*)__placement_address) physx::PxConvexMeshDesc();
+}
 JNIEXPORT jlong JNICALL Java_physx_cooking_PxConvexMeshDesc__1PxConvexMeshDesc(JNIEnv* env, jclass) {
     (void) env;    // avoid unused parameter warning / error
     return (jlong) new physx::PxConvexMeshDesc();
@@ -584,6 +705,11 @@ JNIEXPORT jlong JNICALL Java_physx_cooking_PxCooking__1createConvexMesh(JNIEnv* 
     physx::PxCooking* self = (physx::PxCooking*) address;
     return (jlong) self->createConvexMesh(*((physx::PxConvexMeshDesc*) desc), *((physx::PxPhysicsInsertionCallback*) insertionCallback));
 }
+JNIEXPORT jlong JNICALL Java_physx_cooking_PxCooking__1createTriangleMesh(JNIEnv* env, jclass, jlong address, jlong desc, jlong insertionCallback) {
+    (void) env;    // avoid unused parameter warning / error
+    physx::PxCooking* self = (physx::PxCooking*) address;
+    return (jlong) self->createTriangleMesh(*((physx::PxTriangleMeshDesc*) desc), *((physx::PxPhysicsInsertionCallback*) insertionCallback));
+}
 
 // PxCookingParams
 JNIEXPORT jlong JNICALL Java_physx_cooking_PxCookingParams__1PxCookingParams(JNIEnv* env, jclass, jlong sc) {
@@ -592,6 +718,220 @@ JNIEXPORT jlong JNICALL Java_physx_cooking_PxCookingParams__1PxCookingParams(JNI
 }
 JNIEXPORT void JNICALL Java_physx_cooking_PxCookingParams__1delete_1native_1instance(JNIEnv*, jclass, jlong address) {
     delete (physx::PxCookingParams*) address;
+}
+JNIEXPORT jfloat JNICALL Java_physx_cooking_PxCookingParams__1getAreaTestEpsilon(JNIEnv* env, jclass, jlong address) {
+    (void) env;    // avoid unused parameter warning / error
+    physx::PxCookingParams* self = (physx::PxCookingParams*) address;
+    return (jfloat) self->areaTestEpsilon;
+}
+JNIEXPORT void JNICALL Java_physx_cooking_PxCookingParams__1setAreaTestEpsilon(JNIEnv* env, jclass, jlong address, jfloat value) {
+    (void) env;    // avoid unused parameter warning / error
+    physx::PxCookingParams* self = (physx::PxCookingParams*) address;
+    self->areaTestEpsilon = value;
+}
+JNIEXPORT jfloat JNICALL Java_physx_cooking_PxCookingParams__1getPlaneTolerance(JNIEnv* env, jclass, jlong address) {
+    (void) env;    // avoid unused parameter warning / error
+    physx::PxCookingParams* self = (physx::PxCookingParams*) address;
+    return (jfloat) self->planeTolerance;
+}
+JNIEXPORT void JNICALL Java_physx_cooking_PxCookingParams__1setPlaneTolerance(JNIEnv* env, jclass, jlong address, jfloat value) {
+    (void) env;    // avoid unused parameter warning / error
+    physx::PxCookingParams* self = (physx::PxCookingParams*) address;
+    self->planeTolerance = value;
+}
+JNIEXPORT jint JNICALL Java_physx_cooking_PxCookingParams__1getConvexMeshCookingType(JNIEnv* env, jclass, jlong address) {
+    (void) env;    // avoid unused parameter warning / error
+    physx::PxCookingParams* self = (physx::PxCookingParams*) address;
+    return (PxConvexMeshCookingTypeEnum) self->convexMeshCookingType;
+}
+JNIEXPORT void JNICALL Java_physx_cooking_PxCookingParams__1setConvexMeshCookingType(JNIEnv* env, jclass, jlong address, jint value) {
+    (void) env;    // avoid unused parameter warning / error
+    physx::PxCookingParams* self = (physx::PxCookingParams*) address;
+    self->convexMeshCookingType = (PxConvexMeshCookingTypeEnum) value;
+}
+JNIEXPORT jboolean JNICALL Java_physx_cooking_PxCookingParams__1getSuppressTriangleMeshRemapTable(JNIEnv* env, jclass, jlong address) {
+    (void) env;    // avoid unused parameter warning / error
+    physx::PxCookingParams* self = (physx::PxCookingParams*) address;
+    return (jboolean) self->suppressTriangleMeshRemapTable;
+}
+JNIEXPORT void JNICALL Java_physx_cooking_PxCookingParams__1setSuppressTriangleMeshRemapTable(JNIEnv* env, jclass, jlong address, jboolean value) {
+    (void) env;    // avoid unused parameter warning / error
+    physx::PxCookingParams* self = (physx::PxCookingParams*) address;
+    self->suppressTriangleMeshRemapTable = value;
+}
+JNIEXPORT jboolean JNICALL Java_physx_cooking_PxCookingParams__1getBuildTriangleAdjacencies(JNIEnv* env, jclass, jlong address) {
+    (void) env;    // avoid unused parameter warning / error
+    physx::PxCookingParams* self = (physx::PxCookingParams*) address;
+    return (jboolean) self->buildTriangleAdjacencies;
+}
+JNIEXPORT void JNICALL Java_physx_cooking_PxCookingParams__1setBuildTriangleAdjacencies(JNIEnv* env, jclass, jlong address, jboolean value) {
+    (void) env;    // avoid unused parameter warning / error
+    physx::PxCookingParams* self = (physx::PxCookingParams*) address;
+    self->buildTriangleAdjacencies = value;
+}
+JNIEXPORT jboolean JNICALL Java_physx_cooking_PxCookingParams__1getBuildGPUData(JNIEnv* env, jclass, jlong address) {
+    (void) env;    // avoid unused parameter warning / error
+    physx::PxCookingParams* self = (physx::PxCookingParams*) address;
+    return (jboolean) self->buildGPUData;
+}
+JNIEXPORT void JNICALL Java_physx_cooking_PxCookingParams__1setBuildGPUData(JNIEnv* env, jclass, jlong address, jboolean value) {
+    (void) env;    // avoid unused parameter warning / error
+    physx::PxCookingParams* self = (physx::PxCookingParams*) address;
+    self->buildGPUData = value;
+}
+JNIEXPORT jlong JNICALL Java_physx_cooking_PxCookingParams__1getScale(JNIEnv* env, jclass, jlong address) {
+    (void) env;    // avoid unused parameter warning / error
+    physx::PxCookingParams* self = (physx::PxCookingParams*) address;
+    return (jlong) &self->scale;
+}
+JNIEXPORT void JNICALL Java_physx_cooking_PxCookingParams__1setScale(JNIEnv* env, jclass, jlong address, jlong value) {
+    (void) env;    // avoid unused parameter warning / error
+    physx::PxCookingParams* self = (physx::PxCookingParams*) address;
+    self->scale = *((physx::PxTolerancesScale*) value);
+}
+JNIEXPORT jlong JNICALL Java_physx_cooking_PxCookingParams__1getMeshPreprocessParams(JNIEnv* env, jclass, jlong address) {
+    (void) env;    // avoid unused parameter warning / error
+    physx::PxCookingParams* self = (physx::PxCookingParams*) address;
+    return (jlong) &self->meshPreprocessParams;
+}
+JNIEXPORT void JNICALL Java_physx_cooking_PxCookingParams__1setMeshPreprocessParams(JNIEnv* env, jclass, jlong address, jlong value) {
+    (void) env;    // avoid unused parameter warning / error
+    physx::PxCookingParams* self = (physx::PxCookingParams*) address;
+    self->meshPreprocessParams = *((physx::PxMeshPreprocessingFlags*) value);
+}
+JNIEXPORT jfloat JNICALL Java_physx_cooking_PxCookingParams__1getMeshWeldTolerance(JNIEnv* env, jclass, jlong address) {
+    (void) env;    // avoid unused parameter warning / error
+    physx::PxCookingParams* self = (physx::PxCookingParams*) address;
+    return (jfloat) self->meshWeldTolerance;
+}
+JNIEXPORT void JNICALL Java_physx_cooking_PxCookingParams__1setMeshWeldTolerance(JNIEnv* env, jclass, jlong address, jfloat value) {
+    (void) env;    // avoid unused parameter warning / error
+    physx::PxCookingParams* self = (physx::PxCookingParams*) address;
+    self->meshWeldTolerance = value;
+}
+JNIEXPORT jlong JNICALL Java_physx_cooking_PxCookingParams__1getMidphaseDesc(JNIEnv* env, jclass, jlong address) {
+    (void) env;    // avoid unused parameter warning / error
+    physx::PxCookingParams* self = (physx::PxCookingParams*) address;
+    return (jlong) &self->midphaseDesc;
+}
+JNIEXPORT void JNICALL Java_physx_cooking_PxCookingParams__1setMidphaseDesc(JNIEnv* env, jclass, jlong address, jlong value) {
+    (void) env;    // avoid unused parameter warning / error
+    physx::PxCookingParams* self = (physx::PxCookingParams*) address;
+    self->midphaseDesc = *((physx::PxMidphaseDesc*) value);
+}
+JNIEXPORT jint JNICALL Java_physx_cooking_PxCookingParams__1getGaussMapLimit(JNIEnv* env, jclass, jlong address) {
+    (void) env;    // avoid unused parameter warning / error
+    physx::PxCookingParams* self = (physx::PxCookingParams*) address;
+    return (jint) self->gaussMapLimit;
+}
+JNIEXPORT void JNICALL Java_physx_cooking_PxCookingParams__1setGaussMapLimit(JNIEnv* env, jclass, jlong address, jint value) {
+    (void) env;    // avoid unused parameter warning / error
+    physx::PxCookingParams* self = (physx::PxCookingParams*) address;
+    self->gaussMapLimit = value;
+}
+
+// PxMeshPreprocessingFlags
+JNIEXPORT jlong JNICALL Java_physx_cooking_PxMeshPreprocessingFlags__1PxMeshPreprocessingFlags(JNIEnv* env, jclass, jint flags) {
+    (void) env;    // avoid unused parameter warning / error
+    return (jlong) new physx::PxMeshPreprocessingFlags(flags);
+}
+JNIEXPORT jboolean JNICALL Java_physx_cooking_PxMeshPreprocessingFlags__1isSet(JNIEnv* env, jclass, jlong address, jint flag) {
+    (void) env;    // avoid unused parameter warning / error
+    physx::PxMeshPreprocessingFlags* self = (physx::PxMeshPreprocessingFlags*) address;
+    return (jboolean) self->isSet((PxMeshPreprocessingFlagEnum) flag);
+}
+JNIEXPORT void JNICALL Java_physx_cooking_PxMeshPreprocessingFlags__1set(JNIEnv* env, jclass, jlong address, jint flag) {
+    (void) env;    // avoid unused parameter warning / error
+    physx::PxMeshPreprocessingFlags* self = (physx::PxMeshPreprocessingFlags*) address;
+    self->set((PxMeshPreprocessingFlagEnum) flag);
+}
+JNIEXPORT void JNICALL Java_physx_cooking_PxMeshPreprocessingFlags__1clear(JNIEnv* env, jclass, jlong address, jint flag) {
+    (void) env;    // avoid unused parameter warning / error
+    physx::PxMeshPreprocessingFlags* self = (physx::PxMeshPreprocessingFlags*) address;
+    self->clear((PxMeshPreprocessingFlagEnum) flag);
+}
+JNIEXPORT void JNICALL Java_physx_cooking_PxMeshPreprocessingFlags__1delete_1native_1instance(JNIEnv*, jclass, jlong address) {
+    delete (physx::PxMeshPreprocessingFlags*) address;
+}
+
+// PxMidphaseDesc
+JNIEXPORT jlong JNICALL Java_physx_cooking_PxMidphaseDesc__1PxMidphaseDesc(JNIEnv* env, jclass) {
+    (void) env;    // avoid unused parameter warning / error
+    return (jlong) new physx::PxMidphaseDesc();
+}
+JNIEXPORT jint JNICALL Java_physx_cooking_PxMidphaseDesc__1getType(JNIEnv* env, jclass, jlong address) {
+    (void) env;    // avoid unused parameter warning / error
+    physx::PxMidphaseDesc* self = (physx::PxMidphaseDesc*) address;
+    return (PxMeshMidPhaseEnum) self->getType();
+}
+JNIEXPORT void JNICALL Java_physx_cooking_PxMidphaseDesc__1setToDefault(JNIEnv* env, jclass, jlong address, jint type) {
+    (void) env;    // avoid unused parameter warning / error
+    physx::PxMidphaseDesc* self = (physx::PxMidphaseDesc*) address;
+    self->setToDefault((PxMeshMidPhaseEnum) type);
+}
+JNIEXPORT jboolean JNICALL Java_physx_cooking_PxMidphaseDesc__1isValid(JNIEnv* env, jclass, jlong address) {
+    (void) env;    // avoid unused parameter warning / error
+    physx::PxMidphaseDesc* self = (physx::PxMidphaseDesc*) address;
+    return (jboolean) self->isValid();
+}
+JNIEXPORT void JNICALL Java_physx_cooking_PxMidphaseDesc__1delete_1native_1instance(JNIEnv*, jclass, jlong address) {
+    delete (physx::PxMidphaseDesc*) address;
+}
+JNIEXPORT jlong JNICALL Java_physx_cooking_PxMidphaseDesc__1getMBVH33Desc(JNIEnv* env, jclass, jlong address) {
+    (void) env;    // avoid unused parameter warning / error
+    physx::PxMidphaseDesc* self = (physx::PxMidphaseDesc*) address;
+    return (jlong) &self->mBVH33Desc;
+}
+JNIEXPORT void JNICALL Java_physx_cooking_PxMidphaseDesc__1setMBVH33Desc(JNIEnv* env, jclass, jlong address, jlong value) {
+    (void) env;    // avoid unused parameter warning / error
+    physx::PxMidphaseDesc* self = (physx::PxMidphaseDesc*) address;
+    self->mBVH33Desc = *((physx::PxBVH33MidphaseDesc*) value);
+}
+JNIEXPORT jlong JNICALL Java_physx_cooking_PxMidphaseDesc__1getMBVH34Desc(JNIEnv* env, jclass, jlong address) {
+    (void) env;    // avoid unused parameter warning / error
+    physx::PxMidphaseDesc* self = (physx::PxMidphaseDesc*) address;
+    return (jlong) &self->mBVH34Desc;
+}
+JNIEXPORT void JNICALL Java_physx_cooking_PxMidphaseDesc__1setMBVH34Desc(JNIEnv* env, jclass, jlong address, jlong value) {
+    (void) env;    // avoid unused parameter warning / error
+    physx::PxMidphaseDesc* self = (physx::PxMidphaseDesc*) address;
+    self->mBVH34Desc = *((physx::PxBVH34MidphaseDesc*) value);
+}
+
+// PxTriangleMeshDesc
+JNIEXPORT jint JNICALL Java_physx_cooking_PxTriangleMeshDesc__1_1sizeOf(JNIEnv*, jclass) {
+    return sizeof(physx::PxTriangleMeshDesc);
+}
+JNIEXPORT void JNICALL Java_physx_cooking_PxTriangleMeshDesc__1_1placement_1new_1PxTriangleMeshDesc(JNIEnv* env, jclass, jlong __placement_address) {
+    (void) env;    // avoid unused parameter warning / error
+    new((void*)__placement_address) physx::PxTriangleMeshDesc();
+}
+JNIEXPORT jlong JNICALL Java_physx_cooking_PxTriangleMeshDesc__1PxTriangleMeshDesc(JNIEnv* env, jclass) {
+    (void) env;    // avoid unused parameter warning / error
+    return (jlong) new physx::PxTriangleMeshDesc();
+}
+JNIEXPORT void JNICALL Java_physx_cooking_PxTriangleMeshDesc__1setToDefault(JNIEnv* env, jclass, jlong address) {
+    (void) env;    // avoid unused parameter warning / error
+    physx::PxTriangleMeshDesc* self = (physx::PxTriangleMeshDesc*) address;
+    self->setToDefault();
+}
+JNIEXPORT jboolean JNICALL Java_physx_cooking_PxTriangleMeshDesc__1isValid(JNIEnv* env, jclass, jlong address) {
+    (void) env;    // avoid unused parameter warning / error
+    physx::PxTriangleMeshDesc* self = (physx::PxTriangleMeshDesc*) address;
+    return (jboolean) self->isValid();
+}
+JNIEXPORT void JNICALL Java_physx_cooking_PxTriangleMeshDesc__1delete_1native_1instance(JNIEnv*, jclass, jlong address) {
+    delete (physx::PxTriangleMeshDesc*) address;
+}
+JNIEXPORT jlong JNICALL Java_physx_cooking_PxTriangleMeshDesc__1getMaterialIndices(JNIEnv* env, jclass, jlong address) {
+    (void) env;    // avoid unused parameter warning / error
+    physx::PxTriangleMeshDesc* self = (physx::PxTriangleMeshDesc*) address;
+    return (jlong) &self->materialIndices;
+}
+JNIEXPORT void JNICALL Java_physx_cooking_PxTriangleMeshDesc__1setMaterialIndices(JNIEnv* env, jclass, jlong address, jlong value) {
+    (void) env;    // avoid unused parameter warning / error
+    physx::PxTriangleMeshDesc* self = (physx::PxTriangleMeshDesc*) address;
+    self->materialIndices = *((PxU16StridedData*) value);
 }
 
 // PxConvexFlagEnum
@@ -621,6 +961,41 @@ JNIEXPORT jint JNICALL Java_physx_cooking_PxConvexFlagEnum__1geteGPU_1COMPATIBLE
 }
 JNIEXPORT jint JNICALL Java_physx_cooking_PxConvexFlagEnum__1geteSHIFT_1VERTICES(JNIEnv*, jclass) {
     return PxConvexFlagEnum::eSHIFT_VERTICES;
+}
+
+// PxConvexMeshCookingTypeEnum
+JNIEXPORT jint JNICALL Java_physx_cooking_PxConvexMeshCookingTypeEnum__1geteQUICKHULL(JNIEnv*, jclass) {
+    return PxConvexMeshCookingTypeEnum::eQUICKHULL;
+}
+
+// PxMeshCookingHintEnum
+JNIEXPORT jint JNICALL Java_physx_cooking_PxMeshCookingHintEnum__1geteSIM_1PERFORMANCE(JNIEnv*, jclass) {
+    return PxMeshCookingHintEnum::eSIM_PERFORMANCE;
+}
+JNIEXPORT jint JNICALL Java_physx_cooking_PxMeshCookingHintEnum__1geteCOOKING_1PERFORMANCE(JNIEnv*, jclass) {
+    return PxMeshCookingHintEnum::eCOOKING_PERFORMANCE;
+}
+
+// PxMeshPreprocessingFlagEnum
+JNIEXPORT jint JNICALL Java_physx_cooking_PxMeshPreprocessingFlagEnum__1geteWELD_1VERTICES(JNIEnv*, jclass) {
+    return PxMeshPreprocessingFlagEnum::eWELD_VERTICES;
+}
+JNIEXPORT jint JNICALL Java_physx_cooking_PxMeshPreprocessingFlagEnum__1geteDISABLE_1CLEAN_1MESH(JNIEnv*, jclass) {
+    return PxMeshPreprocessingFlagEnum::eDISABLE_CLEAN_MESH;
+}
+JNIEXPORT jint JNICALL Java_physx_cooking_PxMeshPreprocessingFlagEnum__1geteDISABLE_1ACTIVE_1EDGES_1PRECOMPUTE(JNIEnv*, jclass) {
+    return PxMeshPreprocessingFlagEnum::eDISABLE_ACTIVE_EDGES_PRECOMPUTE;
+}
+JNIEXPORT jint JNICALL Java_physx_cooking_PxMeshPreprocessingFlagEnum__1geteFORCE_132BIT_1INDICES(JNIEnv*, jclass) {
+    return PxMeshPreprocessingFlagEnum::eFORCE_32BIT_INDICES;
+}
+
+// PxMeshMidPhaseEnum
+JNIEXPORT jint JNICALL Java_physx_cooking_PxMeshMidPhaseEnum__1geteBVH33(JNIEnv*, jclass) {
+    return PxMeshMidPhaseEnum::eBVH33;
+}
+JNIEXPORT jint JNICALL Java_physx_cooking_PxMeshMidPhaseEnum__1geteBVH34(JNIEnv*, jclass) {
+    return PxMeshMidPhaseEnum::eBVH34;
 }
 
 // PxDefaultAllocator
@@ -739,6 +1114,13 @@ JNIEXPORT jint JNICALL Java_physx_extensions_PxRevoluteJointFlagEnum__1geteDRIVE
 }
 
 // PxBoxGeometry
+JNIEXPORT jint JNICALL Java_physx_geomutils_PxBoxGeometry__1_1sizeOf(JNIEnv*, jclass) {
+    return sizeof(physx::PxBoxGeometry);
+}
+JNIEXPORT void JNICALL Java_physx_geomutils_PxBoxGeometry__1_1placement_1new_1PxBoxGeometry(JNIEnv* env, jclass, jlong __placement_address, jfloat hx, jfloat hy, jfloat hz) {
+    (void) env;    // avoid unused parameter warning / error
+    new((void*)__placement_address) physx::PxBoxGeometry(hx, hy, hz);
+}
 JNIEXPORT jlong JNICALL Java_physx_geomutils_PxBoxGeometry__1PxBoxGeometry(JNIEnv* env, jclass, jfloat hx, jfloat hy, jfloat hz) {
     (void) env;    // avoid unused parameter warning / error
     return (jlong) new physx::PxBoxGeometry(hx, hy, hz);
@@ -750,6 +1132,13 @@ JNIEXPORT void JNICALL Java_physx_geomutils_PxBoxGeometry__1delete_1native_1inst
 // PxBVHStructure
 
 // PxCapsuleGeometry
+JNIEXPORT jint JNICALL Java_physx_geomutils_PxCapsuleGeometry__1_1sizeOf(JNIEnv*, jclass) {
+    return sizeof(physx::PxCapsuleGeometry);
+}
+JNIEXPORT void JNICALL Java_physx_geomutils_PxCapsuleGeometry__1_1placement_1new_1PxCapsuleGeometry(JNIEnv* env, jclass, jlong __placement_address, jfloat radius, jfloat halfHeight) {
+    (void) env;    // avoid unused parameter warning / error
+    new((void*)__placement_address) physx::PxCapsuleGeometry(radius, halfHeight);
+}
 JNIEXPORT jlong JNICALL Java_physx_geomutils_PxCapsuleGeometry__1PxCapsuleGeometry(JNIEnv* env, jclass, jfloat radius, jfloat halfHeight) {
     (void) env;    // avoid unused parameter warning / error
     return (jlong) new physx::PxCapsuleGeometry(radius, halfHeight);
@@ -810,6 +1199,21 @@ JNIEXPORT jboolean JNICALL Java_physx_geomutils_PxConvexMesh__1isGpuCompatible(J
 }
 
 // PxConvexMeshGeometry
+JNIEXPORT jint JNICALL Java_physx_geomutils_PxConvexMeshGeometry__1_1sizeOf(JNIEnv*, jclass) {
+    return sizeof(physx::PxConvexMeshGeometry);
+}
+JNIEXPORT void JNICALL Java_physx_geomutils_PxConvexMeshGeometry__1_1placement_1new_1PxConvexMeshGeometry__JJ(JNIEnv* env, jclass, jlong __placement_address, jlong mesh) {
+    (void) env;    // avoid unused parameter warning / error
+    new((void*)__placement_address) physx::PxConvexMeshGeometry((physx::PxConvexMesh*) mesh);
+}
+JNIEXPORT void JNICALL Java_physx_geomutils_PxConvexMeshGeometry__1_1placement_1new_1PxConvexMeshGeometry__JJJ(JNIEnv* env, jclass, jlong __placement_address, jlong mesh, jlong scaling) {
+    (void) env;    // avoid unused parameter warning / error
+    new((void*)__placement_address) physx::PxConvexMeshGeometry((physx::PxConvexMesh*) mesh, *((physx::PxMeshScale*) scaling));
+}
+JNIEXPORT void JNICALL Java_physx_geomutils_PxConvexMeshGeometry__1_1placement_1new_1PxConvexMeshGeometry__JJJJ(JNIEnv* env, jclass, jlong __placement_address, jlong mesh, jlong scaling, jlong flags) {
+    (void) env;    // avoid unused parameter warning / error
+    new((void*)__placement_address) physx::PxConvexMeshGeometry((physx::PxConvexMesh*) mesh, *((physx::PxMeshScale*) scaling), *((physx::PxConvexMeshGeometryFlags*) flags));
+}
 JNIEXPORT jlong JNICALL Java_physx_geomutils_PxConvexMeshGeometry__1PxConvexMeshGeometry__J(JNIEnv* env, jclass, jlong mesh) {
     (void) env;    // avoid unused parameter warning / error
     return (jlong) new physx::PxConvexMeshGeometry((physx::PxConvexMesh*) mesh);
@@ -901,6 +1305,61 @@ JNIEXPORT void JNICALL Java_physx_geomutils_PxHullPolygon__1setMIndexBase(JNIEnv
     self->mIndexBase = value;
 }
 
+// PxMeshFlags
+JNIEXPORT jint JNICALL Java_physx_geomutils_PxMeshFlags__1_1sizeOf(JNIEnv*, jclass) {
+    return sizeof(physx::PxMeshFlags);
+}
+JNIEXPORT void JNICALL Java_physx_geomutils_PxMeshFlags__1_1placement_1new_1PxMeshFlags(JNIEnv* env, jclass, jlong __placement_address, jbyte flags) {
+    (void) env;    // avoid unused parameter warning / error
+    new((void*)__placement_address) physx::PxMeshFlags(flags);
+}
+JNIEXPORT jlong JNICALL Java_physx_geomutils_PxMeshFlags__1PxMeshFlags(JNIEnv* env, jclass, jbyte flags) {
+    (void) env;    // avoid unused parameter warning / error
+    return (jlong) new physx::PxMeshFlags(flags);
+}
+JNIEXPORT jboolean JNICALL Java_physx_geomutils_PxMeshFlags__1isSet(JNIEnv* env, jclass, jlong address, jint flag) {
+    (void) env;    // avoid unused parameter warning / error
+    physx::PxMeshFlags* self = (physx::PxMeshFlags*) address;
+    return (jboolean) self->isSet((PxMeshFlagEnum) flag);
+}
+JNIEXPORT void JNICALL Java_physx_geomutils_PxMeshFlags__1set(JNIEnv* env, jclass, jlong address, jint flag) {
+    (void) env;    // avoid unused parameter warning / error
+    physx::PxMeshFlags* self = (physx::PxMeshFlags*) address;
+    self->set((PxMeshFlagEnum) flag);
+}
+JNIEXPORT void JNICALL Java_physx_geomutils_PxMeshFlags__1clear(JNIEnv* env, jclass, jlong address, jint flag) {
+    (void) env;    // avoid unused parameter warning / error
+    physx::PxMeshFlags* self = (physx::PxMeshFlags*) address;
+    self->clear((PxMeshFlagEnum) flag);
+}
+JNIEXPORT void JNICALL Java_physx_geomutils_PxMeshFlags__1delete_1native_1instance(JNIEnv*, jclass, jlong address) {
+    delete (physx::PxMeshFlags*) address;
+}
+
+// PxMeshGeometryFlags
+JNIEXPORT jlong JNICALL Java_physx_geomutils_PxMeshGeometryFlags__1PxMeshGeometryFlags(JNIEnv* env, jclass, jbyte flags) {
+    (void) env;    // avoid unused parameter warning / error
+    return (jlong) new physx::PxMeshGeometryFlags(flags);
+}
+JNIEXPORT jboolean JNICALL Java_physx_geomutils_PxMeshGeometryFlags__1isSet(JNIEnv* env, jclass, jlong address, jint flag) {
+    (void) env;    // avoid unused parameter warning / error
+    physx::PxMeshGeometryFlags* self = (physx::PxMeshGeometryFlags*) address;
+    return (jboolean) self->isSet((PxMeshGeometryFlagEnum) flag);
+}
+JNIEXPORT void JNICALL Java_physx_geomutils_PxMeshGeometryFlags__1set(JNIEnv* env, jclass, jlong address, jint flag) {
+    (void) env;    // avoid unused parameter warning / error
+    physx::PxMeshGeometryFlags* self = (physx::PxMeshGeometryFlags*) address;
+    self->set((PxMeshGeometryFlagEnum) flag);
+}
+JNIEXPORT void JNICALL Java_physx_geomutils_PxMeshGeometryFlags__1clear(JNIEnv* env, jclass, jlong address, jint flag) {
+    (void) env;    // avoid unused parameter warning / error
+    physx::PxMeshGeometryFlags* self = (physx::PxMeshGeometryFlags*) address;
+    self->clear((PxMeshGeometryFlagEnum) flag);
+}
+JNIEXPORT void JNICALL Java_physx_geomutils_PxMeshGeometryFlags__1delete_1native_1instance(JNIEnv*, jclass, jlong address) {
+    delete (physx::PxMeshGeometryFlags*) address;
+}
+
 // PxMeshScale
 JNIEXPORT jlong JNICALL Java_physx_geomutils_PxMeshScale__1PxMeshScale__(JNIEnv* env, jclass) {
     (void) env;    // avoid unused parameter warning / error
@@ -919,6 +1378,13 @@ JNIEXPORT void JNICALL Java_physx_geomutils_PxMeshScale__1delete_1native_1instan
 }
 
 // PxPlaneGeometry
+JNIEXPORT jint JNICALL Java_physx_geomutils_PxPlaneGeometry__1_1sizeOf(JNIEnv*, jclass) {
+    return sizeof(physx::PxPlaneGeometry);
+}
+JNIEXPORT void JNICALL Java_physx_geomutils_PxPlaneGeometry__1_1placement_1new_1PxPlaneGeometry(JNIEnv* env, jclass, jlong __placement_address) {
+    (void) env;    // avoid unused parameter warning / error
+    new((void*)__placement_address) physx::PxPlaneGeometry();
+}
 JNIEXPORT jlong JNICALL Java_physx_geomutils_PxPlaneGeometry__1PxPlaneGeometry(JNIEnv* env, jclass) {
     (void) env;    // avoid unused parameter warning / error
     return (jlong) new physx::PxPlaneGeometry();
@@ -927,7 +1393,63 @@ JNIEXPORT void JNICALL Java_physx_geomutils_PxPlaneGeometry__1delete_1native_1in
     delete (physx::PxPlaneGeometry*) address;
 }
 
+// PxSimpleTriangleMesh
+JNIEXPORT jlong JNICALL Java_physx_geomutils_PxSimpleTriangleMesh__1PxSimpleTriangleMesh(JNIEnv* env, jclass) {
+    (void) env;    // avoid unused parameter warning / error
+    return (jlong) new physx::PxSimpleTriangleMesh();
+}
+JNIEXPORT void JNICALL Java_physx_geomutils_PxSimpleTriangleMesh__1setToDefault(JNIEnv* env, jclass, jlong address) {
+    (void) env;    // avoid unused parameter warning / error
+    physx::PxSimpleTriangleMesh* self = (physx::PxSimpleTriangleMesh*) address;
+    self->setToDefault();
+}
+JNIEXPORT jboolean JNICALL Java_physx_geomutils_PxSimpleTriangleMesh__1isValid(JNIEnv* env, jclass, jlong address) {
+    (void) env;    // avoid unused parameter warning / error
+    physx::PxSimpleTriangleMesh* self = (physx::PxSimpleTriangleMesh*) address;
+    return (jboolean) self->isValid();
+}
+JNIEXPORT void JNICALL Java_physx_geomutils_PxSimpleTriangleMesh__1delete_1native_1instance(JNIEnv*, jclass, jlong address) {
+    delete (physx::PxSimpleTriangleMesh*) address;
+}
+JNIEXPORT jlong JNICALL Java_physx_geomutils_PxSimpleTriangleMesh__1getPoints(JNIEnv* env, jclass, jlong address) {
+    (void) env;    // avoid unused parameter warning / error
+    physx::PxSimpleTriangleMesh* self = (physx::PxSimpleTriangleMesh*) address;
+    return (jlong) &self->points;
+}
+JNIEXPORT void JNICALL Java_physx_geomutils_PxSimpleTriangleMesh__1setPoints(JNIEnv* env, jclass, jlong address, jlong value) {
+    (void) env;    // avoid unused parameter warning / error
+    physx::PxSimpleTriangleMesh* self = (physx::PxSimpleTriangleMesh*) address;
+    self->points = *((physx::PxBoundedData*) value);
+}
+JNIEXPORT jlong JNICALL Java_physx_geomutils_PxSimpleTriangleMesh__1getTriangles(JNIEnv* env, jclass, jlong address) {
+    (void) env;    // avoid unused parameter warning / error
+    physx::PxSimpleTriangleMesh* self = (physx::PxSimpleTriangleMesh*) address;
+    return (jlong) &self->triangles;
+}
+JNIEXPORT void JNICALL Java_physx_geomutils_PxSimpleTriangleMesh__1setTriangles(JNIEnv* env, jclass, jlong address, jlong value) {
+    (void) env;    // avoid unused parameter warning / error
+    physx::PxSimpleTriangleMesh* self = (physx::PxSimpleTriangleMesh*) address;
+    self->triangles = *((physx::PxBoundedData*) value);
+}
+JNIEXPORT jlong JNICALL Java_physx_geomutils_PxSimpleTriangleMesh__1getFlags(JNIEnv* env, jclass, jlong address) {
+    (void) env;    // avoid unused parameter warning / error
+    physx::PxSimpleTriangleMesh* self = (physx::PxSimpleTriangleMesh*) address;
+    return (jlong) &self->flags;
+}
+JNIEXPORT void JNICALL Java_physx_geomutils_PxSimpleTriangleMesh__1setFlags(JNIEnv* env, jclass, jlong address, jlong value) {
+    (void) env;    // avoid unused parameter warning / error
+    physx::PxSimpleTriangleMesh* self = (physx::PxSimpleTriangleMesh*) address;
+    self->flags = *((physx::PxMeshFlags*) value);
+}
+
 // PxSphereGeometry
+JNIEXPORT jint JNICALL Java_physx_geomutils_PxSphereGeometry__1_1sizeOf(JNIEnv*, jclass) {
+    return sizeof(physx::PxSphereGeometry);
+}
+JNIEXPORT void JNICALL Java_physx_geomutils_PxSphereGeometry__1_1placement_1new_1PxSphereGeometry(JNIEnv* env, jclass, jlong __placement_address, jfloat ir) {
+    (void) env;    // avoid unused parameter warning / error
+    new((void*)__placement_address) physx::PxSphereGeometry(ir);
+}
 JNIEXPORT jlong JNICALL Java_physx_geomutils_PxSphereGeometry__1PxSphereGeometry(JNIEnv* env, jclass, jfloat ir) {
     (void) env;    // avoid unused parameter warning / error
     return (jlong) new physx::PxSphereGeometry(ir);
@@ -936,9 +1458,166 @@ JNIEXPORT void JNICALL Java_physx_geomutils_PxSphereGeometry__1delete_1native_1i
     delete (physx::PxSphereGeometry*) address;
 }
 
+// PxTriangleMesh
+JNIEXPORT jint JNICALL Java_physx_geomutils_PxTriangleMesh__1getNbVertices(JNIEnv* env, jclass, jlong address) {
+    (void) env;    // avoid unused parameter warning / error
+    physx::PxTriangleMesh* self = (physx::PxTriangleMesh*) address;
+    return (jint) self->getNbVertices();
+}
+JNIEXPORT jlong JNICALL Java_physx_geomutils_PxTriangleMesh__1getVertices(JNIEnv* env, jclass, jlong address) {
+    (void) env;    // avoid unused parameter warning / error
+    physx::PxTriangleMesh* self = (physx::PxTriangleMesh*) address;
+    return (jlong) self->getVertices();
+}
+JNIEXPORT jlong JNICALL Java_physx_geomutils_PxTriangleMesh__1getVerticesForModification(JNIEnv* env, jclass, jlong address) {
+    (void) env;    // avoid unused parameter warning / error
+    physx::PxTriangleMesh* self = (physx::PxTriangleMesh*) address;
+    return (jlong) self->getVerticesForModification();
+}
+JNIEXPORT jlong JNICALL Java_physx_geomutils_PxTriangleMesh__1refitBVH(JNIEnv* env, jclass, jlong address) {
+    (void) env;    // avoid unused parameter warning / error
+    static physx::PxBounds3 cache;
+    physx::PxTriangleMesh* self = (physx::PxTriangleMesh*) address;
+    cache = self->refitBVH();
+    return (jlong) &cache;
+}
+JNIEXPORT jint JNICALL Java_physx_geomutils_PxTriangleMesh__1getNbTriangles(JNIEnv* env, jclass, jlong address) {
+    (void) env;    // avoid unused parameter warning / error
+    physx::PxTriangleMesh* self = (physx::PxTriangleMesh*) address;
+    return (jint) self->getNbTriangles();
+}
+JNIEXPORT jlong JNICALL Java_physx_geomutils_PxTriangleMesh__1getTriangles(JNIEnv* env, jclass, jlong address) {
+    (void) env;    // avoid unused parameter warning / error
+    physx::PxTriangleMesh* self = (physx::PxTriangleMesh*) address;
+    return (jlong) self->getTriangles();
+}
+JNIEXPORT jlong JNICALL Java_physx_geomutils_PxTriangleMesh__1getTriangleMeshFlags(JNIEnv* env, jclass, jlong address) {
+    (void) env;    // avoid unused parameter warning / error
+    static physx::PxTriangleMeshFlags cache;
+    physx::PxTriangleMesh* self = (physx::PxTriangleMesh*) address;
+    cache = self->getTriangleMeshFlags();
+    return (jlong) &cache;
+}
+JNIEXPORT jlong JNICALL Java_physx_geomutils_PxTriangleMesh__1getTrianglesRemap(JNIEnv* env, jclass, jlong address) {
+    (void) env;    // avoid unused parameter warning / error
+    physx::PxTriangleMesh* self = (physx::PxTriangleMesh*) address;
+    return (jlong) self->getTrianglesRemap();
+}
+JNIEXPORT jshort JNICALL Java_physx_geomutils_PxTriangleMesh__1getTriangleMaterialIndex(JNIEnv* env, jclass, jlong address, jint triangleIndex) {
+    (void) env;    // avoid unused parameter warning / error
+    physx::PxTriangleMesh* self = (physx::PxTriangleMesh*) address;
+    return (jshort) self->getTriangleMaterialIndex(triangleIndex);
+}
+JNIEXPORT jlong JNICALL Java_physx_geomutils_PxTriangleMesh__1getLocalBounds(JNIEnv* env, jclass, jlong address) {
+    (void) env;    // avoid unused parameter warning / error
+    static physx::PxBounds3 cache;
+    physx::PxTriangleMesh* self = (physx::PxTriangleMesh*) address;
+    cache = self->getLocalBounds();
+    return (jlong) &cache;
+}
+JNIEXPORT jint JNICALL Java_physx_geomutils_PxTriangleMesh__1getReferenceCount(JNIEnv* env, jclass, jlong address) {
+    (void) env;    // avoid unused parameter warning / error
+    physx::PxTriangleMesh* self = (physx::PxTriangleMesh*) address;
+    return (jint) self->getReferenceCount();
+}
+JNIEXPORT void JNICALL Java_physx_geomutils_PxTriangleMesh__1acquireReference(JNIEnv* env, jclass, jlong address) {
+    (void) env;    // avoid unused parameter warning / error
+    physx::PxTriangleMesh* self = (physx::PxTriangleMesh*) address;
+    self->acquireReference();
+}
+
+// PxTriangleMeshFlags
+JNIEXPORT jint JNICALL Java_physx_geomutils_PxTriangleMeshFlags__1_1sizeOf(JNIEnv*, jclass) {
+    return sizeof(physx::PxTriangleMeshFlags);
+}
+JNIEXPORT void JNICALL Java_physx_geomutils_PxTriangleMeshFlags__1_1placement_1new_1PxTriangleMeshFlags(JNIEnv* env, jclass, jlong __placement_address, jbyte flags) {
+    (void) env;    // avoid unused parameter warning / error
+    new((void*)__placement_address) physx::PxTriangleMeshFlags(flags);
+}
+JNIEXPORT jlong JNICALL Java_physx_geomutils_PxTriangleMeshFlags__1PxTriangleMeshFlags(JNIEnv* env, jclass, jbyte flags) {
+    (void) env;    // avoid unused parameter warning / error
+    return (jlong) new physx::PxTriangleMeshFlags(flags);
+}
+JNIEXPORT jboolean JNICALL Java_physx_geomutils_PxTriangleMeshFlags__1isSet(JNIEnv* env, jclass, jlong address, jint flag) {
+    (void) env;    // avoid unused parameter warning / error
+    physx::PxTriangleMeshFlags* self = (physx::PxTriangleMeshFlags*) address;
+    return (jboolean) self->isSet((PxTriangleMeshFlagEnum) flag);
+}
+JNIEXPORT void JNICALL Java_physx_geomutils_PxTriangleMeshFlags__1set(JNIEnv* env, jclass, jlong address, jint flag) {
+    (void) env;    // avoid unused parameter warning / error
+    physx::PxTriangleMeshFlags* self = (physx::PxTriangleMeshFlags*) address;
+    self->set((PxTriangleMeshFlagEnum) flag);
+}
+JNIEXPORT void JNICALL Java_physx_geomutils_PxTriangleMeshFlags__1clear(JNIEnv* env, jclass, jlong address, jint flag) {
+    (void) env;    // avoid unused parameter warning / error
+    physx::PxTriangleMeshFlags* self = (physx::PxTriangleMeshFlags*) address;
+    self->clear((PxTriangleMeshFlagEnum) flag);
+}
+JNIEXPORT void JNICALL Java_physx_geomutils_PxTriangleMeshFlags__1delete_1native_1instance(JNIEnv*, jclass, jlong address) {
+    delete (physx::PxTriangleMeshFlags*) address;
+}
+
+// PxTriangleMeshGeometry
+JNIEXPORT jint JNICALL Java_physx_geomutils_PxTriangleMeshGeometry__1_1sizeOf(JNIEnv*, jclass) {
+    return sizeof(physx::PxTriangleMeshGeometry);
+}
+JNIEXPORT void JNICALL Java_physx_geomutils_PxTriangleMeshGeometry__1_1placement_1new_1PxTriangleMeshGeometry__JJ(JNIEnv* env, jclass, jlong __placement_address, jlong mesh) {
+    (void) env;    // avoid unused parameter warning / error
+    new((void*)__placement_address) physx::PxTriangleMeshGeometry((physx::PxTriangleMesh*) mesh);
+}
+JNIEXPORT void JNICALL Java_physx_geomutils_PxTriangleMeshGeometry__1_1placement_1new_1PxTriangleMeshGeometry__JJJ(JNIEnv* env, jclass, jlong __placement_address, jlong mesh, jlong scaling) {
+    (void) env;    // avoid unused parameter warning / error
+    new((void*)__placement_address) physx::PxTriangleMeshGeometry((physx::PxTriangleMesh*) mesh, *((physx::PxMeshScale*) scaling));
+}
+JNIEXPORT void JNICALL Java_physx_geomutils_PxTriangleMeshGeometry__1_1placement_1new_1PxTriangleMeshGeometry__JJJJ(JNIEnv* env, jclass, jlong __placement_address, jlong mesh, jlong scaling, jlong flags) {
+    (void) env;    // avoid unused parameter warning / error
+    new((void*)__placement_address) physx::PxTriangleMeshGeometry((physx::PxTriangleMesh*) mesh, *((physx::PxMeshScale*) scaling), *((physx::PxMeshGeometryFlags*) flags));
+}
+JNIEXPORT jlong JNICALL Java_physx_geomutils_PxTriangleMeshGeometry__1PxTriangleMeshGeometry__J(JNIEnv* env, jclass, jlong mesh) {
+    (void) env;    // avoid unused parameter warning / error
+    return (jlong) new physx::PxTriangleMeshGeometry((physx::PxTriangleMesh*) mesh);
+}
+JNIEXPORT jlong JNICALL Java_physx_geomutils_PxTriangleMeshGeometry__1PxTriangleMeshGeometry__JJ(JNIEnv* env, jclass, jlong mesh, jlong scaling) {
+    (void) env;    // avoid unused parameter warning / error
+    return (jlong) new physx::PxTriangleMeshGeometry((physx::PxTriangleMesh*) mesh, *((physx::PxMeshScale*) scaling));
+}
+JNIEXPORT jlong JNICALL Java_physx_geomutils_PxTriangleMeshGeometry__1PxTriangleMeshGeometry__JJJ(JNIEnv* env, jclass, jlong mesh, jlong scaling, jlong flags) {
+    (void) env;    // avoid unused parameter warning / error
+    return (jlong) new physx::PxTriangleMeshGeometry((physx::PxTriangleMesh*) mesh, *((physx::PxMeshScale*) scaling), *((physx::PxMeshGeometryFlags*) flags));
+}
+JNIEXPORT jboolean JNICALL Java_physx_geomutils_PxTriangleMeshGeometry__1isValid(JNIEnv* env, jclass, jlong address) {
+    (void) env;    // avoid unused parameter warning / error
+    physx::PxTriangleMeshGeometry* self = (physx::PxTriangleMeshGeometry*) address;
+    return (jboolean) self->isValid();
+}
+JNIEXPORT void JNICALL Java_physx_geomutils_PxTriangleMeshGeometry__1delete_1native_1instance(JNIEnv*, jclass, jlong address) {
+    delete (physx::PxTriangleMeshGeometry*) address;
+}
+
 // PxConvexMeshGeometryFlagEnum
 JNIEXPORT jint JNICALL Java_physx_geomutils_PxConvexMeshGeometryFlagEnum__1geteTIGHT_1BOUNDS(JNIEnv*, jclass) {
     return PxConvexMeshGeometryFlagEnum::eTIGHT_BOUNDS;
+}
+
+// PxMeshFlagEnum
+JNIEXPORT jint JNICALL Java_physx_geomutils_PxMeshFlagEnum__1geteFLIPNORMALS(JNIEnv*, jclass) {
+    return PxMeshFlagEnum::eFLIPNORMALS;
+}
+JNIEXPORT jint JNICALL Java_physx_geomutils_PxMeshFlagEnum__1gete16_1BIT_1INDICES(JNIEnv*, jclass) {
+    return PxMeshFlagEnum::e16_BIT_INDICES;
+}
+
+// PxMeshGeometryFlagEnum
+JNIEXPORT jint JNICALL Java_physx_geomutils_PxMeshGeometryFlagEnum__1geteDOUBLE_1SIDED(JNIEnv*, jclass) {
+    return PxMeshGeometryFlagEnum::eDOUBLE_SIDED;
+}
+
+// PxTriangleMeshFlagEnum
+JNIEXPORT jint JNICALL Java_physx_geomutils_PxTriangleMeshFlagEnum__1gete16_1BIT_1INDICES(JNIEnv*, jclass) {
+    return PxTriangleMeshFlagEnum::e16_BIT_INDICES;
+}
+JNIEXPORT jint JNICALL Java_physx_geomutils_PxTriangleMeshFlagEnum__1geteADJACENCY_1INFO(JNIEnv*, jclass) {
+    return PxTriangleMeshFlagEnum::eADJACENCY_INFO;
 }
 
 // PxActor
@@ -2652,6 +3331,26 @@ JNIEXPORT void JNICALL Java_physx_support_PxMaterialPtr__1delete_1native_1instan
     delete (PxMaterialPtr*) address;
 }
 
+// PxRealPtr
+JNIEXPORT void JNICALL Java_physx_support_PxRealPtr__1delete_1native_1instance(JNIEnv*, jclass, jlong address) {
+    delete (PxRealPtr*) address;
+}
+
+// PxU8Ptr
+JNIEXPORT void JNICALL Java_physx_support_PxU8Ptr__1delete_1native_1instance(JNIEnv*, jclass, jlong address) {
+    delete (PxU8Ptr*) address;
+}
+
+// PxU16Ptr
+JNIEXPORT void JNICALL Java_physx_support_PxU16Ptr__1delete_1native_1instance(JNIEnv*, jclass, jlong address) {
+    delete (PxU16Ptr*) address;
+}
+
+// PxU32Ptr
+JNIEXPORT void JNICALL Java_physx_support_PxU32Ptr__1delete_1native_1instance(JNIEnv*, jclass, jlong address) {
+    delete (PxU32Ptr*) address;
+}
+
 // Vector_PxMaterial
 JNIEXPORT jlong JNICALL Java_physx_support_Vector_1PxMaterial__1Vector_1PxMaterial__(JNIEnv* env, jclass) {
     (void) env;    // avoid unused parameter warning / error
@@ -2701,10 +3400,8 @@ JNIEXPORT jfloat JNICALL Java_physx_support_Vector_1PxReal__1at(JNIEnv* env, jcl
 }
 JNIEXPORT jlong JNICALL Java_physx_support_Vector_1PxReal__1data(JNIEnv* env, jclass, jlong address) {
     (void) env;    // avoid unused parameter warning / error
-    static PxRealPtr cache;
     Vector_PxReal* self = (Vector_PxReal*) address;
-    cache = self->data();
-    return (jlong) &cache;
+    return (jlong) self->data();
 }
 JNIEXPORT jint JNICALL Java_physx_support_Vector_1PxReal__1size(JNIEnv* env, jclass, jlong address) {
     (void) env;    // avoid unused parameter warning / error
@@ -2718,6 +3415,72 @@ JNIEXPORT void JNICALL Java_physx_support_Vector_1PxReal__1push_1back(JNIEnv* en
 }
 JNIEXPORT void JNICALL Java_physx_support_Vector_1PxReal__1delete_1native_1instance(JNIEnv*, jclass, jlong address) {
     delete (Vector_PxReal*) address;
+}
+
+// Vector_PxU16
+JNIEXPORT jlong JNICALL Java_physx_support_Vector_1PxU16__1Vector_1PxU16__(JNIEnv* env, jclass) {
+    (void) env;    // avoid unused parameter warning / error
+    return (jlong) new Vector_PxU16();
+}
+JNIEXPORT jlong JNICALL Java_physx_support_Vector_1PxU16__1Vector_1PxU16__I(JNIEnv* env, jclass, jint size) {
+    (void) env;    // avoid unused parameter warning / error
+    return (jlong) new Vector_PxU16(size);
+}
+JNIEXPORT jshort JNICALL Java_physx_support_Vector_1PxU16__1at(JNIEnv* env, jclass, jlong address, jint index) {
+    (void) env;    // avoid unused parameter warning / error
+    Vector_PxU16* self = (Vector_PxU16*) address;
+    return (jshort) self->at(index);
+}
+JNIEXPORT jlong JNICALL Java_physx_support_Vector_1PxU16__1data(JNIEnv* env, jclass, jlong address) {
+    (void) env;    // avoid unused parameter warning / error
+    Vector_PxU16* self = (Vector_PxU16*) address;
+    return (jlong) self->data();
+}
+JNIEXPORT jint JNICALL Java_physx_support_Vector_1PxU16__1size(JNIEnv* env, jclass, jlong address) {
+    (void) env;    // avoid unused parameter warning / error
+    Vector_PxU16* self = (Vector_PxU16*) address;
+    return (jint) self->size();
+}
+JNIEXPORT void JNICALL Java_physx_support_Vector_1PxU16__1push_1back(JNIEnv* env, jclass, jlong address, jshort value) {
+    (void) env;    // avoid unused parameter warning / error
+    Vector_PxU16* self = (Vector_PxU16*) address;
+    self->push_back(value);
+}
+JNIEXPORT void JNICALL Java_physx_support_Vector_1PxU16__1delete_1native_1instance(JNIEnv*, jclass, jlong address) {
+    delete (Vector_PxU16*) address;
+}
+
+// Vector_PxU32
+JNIEXPORT jlong JNICALL Java_physx_support_Vector_1PxU32__1Vector_1PxU32__(JNIEnv* env, jclass) {
+    (void) env;    // avoid unused parameter warning / error
+    return (jlong) new Vector_PxU32();
+}
+JNIEXPORT jlong JNICALL Java_physx_support_Vector_1PxU32__1Vector_1PxU32__I(JNIEnv* env, jclass, jint size) {
+    (void) env;    // avoid unused parameter warning / error
+    return (jlong) new Vector_PxU32(size);
+}
+JNIEXPORT jint JNICALL Java_physx_support_Vector_1PxU32__1at(JNIEnv* env, jclass, jlong address, jint index) {
+    (void) env;    // avoid unused parameter warning / error
+    Vector_PxU32* self = (Vector_PxU32*) address;
+    return (jint) self->at(index);
+}
+JNIEXPORT jlong JNICALL Java_physx_support_Vector_1PxU32__1data(JNIEnv* env, jclass, jlong address) {
+    (void) env;    // avoid unused parameter warning / error
+    Vector_PxU32* self = (Vector_PxU32*) address;
+    return (jlong) self->data();
+}
+JNIEXPORT jint JNICALL Java_physx_support_Vector_1PxU32__1size(JNIEnv* env, jclass, jlong address) {
+    (void) env;    // avoid unused parameter warning / error
+    Vector_PxU32* self = (Vector_PxU32*) address;
+    return (jint) self->size();
+}
+JNIEXPORT void JNICALL Java_physx_support_Vector_1PxU32__1push_1back(JNIEnv* env, jclass, jlong address, jint value) {
+    (void) env;    // avoid unused parameter warning / error
+    Vector_PxU32* self = (Vector_PxU32*) address;
+    self->push_back(value);
+}
+JNIEXPORT void JNICALL Java_physx_support_Vector_1PxU32__1delete_1native_1instance(JNIEnv*, jclass, jlong address) {
+    delete (Vector_PxU32*) address;
 }
 
 // Vector_PxVec3
@@ -4644,6 +5407,13 @@ JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleWheelsSimData__1delete_1nativ
 }
 
 // PxVehicleWheelsSimFlags
+JNIEXPORT jint JNICALL Java_physx_vehicle_PxVehicleWheelsSimFlags__1_1sizeOf(JNIEnv*, jclass) {
+    return sizeof(physx::PxVehicleWheelsSimFlags);
+}
+JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleWheelsSimFlags__1_1placement_1new_1PxVehicleWheelsSimFlags(JNIEnv* env, jclass, jlong __placement_address, jint flags) {
+    (void) env;    // avoid unused parameter warning / error
+    new((void*)__placement_address) physx::PxVehicleWheelsSimFlags(flags);
+}
 JNIEXPORT jlong JNICALL Java_physx_vehicle_PxVehicleWheelsSimFlags__1PxVehicleWheelsSimFlags(JNIEnv* env, jclass, jint flags) {
     (void) env;    // avoid unused parameter warning / error
     return (jlong) new physx::PxVehicleWheelsSimFlags(flags);

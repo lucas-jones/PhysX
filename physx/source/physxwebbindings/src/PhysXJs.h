@@ -1,4 +1,5 @@
 #include "PxPhysicsAPI.h"
+#include <stdio.h>
 #include <vector>
 
 // enums within namespaces are not supported by webidl binder, as a hack we can use typedefs
@@ -6,15 +7,22 @@ typedef physx::PxActorFlag::Enum PxActorFlagEnum;
 typedef physx::PxActorType::Enum PxActorTypeEnum;
 typedef physx::PxBaseFlag::Enum PxBaseFlagEnum;
 typedef physx::PxConvexFlag::Enum PxConvexFlagEnum;
+typedef physx::PxConvexMeshCookingType::Enum PxConvexMeshCookingTypeEnum;
 typedef physx::PxConvexMeshGeometryFlag::Enum PxConvexMeshGeometryFlagEnum;
 typedef physx::PxForceMode::Enum PxForceModeEnum;
 typedef physx::PxHitFlag::Enum PxHitFlagEnum;
 typedef physx::PxIDENTITY PxIDENTITYEnum;
+typedef physx::PxMeshCookingHint::Enum PxMeshCookingHintEnum;
+typedef physx::PxMeshFlag::Enum PxMeshFlagEnum;
+typedef physx::PxMeshGeometryFlag::Enum PxMeshGeometryFlagEnum;
+typedef physx::PxMeshMidPhase::Enum PxMeshMidPhaseEnum;
+typedef physx::PxMeshPreprocessingFlag::Enum PxMeshPreprocessingFlagEnum;
 typedef physx::PxRigidBodyFlag::Enum PxRigidBodyFlagEnum;
 typedef physx::PxRigidDynamicLockFlag::Enum PxRigidDynamicLockFlagEnum;
 typedef physx::PxSceneFlag::Enum PxSceneFlagEnum;
 typedef physx::PxShapeFlag::Enum PxShapeFlagEnum;
 typedef physx::PxRevoluteJointFlag::Enum PxRevoluteJointFlagEnum;
+typedef physx::PxTriangleMeshFlag::Enum PxTriangleMeshFlagEnum;
 typedef physx::PxVehicleClutchAccuracyMode::Enum PxVehicleClutchAccuracyModeEnum;
 typedef physx::PxVehicleDifferential4WData::Enum PxVehicleDifferential4WDataEnum;
 typedef physx::PxVehicleDrive4WControl::Enum PxVehicleDrive4WControlEnum;
@@ -24,12 +32,15 @@ typedef physx::PxVehicleWheelsSimFlag::Enum PxVehicleWheelsSimFlagEnum;
 
 // typedefs for pointer types
 typedef const physx::PxU8* PxU8Ptr;
+typedef const physx::PxU16* PxU16Ptr;
+typedef const physx::PxU32* PxU32Ptr;
 typedef const physx::PxMaterial* PxMaterialPtr;
 typedef physx::PxReal* PxRealPtr;
 typedef physx::PxVehicleWheels* PxVehicleWheelsPtr;
 
 // template classes are not supported by webidl binder, as a hack we can use typedefs
 typedef physx::PxFixedSizeLookupTable<physx::PxVehicleEngineData::eMAX_NB_ENGINE_TORQUE_CURVE_ENTRIES> PxEngineTorqueLookupTable;
+typedef physx::PxTypedStridedData<physx::PxU16> PxU16StridedData;
 
 typedef std::vector<PxMaterialPtr> Vector_PxMaterial;
 typedef std::vector<physx::PxRaycastHit> Vector_PxRaycastHit;
@@ -41,6 +52,8 @@ typedef std::vector<physx::PxWheelQueryResult> Vector_PxWheelQueryResult;
 typedef std::vector<PxVehicleWheelsPtr> Vector_PxVehicleWheels;
 
 typedef std::vector<physx::PxReal> Vector_PxReal;
+typedef std::vector<physx::PxU16> Vector_PxU16;
+typedef std::vector<physx::PxU32> Vector_PxU32;
 typedef std::vector<physx::PxVec3> Vector_PxVec3;
 
 // default scene filter / query shaders, implemented in C++ for performance reasons
@@ -121,7 +134,7 @@ class PxTopLevelFunctions {
             return &defaultWheelSceneQueryPostFilterBlocking;
         }
 
-        static physx::PxFoundation* CreateFoundation(physx::PxU32 version, physx::PxDefaultAllocator& allocator, physx::PxDefaultErrorCallback& errorCallback) {
+        static physx::PxFoundation* CreateFoundation(physx::PxU32 version, physx::PxDefaultAllocator& allocator, physx::PxErrorCallback& errorCallback) {
             return PxCreateFoundation(version, allocator, errorCallback);
         }
 
@@ -147,6 +160,21 @@ class PxTopLevelFunctions {
 
         // helper function for array-like access on a raw PxU8-pointer
         static physx::PxU8 getU8At(const physx::PxU8* base, int index) {
+            return base[index];
+        }
+
+        // helper function for array-like access on a raw PxU16-pointer
+        static physx::PxU16 getU16At(const physx::PxU16* base, int index) {
+            return base[index];
+        }
+
+        // helper function for array-like access on a raw PxU32-pointer
+        static physx::PxU32 getU32At(const physx::PxU32* base, int index) {
+            return base[index];
+        }
+
+        // helper function for array-like access on a raw PxReal-pointer
+        static physx::PxReal getRealAt(physx::PxReal* base, int index) {
             return base[index];
         }
 
