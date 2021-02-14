@@ -4,117 +4,223 @@
  */
 #include <jni.h>
 
+static JavaVM * javaVm = NULL;
+
+class JniThreadEnv {
+    public:
+        JniThreadEnv() : shouldDetach(false), env(NULL) { }
+        JniThreadEnv(JNIEnv *env) : shouldDetach(false), env(env) { }
+        ~JniThreadEnv() {
+            if (shouldDetach) {
+                javaVm->DetachCurrentThread();
+            }
+        }
+        JNIEnv* getEnv() {
+            if (env == NULL && javaVm != NULL) {
+                javaVm->AttachCurrentThread((void**) &env, NULL);
+                shouldDetach = true;
+            }
+            return env;
+        }
+        
+    private:
+        bool shouldDetach;
+        JNIEnv *env;
+};
+
+static thread_local JniThreadEnv jniThreadEnv;
+
+class JniThreadManager {
+    public:
+        static bool init(JNIEnv *env) {
+            if (env->GetJavaVM(&javaVm) != 0) {
+                return false;
+            }
+            jniThreadEnv = JniThreadEnv(env);
+            return true;
+        }
+};
+
+class JavaSimulationEventCallback : SimpleSimulationEventCallback {
+    public:
+        JavaSimulationEventCallback(JNIEnv* env, jobject javaLocalRef) {
+            javaGlobalRef = env->NewGlobalRef(javaLocalRef);
+            jclass javaClass = env->GetObjectClass(javaLocalRef);
+            JavaSimpleSimulationEventCallbackMethodId = env->GetMethodID(javaClass, "_JavaSimpleSimulationEventCallback", "()V");
+            onConstraintBreakMethodId = env->GetMethodID(javaClass, "_onConstraintBreak", "(JI)V");
+            onWakeMethodId = env->GetMethodID(javaClass, "_onWake", "(JI)V");
+            onSleepMethodId = env->GetMethodID(javaClass, "_onSleep", "(JI)V");
+            onContactMethodId = env->GetMethodID(javaClass, "_onContact", "(JJI)V");
+            onTriggerMethodId = env->GetMethodID(javaClass, "_onTrigger", "(JI)V");
+        }
+        
+        ~JavaSimulationEventCallback() {
+            jniThreadEnv.getEnv()->DeleteGlobalRef(javaGlobalRef);
+        }
+        
+        virtual void JavaSimpleSimulationEventCallback() {
+            JNIEnv* _env = jniThreadEnv.getEnv();
+            _env->CallVoidMethod(javaGlobalRef, JavaSimpleSimulationEventCallbackMethodId);
+        }
+
+        virtual void onConstraintBreak(physx::PxConstraintInfo* constraints, unsigned int count) {
+            JNIEnv* _env = jniThreadEnv.getEnv();
+            _env->CallVoidMethod(javaGlobalRef, onConstraintBreakMethodId, (jlong) constraints, (jint) count);
+        }
+
+        virtual void onWake(PxActorPtr* actors, unsigned int count) {
+            JNIEnv* _env = jniThreadEnv.getEnv();
+            _env->CallVoidMethod(javaGlobalRef, onWakeMethodId, (jlong) actors, (jint) count);
+        }
+
+        virtual void onSleep(PxActorPtr* actors, unsigned int count) {
+            JNIEnv* _env = jniThreadEnv.getEnv();
+            _env->CallVoidMethod(javaGlobalRef, onSleepMethodId, (jlong) actors, (jint) count);
+        }
+
+        virtual void onContact(const physx::PxContactPairHeader& pairHeader, const physx::PxContactPair* pairs, unsigned int nbPairs) {
+            JNIEnv* _env = jniThreadEnv.getEnv();
+            _env->CallVoidMethod(javaGlobalRef, onContactMethodId, (jlong) &pairHeader, (jlong) pairs, (jint) nbPairs);
+        }
+
+        virtual void onTrigger(physx::PxTriggerPair* pairs, unsigned int count) {
+            JNIEnv* _env = jniThreadEnv.getEnv();
+            _env->CallVoidMethod(javaGlobalRef, onTriggerMethodId, (jlong) pairs, (jint) count);
+        }
+
+    private:
+        jobject javaGlobalRef;
+        jmethodID JavaSimpleSimulationEventCallbackMethodId;
+        jmethodID onConstraintBreakMethodId;
+        jmethodID onWakeMethodId;
+        jmethodID onSleepMethodId;
+        jmethodID onContactMethodId;
+        jmethodID onTriggerMethodId;
+};
+
+class JavaErrorCallback : physx::PxErrorCallback {
+    public:
+        JavaErrorCallback(JNIEnv* env, jobject javaLocalRef) {
+            javaGlobalRef = env->NewGlobalRef(javaLocalRef);
+            jclass javaClass = env->GetObjectClass(javaLocalRef);
+            reportErrorMethodId = env->GetMethodID(javaClass, "_reportError", "(ILjava/lang/String;Ljava/lang/String;I)V");
+        }
+        
+        ~JavaErrorCallback() {
+            jniThreadEnv.getEnv()->DeleteGlobalRef(javaGlobalRef);
+        }
+        
+        virtual void reportError(PxErrorCodeEnum code, const char* message, const char* file, int line) {
+            JNIEnv* _env = jniThreadEnv.getEnv();
+            _env->CallVoidMethod(javaGlobalRef, reportErrorMethodId, (jint) code, _env->NewStringUTF(message), _env->NewStringUTF(file), (jint) line);
+        }
+
+    private:
+        jobject javaGlobalRef;
+        jmethodID reportErrorMethodId;
+};
+
 extern "C" {
 
+// JniThreadManager
+JNIEXPORT jboolean JNICALL Java_physx_JniThreadManager__1init(JNIEnv* env, jclass) {
+    return (jboolean) JniThreadManager::init(env);
+}
+JNIEXPORT void JNICALL Java_physx_JniThreadManager__1delete_1native_1instance(JNIEnv*, jclass, jlong address) {
+    delete (JniThreadManager*) address;
+}
+
 // PxTopLevelFunctions
-JNIEXPORT jlong JNICALL Java_physx_PxTopLevelFunctions__1DefaultFilterShader(JNIEnv* env, jclass) {
-    (void) env;    // avoid unused parameter warning / error
-    static physx::PxSimulationFilterShader cache;
-    cache = PxTopLevelFunctions::DefaultFilterShader();
-    return (jlong) &cache;
+JNIEXPORT jlong JNICALL Java_physx_PxTopLevelFunctions__1DefaultFilterShader(JNIEnv*, jclass) {
+    static thread_local physx::PxSimulationFilterShader _cache;
+    _cache = PxTopLevelFunctions::DefaultFilterShader();
+    return (jlong) &_cache;
 }
-JNIEXPORT jlong JNICALL Java_physx_PxTopLevelFunctions__1DefaultWheelSceneQueryPreFilterBlocking(JNIEnv* env, jclass) {
-    (void) env;    // avoid unused parameter warning / error
-    static physx::PxBatchQueryPreFilterShader cache;
-    cache = PxTopLevelFunctions::DefaultWheelSceneQueryPreFilterBlocking();
-    return (jlong) &cache;
+JNIEXPORT jlong JNICALL Java_physx_PxTopLevelFunctions__1DefaultWheelSceneQueryPreFilterBlocking(JNIEnv*, jclass) {
+    static thread_local physx::PxBatchQueryPreFilterShader _cache;
+    _cache = PxTopLevelFunctions::DefaultWheelSceneQueryPreFilterBlocking();
+    return (jlong) &_cache;
 }
-JNIEXPORT jlong JNICALL Java_physx_PxTopLevelFunctions__1DefaultWheelSceneQueryPostFilterBlocking(JNIEnv* env, jclass) {
-    (void) env;    // avoid unused parameter warning / error
-    static physx::PxBatchQueryPostFilterShader cache;
-    cache = PxTopLevelFunctions::DefaultWheelSceneQueryPostFilterBlocking();
-    return (jlong) &cache;
+JNIEXPORT jlong JNICALL Java_physx_PxTopLevelFunctions__1DefaultWheelSceneQueryPostFilterBlocking(JNIEnv*, jclass) {
+    static thread_local physx::PxBatchQueryPostFilterShader _cache;
+    _cache = PxTopLevelFunctions::DefaultWheelSceneQueryPostFilterBlocking();
+    return (jlong) &_cache;
 }
-JNIEXPORT jlong JNICALL Java_physx_PxTopLevelFunctions__1CreateCooking(JNIEnv* env, jclass, jint version, jlong foundation, jlong scale) {
-    (void) env;    // avoid unused parameter warning / error
+JNIEXPORT jlong JNICALL Java_physx_PxTopLevelFunctions__1CreateCooking(JNIEnv*, jclass, jint version, jlong foundation, jlong scale) {
     return (jlong) PxTopLevelFunctions::CreateCooking(version, *((physx::PxFoundation*) foundation), *((physx::PxCookingParams*) scale));
 }
-JNIEXPORT jlong JNICALL Java_physx_PxTopLevelFunctions__1CreateFoundation(JNIEnv* env, jclass, jint version, jlong allocator, jlong errorCallback) {
-    (void) env;    // avoid unused parameter warning / error
+JNIEXPORT jlong JNICALL Java_physx_PxTopLevelFunctions__1CreateFoundation(JNIEnv*, jclass, jint version, jlong allocator, jlong errorCallback) {
     return (jlong) PxTopLevelFunctions::CreateFoundation(version, *((physx::PxDefaultAllocator*) allocator), *((physx::PxErrorCallback*) errorCallback));
 }
-JNIEXPORT jlong JNICALL Java_physx_PxTopLevelFunctions__1CreatePhysics(JNIEnv* env, jclass, jint version, jlong foundation, jlong params) {
-    (void) env;    // avoid unused parameter warning / error
+JNIEXPORT jlong JNICALL Java_physx_PxTopLevelFunctions__1CreatePhysics(JNIEnv*, jclass, jint version, jlong foundation, jlong params) {
     return (jlong) PxTopLevelFunctions::CreatePhysics(version, *((physx::PxFoundation*) foundation), *((physx::PxTolerancesScale*) params));
 }
-JNIEXPORT jlong JNICALL Java_physx_PxTopLevelFunctions__1DefaultCpuDispatcherCreate(JNIEnv* env, jclass, jint numThreads) {
-    (void) env;    // avoid unused parameter warning / error
+JNIEXPORT jlong JNICALL Java_physx_PxTopLevelFunctions__1DefaultCpuDispatcherCreate(JNIEnv*, jclass, jint numThreads) {
     return (jlong) PxTopLevelFunctions::DefaultCpuDispatcherCreate(numThreads);
 }
-JNIEXPORT jboolean JNICALL Java_physx_PxTopLevelFunctions__1InitExtensions(JNIEnv* env, jclass, jlong physics) {
-    (void) env;    // avoid unused parameter warning / error
+JNIEXPORT jboolean JNICALL Java_physx_PxTopLevelFunctions__1InitExtensions(JNIEnv*, jclass, jlong physics) {
     return (jboolean) PxTopLevelFunctions::InitExtensions(*((physx::PxPhysics*) physics));
 }
-JNIEXPORT jlong JNICALL Java_physx_PxTopLevelFunctions__1RevoluteJointCreate(JNIEnv* env, jclass, jlong physics, jlong actor0, jlong localFrame0, jlong actor1, jlong localFrame1) {
-    (void) env;    // avoid unused parameter warning / error
+JNIEXPORT jlong JNICALL Java_physx_PxTopLevelFunctions__1RevoluteJointCreate(JNIEnv*, jclass, jlong physics, jlong actor0, jlong localFrame0, jlong actor1, jlong localFrame1) {
     return (jlong) PxTopLevelFunctions::RevoluteJointCreate(*((physx::PxPhysics*) physics), (physx::PxRigidActor*) actor0, *((physx::PxTransform*) localFrame0), (physx::PxRigidActor*) actor1, *((physx::PxTransform*) localFrame1));
 }
-JNIEXPORT jbyte JNICALL Java_physx_PxTopLevelFunctions__1getU8At(JNIEnv* env, jclass, jlong base, jint index) {
-    (void) env;    // avoid unused parameter warning / error
+JNIEXPORT jbyte JNICALL Java_physx_PxTopLevelFunctions__1getU8At(JNIEnv*, jclass, jlong base, jint index) {
     return (jbyte) PxTopLevelFunctions::getU8At(*((PxU8Ptr*) base), index);
 }
-JNIEXPORT jshort JNICALL Java_physx_PxTopLevelFunctions__1getU16At(JNIEnv* env, jclass, jlong base, jint index) {
-    (void) env;    // avoid unused parameter warning / error
+JNIEXPORT jshort JNICALL Java_physx_PxTopLevelFunctions__1getU16At(JNIEnv*, jclass, jlong base, jint index) {
     return (jshort) PxTopLevelFunctions::getU16At(*((PxU16Ptr*) base), index);
 }
-JNIEXPORT jint JNICALL Java_physx_PxTopLevelFunctions__1getU32At(JNIEnv* env, jclass, jlong base, jint index) {
-    (void) env;    // avoid unused parameter warning / error
+JNIEXPORT jint JNICALL Java_physx_PxTopLevelFunctions__1getU32At(JNIEnv*, jclass, jlong base, jint index) {
     return (jint) PxTopLevelFunctions::getU32At(*((PxU32Ptr*) base), index);
 }
-JNIEXPORT jfloat JNICALL Java_physx_PxTopLevelFunctions__1getRealAt(JNIEnv* env, jclass, jlong base, jint index) {
-    (void) env;    // avoid unused parameter warning / error
+JNIEXPORT jfloat JNICALL Java_physx_PxTopLevelFunctions__1getRealAt(JNIEnv*, jclass, jlong base, jint index) {
     return (jfloat) PxTopLevelFunctions::getRealAt(*((PxRealPtr*) base), index);
 }
-JNIEXPORT jlong JNICALL Java_physx_PxTopLevelFunctions__1getVec3At(JNIEnv* env, jclass, jlong base, jint index) {
-    (void) env;    // avoid unused parameter warning / error
-    static physx::PxVec3 cache;
-    cache = PxTopLevelFunctions::getVec3At((physx::PxVec3*) base, index);
-    return (jlong) &cache;
+JNIEXPORT jlong JNICALL Java_physx_PxTopLevelFunctions__1getContactPairAt(JNIEnv*, jclass, jlong base, jint index) {
+    return (jlong) PxTopLevelFunctions::getContactPairAt((physx::PxContactPair*) base, index);
 }
-JNIEXPORT void JNICALL Java_physx_PxTopLevelFunctions__1delete_1native_1instance(JNIEnv*, jclass, jlong address) {
-    delete (PxTopLevelFunctions*) address;
+JNIEXPORT jlong JNICALL Java_physx_PxTopLevelFunctions__1getTriggerPairAt(JNIEnv*, jclass, jlong base, jint index) {
+    return (jlong) PxTopLevelFunctions::getTriggerPairAt((physx::PxTriggerPair*) base, index);
 }
-JNIEXPORT jint JNICALL Java_physx_PxTopLevelFunctions__1getPHYSICS_1VERSION(JNIEnv* env, jclass) {
-    (void) env;    // avoid unused parameter warning / error
+JNIEXPORT jlong JNICALL Java_physx_PxTopLevelFunctions__1getVec3At(JNIEnv*, jclass, jlong base, jint index) {
+    return (jlong) PxTopLevelFunctions::getVec3At((physx::PxVec3*) base, index);
+}
+JNIEXPORT void JNICALL Java_physx_PxTopLevelFunctions__1delete_1native_1instance(JNIEnv*, jclass, jlong _address) {
+    delete (PxTopLevelFunctions*) _address;
+}
+JNIEXPORT jint JNICALL Java_physx_PxTopLevelFunctions__1getPHYSICS_1VERSION(JNIEnv*, jclass) {
     return (jint) PxTopLevelFunctions::PHYSICS_VERSION;
 }
 
 // PxBase
-JNIEXPORT void JNICALL Java_physx_common_PxBase__1release(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxBase* self = (physx::PxBase*) address;
+JNIEXPORT void JNICALL Java_physx_common_PxBase__1release(JNIEnv*, jclass, jlong _address) {
+    physx::PxBase* self = (physx::PxBase*) _address;
     self->release();
 }
-JNIEXPORT jstring JNICALL Java_physx_common_PxBase__1getConcreteTypeName(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxBase* self = (physx::PxBase*) address;
-    return env->NewStringUTF(self->getConcreteTypeName());
+JNIEXPORT jstring JNICALL Java_physx_common_PxBase__1getConcreteTypeName(JNIEnv* _env, jclass, jlong _address) {
+    physx::PxBase* self = (physx::PxBase*) _address;
+    return _env->NewStringUTF(self->getConcreteTypeName());
 }
-JNIEXPORT jint JNICALL Java_physx_common_PxBase__1getConcreteType(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxBase* self = (physx::PxBase*) address;
+JNIEXPORT jint JNICALL Java_physx_common_PxBase__1getConcreteType(JNIEnv*, jclass, jlong _address) {
+    physx::PxBase* self = (physx::PxBase*) _address;
     return (jint) self->getConcreteType();
 }
-JNIEXPORT void JNICALL Java_physx_common_PxBase__1setBaseFlag(JNIEnv* env, jclass, jlong address, jint flag, jboolean value) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxBase* self = (physx::PxBase*) address;
+JNIEXPORT void JNICALL Java_physx_common_PxBase__1setBaseFlag(JNIEnv*, jclass, jlong _address, jint flag, jboolean value) {
+    physx::PxBase* self = (physx::PxBase*) _address;
     self->setBaseFlag((PxBaseFlagEnum) flag, value);
 }
-JNIEXPORT void JNICALL Java_physx_common_PxBase__1setBaseFlags(JNIEnv* env, jclass, jlong address, jlong inFlags) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxBase* self = (physx::PxBase*) address;
+JNIEXPORT void JNICALL Java_physx_common_PxBase__1setBaseFlags(JNIEnv*, jclass, jlong _address, jlong inFlags) {
+    physx::PxBase* self = (physx::PxBase*) _address;
     self->setBaseFlags(*((physx::PxBaseFlags*) inFlags));
 }
-JNIEXPORT jlong JNICALL Java_physx_common_PxBase__1getBaseFlags(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    static physx::PxBaseFlags cache;
-    physx::PxBase* self = (physx::PxBase*) address;
-    cache = self->getBaseFlags();
-    return (jlong) &cache;
+JNIEXPORT jlong JNICALL Java_physx_common_PxBase__1getBaseFlags(JNIEnv*, jclass, jlong _address) {
+    static thread_local physx::PxBaseFlags _cache;
+    physx::PxBase* self = (physx::PxBase*) _address;
+    _cache = self->getBaseFlags();
+    return (jlong) &_cache;
 }
-JNIEXPORT jboolean JNICALL Java_physx_common_PxBase__1isReleasable(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxBase* self = (physx::PxBase*) address;
+JNIEXPORT jboolean JNICALL Java_physx_common_PxBase__1isReleasable(JNIEnv*, jclass, jlong _address) {
+    physx::PxBase* self = (physx::PxBase*) _address;
     return (jboolean) self->isReleasable();
 }
 
@@ -122,242 +228,214 @@ JNIEXPORT jboolean JNICALL Java_physx_common_PxBase__1isReleasable(JNIEnv* env, 
 JNIEXPORT jint JNICALL Java_physx_common_PxBaseFlags__1_1sizeOf(JNIEnv*, jclass) {
     return sizeof(physx::PxBaseFlags);
 }
-JNIEXPORT void JNICALL Java_physx_common_PxBaseFlags__1_1placement_1new_1PxBaseFlags(JNIEnv* env, jclass, jlong __placement_address, jshort flags) {
-    (void) env;    // avoid unused parameter warning / error
-    new((void*)__placement_address) physx::PxBaseFlags(flags);
+JNIEXPORT jlong JNICALL Java_physx_common_PxBaseFlags__1_1placement_1new_1PxBaseFlags(JNIEnv*, jclass, jlong _placement_address, jshort flags) {
+    return (jlong) new((void*)_placement_address) physx::PxBaseFlags(flags);
 }
-JNIEXPORT jlong JNICALL Java_physx_common_PxBaseFlags__1PxBaseFlags(JNIEnv* env, jclass, jshort flags) {
-    (void) env;    // avoid unused parameter warning / error
+JNIEXPORT jlong JNICALL Java_physx_common_PxBaseFlags__1PxBaseFlags(JNIEnv*, jclass, jshort flags) {
     return (jlong) new physx::PxBaseFlags(flags);
 }
-JNIEXPORT jboolean JNICALL Java_physx_common_PxBaseFlags__1isSet(JNIEnv* env, jclass, jlong address, jint flag) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxBaseFlags* self = (physx::PxBaseFlags*) address;
+JNIEXPORT jboolean JNICALL Java_physx_common_PxBaseFlags__1isSet(JNIEnv*, jclass, jlong _address, jint flag) {
+    physx::PxBaseFlags* self = (physx::PxBaseFlags*) _address;
     return (jboolean) self->isSet((PxBaseFlagEnum) flag);
 }
-JNIEXPORT void JNICALL Java_physx_common_PxBaseFlags__1set(JNIEnv* env, jclass, jlong address, jint flag) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxBaseFlags* self = (physx::PxBaseFlags*) address;
+JNIEXPORT void JNICALL Java_physx_common_PxBaseFlags__1set(JNIEnv*, jclass, jlong _address, jint flag) {
+    physx::PxBaseFlags* self = (physx::PxBaseFlags*) _address;
     self->set((PxBaseFlagEnum) flag);
 }
-JNIEXPORT void JNICALL Java_physx_common_PxBaseFlags__1clear(JNIEnv* env, jclass, jlong address, jint flag) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxBaseFlags* self = (physx::PxBaseFlags*) address;
+JNIEXPORT void JNICALL Java_physx_common_PxBaseFlags__1clear(JNIEnv*, jclass, jlong _address, jint flag) {
+    physx::PxBaseFlags* self = (physx::PxBaseFlags*) _address;
     self->clear((PxBaseFlagEnum) flag);
 }
-JNIEXPORT void JNICALL Java_physx_common_PxBaseFlags__1delete_1native_1instance(JNIEnv*, jclass, jlong address) {
-    delete (physx::PxBaseFlags*) address;
+JNIEXPORT void JNICALL Java_physx_common_PxBaseFlags__1delete_1native_1instance(JNIEnv*, jclass, jlong _address) {
+    delete (physx::PxBaseFlags*) _address;
 }
 
 // PxBaseTask
-JNIEXPORT void JNICALL Java_physx_common_PxBaseTask__1delete_1native_1instance(JNIEnv*, jclass, jlong address) {
-    delete (physx::PxBaseTask*) address;
+JNIEXPORT void JNICALL Java_physx_common_PxBaseTask__1delete_1native_1instance(JNIEnv*, jclass, jlong _address) {
+    delete (physx::PxBaseTask*) _address;
 }
 
 // PxBoundedData
 JNIEXPORT jint JNICALL Java_physx_common_PxBoundedData__1_1sizeOf(JNIEnv*, jclass) {
     return sizeof(physx::PxBoundedData);
 }
-JNIEXPORT void JNICALL Java_physx_common_PxBoundedData__1_1placement_1new_1PxBoundedData(JNIEnv* env, jclass, jlong __placement_address) {
-    (void) env;    // avoid unused parameter warning / error
-    new((void*)__placement_address) physx::PxBoundedData();
+JNIEXPORT jlong JNICALL Java_physx_common_PxBoundedData__1_1placement_1new_1PxBoundedData(JNIEnv*, jclass, jlong _placement_address) {
+    return (jlong) new((void*)_placement_address) physx::PxBoundedData();
 }
-JNIEXPORT jlong JNICALL Java_physx_common_PxBoundedData__1PxBoundedData(JNIEnv* env, jclass) {
-    (void) env;    // avoid unused parameter warning / error
+JNIEXPORT jlong JNICALL Java_physx_common_PxBoundedData__1PxBoundedData(JNIEnv*, jclass) {
     return (jlong) new physx::PxBoundedData();
 }
-JNIEXPORT void JNICALL Java_physx_common_PxBoundedData__1delete_1native_1instance(JNIEnv*, jclass, jlong address) {
-    delete (physx::PxBoundedData*) address;
+JNIEXPORT void JNICALL Java_physx_common_PxBoundedData__1delete_1native_1instance(JNIEnv*, jclass, jlong _address) {
+    delete (physx::PxBoundedData*) _address;
 }
-JNIEXPORT jint JNICALL Java_physx_common_PxBoundedData__1getCount(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxBoundedData* self = (physx::PxBoundedData*) address;
-    return (jint) self->count;
+JNIEXPORT jint JNICALL Java_physx_common_PxBoundedData__1getCount(JNIEnv*, jclass, jlong _address) {
+    physx::PxBoundedData* _self = (physx::PxBoundedData*) _address;
+    return (jint) _self->count;
 }
-JNIEXPORT void JNICALL Java_physx_common_PxBoundedData__1setCount(JNIEnv* env, jclass, jlong address, jint value) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxBoundedData* self = (physx::PxBoundedData*) address;
-    self->count = value;
+JNIEXPORT void JNICALL Java_physx_common_PxBoundedData__1setCount(JNIEnv*, jclass, jlong _address, jint value) {
+    physx::PxBoundedData* _self = (physx::PxBoundedData*) _address;
+    _self->count = value;
 }
-JNIEXPORT jint JNICALL Java_physx_common_PxBoundedData__1getStride(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxBoundedData* self = (physx::PxBoundedData*) address;
-    return (jint) self->stride;
+JNIEXPORT jint JNICALL Java_physx_common_PxBoundedData__1getStride(JNIEnv*, jclass, jlong _address) {
+    physx::PxBoundedData* _self = (physx::PxBoundedData*) _address;
+    return (jint) _self->stride;
 }
-JNIEXPORT void JNICALL Java_physx_common_PxBoundedData__1setStride(JNIEnv* env, jclass, jlong address, jint value) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxBoundedData* self = (physx::PxBoundedData*) address;
-    self->stride = value;
+JNIEXPORT void JNICALL Java_physx_common_PxBoundedData__1setStride(JNIEnv*, jclass, jlong _address, jint value) {
+    physx::PxBoundedData* _self = (physx::PxBoundedData*) _address;
+    _self->stride = value;
 }
-JNIEXPORT jlong JNICALL Java_physx_common_PxBoundedData__1getData(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxBoundedData* self = (physx::PxBoundedData*) address;
-    return (jlong) self->data;
+JNIEXPORT jlong JNICALL Java_physx_common_PxBoundedData__1getData(JNIEnv*, jclass, jlong _address) {
+    physx::PxBoundedData* _self = (physx::PxBoundedData*) _address;
+    return (jlong) _self->data;
 }
-JNIEXPORT void JNICALL Java_physx_common_PxBoundedData__1setData(JNIEnv* env, jclass, jlong address, jlong value) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxBoundedData* self = (physx::PxBoundedData*) address;
-    self->data = (void*) value;
+JNIEXPORT void JNICALL Java_physx_common_PxBoundedData__1setData(JNIEnv*, jclass, jlong _address, jlong value) {
+    physx::PxBoundedData* _self = (physx::PxBoundedData*) _address;
+    _self->data = (void*) value;
 }
 
 // PxBounds3
 JNIEXPORT jint JNICALL Java_physx_common_PxBounds3__1_1sizeOf(JNIEnv*, jclass) {
     return sizeof(physx::PxBounds3);
 }
-JNIEXPORT void JNICALL Java_physx_common_PxBounds3__1_1placement_1new_1PxBounds3__J(JNIEnv* env, jclass, jlong __placement_address) {
-    (void) env;    // avoid unused parameter warning / error
-    new((void*)__placement_address) physx::PxBounds3();
+JNIEXPORT jlong JNICALL Java_physx_common_PxBounds3__1_1placement_1new_1PxBounds3__J(JNIEnv*, jclass, jlong _placement_address) {
+    return (jlong) new((void*)_placement_address) physx::PxBounds3();
 }
-JNIEXPORT void JNICALL Java_physx_common_PxBounds3__1_1placement_1new_1PxBounds3__JJJ(JNIEnv* env, jclass, jlong __placement_address, jlong minimum, jlong maximum) {
-    (void) env;    // avoid unused parameter warning / error
-    new((void*)__placement_address) physx::PxBounds3(*((physx::PxVec3*) minimum), *((physx::PxVec3*) maximum));
+JNIEXPORT jlong JNICALL Java_physx_common_PxBounds3__1_1placement_1new_1PxBounds3__JJJ(JNIEnv*, jclass, jlong _placement_address, jlong minimum, jlong maximum) {
+    return (jlong) new((void*)_placement_address) physx::PxBounds3(*((physx::PxVec3*) minimum), *((physx::PxVec3*) maximum));
 }
-JNIEXPORT jlong JNICALL Java_physx_common_PxBounds3__1PxBounds3__(JNIEnv* env, jclass) {
-    (void) env;    // avoid unused parameter warning / error
+JNIEXPORT jlong JNICALL Java_physx_common_PxBounds3__1PxBounds3__(JNIEnv*, jclass) {
     return (jlong) new physx::PxBounds3();
 }
-JNIEXPORT jlong JNICALL Java_physx_common_PxBounds3__1PxBounds3__JJ(JNIEnv* env, jclass, jlong minimum, jlong maximum) {
-    (void) env;    // avoid unused parameter warning / error
+JNIEXPORT jlong JNICALL Java_physx_common_PxBounds3__1PxBounds3__JJ(JNIEnv*, jclass, jlong minimum, jlong maximum) {
     return (jlong) new physx::PxBounds3(*((physx::PxVec3*) minimum), *((physx::PxVec3*) maximum));
 }
-JNIEXPORT void JNICALL Java_physx_common_PxBounds3__1setEmpty(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxBounds3* self = (physx::PxBounds3*) address;
+JNIEXPORT void JNICALL Java_physx_common_PxBounds3__1setEmpty(JNIEnv*, jclass, jlong _address) {
+    physx::PxBounds3* self = (physx::PxBounds3*) _address;
     self->setEmpty();
 }
-JNIEXPORT void JNICALL Java_physx_common_PxBounds3__1setMaximal(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxBounds3* self = (physx::PxBounds3*) address;
+JNIEXPORT void JNICALL Java_physx_common_PxBounds3__1setMaximal(JNIEnv*, jclass, jlong _address) {
+    physx::PxBounds3* self = (physx::PxBounds3*) _address;
     self->setMaximal();
 }
-JNIEXPORT void JNICALL Java_physx_common_PxBounds3__1include(JNIEnv* env, jclass, jlong address, jlong v) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxBounds3* self = (physx::PxBounds3*) address;
+JNIEXPORT void JNICALL Java_physx_common_PxBounds3__1include(JNIEnv*, jclass, jlong _address, jlong v) {
+    physx::PxBounds3* self = (physx::PxBounds3*) _address;
     self->include(*((physx::PxVec3*) v));
 }
-JNIEXPORT jboolean JNICALL Java_physx_common_PxBounds3__1isEmpty(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxBounds3* self = (physx::PxBounds3*) address;
+JNIEXPORT jboolean JNICALL Java_physx_common_PxBounds3__1isEmpty(JNIEnv*, jclass, jlong _address) {
+    physx::PxBounds3* self = (physx::PxBounds3*) _address;
     return (jboolean) self->isEmpty();
 }
-JNIEXPORT jboolean JNICALL Java_physx_common_PxBounds3__1intersects(JNIEnv* env, jclass, jlong address, jlong b) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxBounds3* self = (physx::PxBounds3*) address;
+JNIEXPORT jboolean JNICALL Java_physx_common_PxBounds3__1intersects(JNIEnv*, jclass, jlong _address, jlong b) {
+    physx::PxBounds3* self = (physx::PxBounds3*) _address;
     return (jboolean) self->intersects(*((physx::PxBounds3*) b));
 }
-JNIEXPORT jboolean JNICALL Java_physx_common_PxBounds3__1intersects1D(JNIEnv* env, jclass, jlong address, jlong b, jint axis) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxBounds3* self = (physx::PxBounds3*) address;
+JNIEXPORT jboolean JNICALL Java_physx_common_PxBounds3__1intersects1D(JNIEnv*, jclass, jlong _address, jlong b, jint axis) {
+    physx::PxBounds3* self = (physx::PxBounds3*) _address;
     return (jboolean) self->intersects1D(*((physx::PxBounds3*) b), axis);
 }
-JNIEXPORT jboolean JNICALL Java_physx_common_PxBounds3__1contains(JNIEnv* env, jclass, jlong address, jlong v) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxBounds3* self = (physx::PxBounds3*) address;
+JNIEXPORT jboolean JNICALL Java_physx_common_PxBounds3__1contains(JNIEnv*, jclass, jlong _address, jlong v) {
+    physx::PxBounds3* self = (physx::PxBounds3*) _address;
     return (jboolean) self->contains(*((physx::PxVec3*) v));
 }
-JNIEXPORT jboolean JNICALL Java_physx_common_PxBounds3__1isInside(JNIEnv* env, jclass, jlong address, jlong box) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxBounds3* self = (physx::PxBounds3*) address;
+JNIEXPORT jboolean JNICALL Java_physx_common_PxBounds3__1isInside(JNIEnv*, jclass, jlong _address, jlong box) {
+    physx::PxBounds3* self = (physx::PxBounds3*) _address;
     return (jboolean) self->isInside(*((physx::PxBounds3*) box));
 }
-JNIEXPORT jlong JNICALL Java_physx_common_PxBounds3__1getCenter(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    static physx::PxVec3 cache;
-    physx::PxBounds3* self = (physx::PxBounds3*) address;
-    cache = self->getCenter();
-    return (jlong) &cache;
+JNIEXPORT jlong JNICALL Java_physx_common_PxBounds3__1getCenter(JNIEnv*, jclass, jlong _address) {
+    static thread_local physx::PxVec3 _cache;
+    physx::PxBounds3* self = (physx::PxBounds3*) _address;
+    _cache = self->getCenter();
+    return (jlong) &_cache;
 }
-JNIEXPORT jlong JNICALL Java_physx_common_PxBounds3__1getDimensions(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    static physx::PxVec3 cache;
-    physx::PxBounds3* self = (physx::PxBounds3*) address;
-    cache = self->getDimensions();
-    return (jlong) &cache;
+JNIEXPORT jlong JNICALL Java_physx_common_PxBounds3__1getDimensions(JNIEnv*, jclass, jlong _address) {
+    static thread_local physx::PxVec3 _cache;
+    physx::PxBounds3* self = (physx::PxBounds3*) _address;
+    _cache = self->getDimensions();
+    return (jlong) &_cache;
 }
-JNIEXPORT jlong JNICALL Java_physx_common_PxBounds3__1getExtents(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    static physx::PxVec3 cache;
-    physx::PxBounds3* self = (physx::PxBounds3*) address;
-    cache = self->getExtents();
-    return (jlong) &cache;
+JNIEXPORT jlong JNICALL Java_physx_common_PxBounds3__1getExtents(JNIEnv*, jclass, jlong _address) {
+    static thread_local physx::PxVec3 _cache;
+    physx::PxBounds3* self = (physx::PxBounds3*) _address;
+    _cache = self->getExtents();
+    return (jlong) &_cache;
 }
-JNIEXPORT void JNICALL Java_physx_common_PxBounds3__1scaleSafe(JNIEnv* env, jclass, jlong address, jfloat scale) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxBounds3* self = (physx::PxBounds3*) address;
+JNIEXPORT void JNICALL Java_physx_common_PxBounds3__1scaleSafe(JNIEnv*, jclass, jlong _address, jfloat scale) {
+    physx::PxBounds3* self = (physx::PxBounds3*) _address;
     self->scaleSafe(scale);
 }
-JNIEXPORT void JNICALL Java_physx_common_PxBounds3__1scaleFast(JNIEnv* env, jclass, jlong address, jfloat scale) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxBounds3* self = (physx::PxBounds3*) address;
+JNIEXPORT void JNICALL Java_physx_common_PxBounds3__1scaleFast(JNIEnv*, jclass, jlong _address, jfloat scale) {
+    physx::PxBounds3* self = (physx::PxBounds3*) _address;
     self->scaleFast(scale);
 }
-JNIEXPORT void JNICALL Java_physx_common_PxBounds3__1fattenSafe(JNIEnv* env, jclass, jlong address, jfloat distance) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxBounds3* self = (physx::PxBounds3*) address;
+JNIEXPORT void JNICALL Java_physx_common_PxBounds3__1fattenSafe(JNIEnv*, jclass, jlong _address, jfloat distance) {
+    physx::PxBounds3* self = (physx::PxBounds3*) _address;
     self->fattenSafe(distance);
 }
-JNIEXPORT void JNICALL Java_physx_common_PxBounds3__1fattenFast(JNIEnv* env, jclass, jlong address, jfloat distance) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxBounds3* self = (physx::PxBounds3*) address;
+JNIEXPORT void JNICALL Java_physx_common_PxBounds3__1fattenFast(JNIEnv*, jclass, jlong _address, jfloat distance) {
+    physx::PxBounds3* self = (physx::PxBounds3*) _address;
     self->fattenFast(distance);
 }
-JNIEXPORT jboolean JNICALL Java_physx_common_PxBounds3__1isFinite(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxBounds3* self = (physx::PxBounds3*) address;
+JNIEXPORT jboolean JNICALL Java_physx_common_PxBounds3__1isFinite(JNIEnv*, jclass, jlong _address) {
+    physx::PxBounds3* self = (physx::PxBounds3*) _address;
     return (jboolean) self->isFinite();
 }
-JNIEXPORT jboolean JNICALL Java_physx_common_PxBounds3__1isValid(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxBounds3* self = (physx::PxBounds3*) address;
+JNIEXPORT jboolean JNICALL Java_physx_common_PxBounds3__1isValid(JNIEnv*, jclass, jlong _address) {
+    physx::PxBounds3* self = (physx::PxBounds3*) _address;
     return (jboolean) self->isValid();
 }
-JNIEXPORT void JNICALL Java_physx_common_PxBounds3__1delete_1native_1instance(JNIEnv*, jclass, jlong address) {
-    delete (physx::PxBounds3*) address;
+JNIEXPORT void JNICALL Java_physx_common_PxBounds3__1delete_1native_1instance(JNIEnv*, jclass, jlong _address) {
+    delete (physx::PxBounds3*) _address;
 }
-JNIEXPORT jlong JNICALL Java_physx_common_PxBounds3__1getMinimum(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxBounds3* self = (physx::PxBounds3*) address;
-    return (jlong) &self->minimum;
+JNIEXPORT jlong JNICALL Java_physx_common_PxBounds3__1getMinimum(JNIEnv*, jclass, jlong _address) {
+    physx::PxBounds3* _self = (physx::PxBounds3*) _address;
+    return (jlong) &_self->minimum;
 }
-JNIEXPORT void JNICALL Java_physx_common_PxBounds3__1setMinimum(JNIEnv* env, jclass, jlong address, jlong value) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxBounds3* self = (physx::PxBounds3*) address;
-    self->minimum = *((physx::PxVec3*) value);
+JNIEXPORT void JNICALL Java_physx_common_PxBounds3__1setMinimum(JNIEnv*, jclass, jlong _address, jlong value) {
+    physx::PxBounds3* _self = (physx::PxBounds3*) _address;
+    _self->minimum = *((physx::PxVec3*) value);
 }
-JNIEXPORT jlong JNICALL Java_physx_common_PxBounds3__1getMaximum(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxBounds3* self = (physx::PxBounds3*) address;
-    return (jlong) &self->maximum;
+JNIEXPORT jlong JNICALL Java_physx_common_PxBounds3__1getMaximum(JNIEnv*, jclass, jlong _address) {
+    physx::PxBounds3* _self = (physx::PxBounds3*) _address;
+    return (jlong) &_self->maximum;
 }
-JNIEXPORT void JNICALL Java_physx_common_PxBounds3__1setMaximum(JNIEnv* env, jclass, jlong address, jlong value) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxBounds3* self = (physx::PxBounds3*) address;
-    self->maximum = *((physx::PxVec3*) value);
+JNIEXPORT void JNICALL Java_physx_common_PxBounds3__1setMaximum(JNIEnv*, jclass, jlong _address, jlong value) {
+    physx::PxBounds3* _self = (physx::PxBounds3*) _address;
+    _self->maximum = *((physx::PxVec3*) value);
 }
 
 // PxCpuDispatcher
-JNIEXPORT void JNICALL Java_physx_common_PxCpuDispatcher__1delete_1native_1instance(JNIEnv*, jclass, jlong address) {
-    delete (physx::PxCpuDispatcher*) address;
+JNIEXPORT void JNICALL Java_physx_common_PxCpuDispatcher__1delete_1native_1instance(JNIEnv*, jclass, jlong _address) {
+    delete (physx::PxCpuDispatcher*) _address;
 }
 
 // PxDefaultErrorCallback
-JNIEXPORT jlong JNICALL Java_physx_common_PxDefaultErrorCallback__1PxDefaultErrorCallback(JNIEnv* env, jclass) {
-    (void) env;    // avoid unused parameter warning / error
+JNIEXPORT jlong JNICALL Java_physx_common_PxDefaultErrorCallback__1PxDefaultErrorCallback(JNIEnv*, jclass) {
     return (jlong) new physx::PxDefaultErrorCallback();
 }
-JNIEXPORT void JNICALL Java_physx_common_PxDefaultErrorCallback__1delete_1native_1instance(JNIEnv*, jclass, jlong address) {
-    delete (physx::PxDefaultErrorCallback*) address;
+JNIEXPORT void JNICALL Java_physx_common_PxDefaultErrorCallback__1delete_1native_1instance(JNIEnv*, jclass, jlong _address) {
+    delete (physx::PxDefaultErrorCallback*) _address;
 }
 
 // PxErrorCallback
-JNIEXPORT void JNICALL Java_physx_common_PxErrorCallback__1delete_1native_1instance(JNIEnv*, jclass, jlong address) {
-    delete (physx::PxErrorCallback*) address;
+JNIEXPORT void JNICALL Java_physx_common_PxErrorCallback__1reportError(JNIEnv* _env, jclass, jlong _address, jint code, jstring message, jstring file, jint line) {
+    physx::PxErrorCallback* self = (physx::PxErrorCallback*) _address;
+    self->reportError((PxErrorCodeEnum) code, _env->GetStringUTFChars(message, 0), _env->GetStringUTFChars(file, 0), line);
+}
+JNIEXPORT void JNICALL Java_physx_common_PxErrorCallback__1delete_1native_1instance(JNIEnv*, jclass, jlong _address) {
+    delete (physx::PxErrorCallback*) _address;
+}
+
+// JavaErrorCallback
+JNIEXPORT jlong JNICALL Java_physx_common_JavaErrorCallback__1JavaErrorCallback(JNIEnv* env, jobject obj) {
+    return (jlong) new JavaErrorCallback(env, obj);
+}
+JNIEXPORT void JNICALL Java_physx_common_JavaErrorCallback__1delete_1native_1instance(JNIEnv*, jclass, jlong address) {
+    delete (JavaErrorCallback*) address;
 }
 
 // PxFoundation
-JNIEXPORT void JNICALL Java_physx_common_PxFoundation__1release(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxFoundation* self = (physx::PxFoundation*) address;
+JNIEXPORT void JNICALL Java_physx_common_PxFoundation__1release(JNIEnv*, jclass, jlong _address) {
+    physx::PxFoundation* self = (physx::PxFoundation*) _address;
     self->release();
 }
 
@@ -367,196 +445,161 @@ JNIEXPORT void JNICALL Java_physx_common_PxFoundation__1release(JNIEnv* env, jcl
 JNIEXPORT jint JNICALL Java_physx_common_PxQuat__1_1sizeOf(JNIEnv*, jclass) {
     return sizeof(physx::PxQuat);
 }
-JNIEXPORT void JNICALL Java_physx_common_PxQuat__1_1placement_1new_1PxQuat__J(JNIEnv* env, jclass, jlong __placement_address) {
-    (void) env;    // avoid unused parameter warning / error
-    new((void*)__placement_address) physx::PxQuat();
+JNIEXPORT jlong JNICALL Java_physx_common_PxQuat__1_1placement_1new_1PxQuat__J(JNIEnv*, jclass, jlong _placement_address) {
+    return (jlong) new((void*)_placement_address) physx::PxQuat();
 }
-JNIEXPORT void JNICALL Java_physx_common_PxQuat__1_1placement_1new_1PxQuat__JFFFF(JNIEnv* env, jclass, jlong __placement_address, jfloat x, jfloat y, jfloat z, jfloat w) {
-    (void) env;    // avoid unused parameter warning / error
-    new((void*)__placement_address) physx::PxQuat(x, y, z, w);
+JNIEXPORT jlong JNICALL Java_physx_common_PxQuat__1_1placement_1new_1PxQuat__JFFFF(JNIEnv*, jclass, jlong _placement_address, jfloat x, jfloat y, jfloat z, jfloat w) {
+    return (jlong) new((void*)_placement_address) physx::PxQuat(x, y, z, w);
 }
-JNIEXPORT jlong JNICALL Java_physx_common_PxQuat__1PxQuat__(JNIEnv* env, jclass) {
-    (void) env;    // avoid unused parameter warning / error
+JNIEXPORT jlong JNICALL Java_physx_common_PxQuat__1PxQuat__(JNIEnv*, jclass) {
     return (jlong) new physx::PxQuat();
 }
-JNIEXPORT jlong JNICALL Java_physx_common_PxQuat__1PxQuat__FFFF(JNIEnv* env, jclass, jfloat x, jfloat y, jfloat z, jfloat w) {
-    (void) env;    // avoid unused parameter warning / error
+JNIEXPORT jlong JNICALL Java_physx_common_PxQuat__1PxQuat__FFFF(JNIEnv*, jclass, jfloat x, jfloat y, jfloat z, jfloat w) {
     return (jlong) new physx::PxQuat(x, y, z, w);
 }
-JNIEXPORT void JNICALL Java_physx_common_PxQuat__1delete_1native_1instance(JNIEnv*, jclass, jlong address) {
-    delete (physx::PxQuat*) address;
+JNIEXPORT void JNICALL Java_physx_common_PxQuat__1delete_1native_1instance(JNIEnv*, jclass, jlong _address) {
+    delete (physx::PxQuat*) _address;
 }
-JNIEXPORT jfloat JNICALL Java_physx_common_PxQuat__1getX(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxQuat* self = (physx::PxQuat*) address;
-    return (jfloat) self->x;
+JNIEXPORT jfloat JNICALL Java_physx_common_PxQuat__1getX(JNIEnv*, jclass, jlong _address) {
+    physx::PxQuat* _self = (physx::PxQuat*) _address;
+    return (jfloat) _self->x;
 }
-JNIEXPORT void JNICALL Java_physx_common_PxQuat__1setX(JNIEnv* env, jclass, jlong address, jfloat value) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxQuat* self = (physx::PxQuat*) address;
-    self->x = value;
+JNIEXPORT void JNICALL Java_physx_common_PxQuat__1setX(JNIEnv*, jclass, jlong _address, jfloat value) {
+    physx::PxQuat* _self = (physx::PxQuat*) _address;
+    _self->x = value;
 }
-JNIEXPORT jfloat JNICALL Java_physx_common_PxQuat__1getY(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxQuat* self = (physx::PxQuat*) address;
-    return (jfloat) self->y;
+JNIEXPORT jfloat JNICALL Java_physx_common_PxQuat__1getY(JNIEnv*, jclass, jlong _address) {
+    physx::PxQuat* _self = (physx::PxQuat*) _address;
+    return (jfloat) _self->y;
 }
-JNIEXPORT void JNICALL Java_physx_common_PxQuat__1setY(JNIEnv* env, jclass, jlong address, jfloat value) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxQuat* self = (physx::PxQuat*) address;
-    self->y = value;
+JNIEXPORT void JNICALL Java_physx_common_PxQuat__1setY(JNIEnv*, jclass, jlong _address, jfloat value) {
+    physx::PxQuat* _self = (physx::PxQuat*) _address;
+    _self->y = value;
 }
-JNIEXPORT jfloat JNICALL Java_physx_common_PxQuat__1getZ(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxQuat* self = (physx::PxQuat*) address;
-    return (jfloat) self->z;
+JNIEXPORT jfloat JNICALL Java_physx_common_PxQuat__1getZ(JNIEnv*, jclass, jlong _address) {
+    physx::PxQuat* _self = (physx::PxQuat*) _address;
+    return (jfloat) _self->z;
 }
-JNIEXPORT void JNICALL Java_physx_common_PxQuat__1setZ(JNIEnv* env, jclass, jlong address, jfloat value) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxQuat* self = (physx::PxQuat*) address;
-    self->z = value;
+JNIEXPORT void JNICALL Java_physx_common_PxQuat__1setZ(JNIEnv*, jclass, jlong _address, jfloat value) {
+    physx::PxQuat* _self = (physx::PxQuat*) _address;
+    _self->z = value;
 }
-JNIEXPORT jfloat JNICALL Java_physx_common_PxQuat__1getW(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxQuat* self = (physx::PxQuat*) address;
-    return (jfloat) self->w;
+JNIEXPORT jfloat JNICALL Java_physx_common_PxQuat__1getW(JNIEnv*, jclass, jlong _address) {
+    physx::PxQuat* _self = (physx::PxQuat*) _address;
+    return (jfloat) _self->w;
 }
-JNIEXPORT void JNICALL Java_physx_common_PxQuat__1setW(JNIEnv* env, jclass, jlong address, jfloat value) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxQuat* self = (physx::PxQuat*) address;
-    self->w = value;
+JNIEXPORT void JNICALL Java_physx_common_PxQuat__1setW(JNIEnv*, jclass, jlong _address, jfloat value) {
+    physx::PxQuat* _self = (physx::PxQuat*) _address;
+    _self->w = value;
 }
 
 // PxTolerancesScale
-JNIEXPORT jlong JNICALL Java_physx_common_PxTolerancesScale__1PxTolerancesScale(JNIEnv* env, jclass) {
-    (void) env;    // avoid unused parameter warning / error
+JNIEXPORT jlong JNICALL Java_physx_common_PxTolerancesScale__1PxTolerancesScale(JNIEnv*, jclass) {
     return (jlong) new physx::PxTolerancesScale();
 }
-JNIEXPORT void JNICALL Java_physx_common_PxTolerancesScale__1delete_1native_1instance(JNIEnv*, jclass, jlong address) {
-    delete (physx::PxTolerancesScale*) address;
+JNIEXPORT void JNICALL Java_physx_common_PxTolerancesScale__1delete_1native_1instance(JNIEnv*, jclass, jlong _address) {
+    delete (physx::PxTolerancesScale*) _address;
 }
 
 // PxTransform
 JNIEXPORT jint JNICALL Java_physx_common_PxTransform__1_1sizeOf(JNIEnv*, jclass) {
     return sizeof(physx::PxTransform);
 }
-JNIEXPORT void JNICALL Java_physx_common_PxTransform__1_1placement_1new_1PxTransform__JI(JNIEnv* env, jclass, jlong __placement_address, jint r) {
-    (void) env;    // avoid unused parameter warning / error
-    new((void*)__placement_address) physx::PxTransform((PxIDENTITYEnum) r);
+JNIEXPORT jlong JNICALL Java_physx_common_PxTransform__1_1placement_1new_1PxTransform__JI(JNIEnv*, jclass, jlong _placement_address, jint r) {
+    return (jlong) new((void*)_placement_address) physx::PxTransform((PxIDENTITYEnum) r);
 }
-JNIEXPORT void JNICALL Java_physx_common_PxTransform__1_1placement_1new_1PxTransform__JJJ(JNIEnv* env, jclass, jlong __placement_address, jlong p0, jlong q0) {
-    (void) env;    // avoid unused parameter warning / error
-    new((void*)__placement_address) physx::PxTransform(*((physx::PxVec3*) p0), *((physx::PxQuat*) q0));
+JNIEXPORT jlong JNICALL Java_physx_common_PxTransform__1_1placement_1new_1PxTransform__JJJ(JNIEnv*, jclass, jlong _placement_address, jlong p0, jlong q0) {
+    return (jlong) new((void*)_placement_address) physx::PxTransform(*((physx::PxVec3*) p0), *((physx::PxQuat*) q0));
 }
-JNIEXPORT jlong JNICALL Java_physx_common_PxTransform__1PxTransform__I(JNIEnv* env, jclass, jint r) {
-    (void) env;    // avoid unused parameter warning / error
+JNIEXPORT jlong JNICALL Java_physx_common_PxTransform__1PxTransform__I(JNIEnv*, jclass, jint r) {
     return (jlong) new physx::PxTransform((PxIDENTITYEnum) r);
 }
-JNIEXPORT jlong JNICALL Java_physx_common_PxTransform__1PxTransform__JJ(JNIEnv* env, jclass, jlong p0, jlong q0) {
-    (void) env;    // avoid unused parameter warning / error
+JNIEXPORT jlong JNICALL Java_physx_common_PxTransform__1PxTransform__JJ(JNIEnv*, jclass, jlong p0, jlong q0) {
     return (jlong) new physx::PxTransform(*((physx::PxVec3*) p0), *((physx::PxQuat*) q0));
 }
-JNIEXPORT void JNICALL Java_physx_common_PxTransform__1delete_1native_1instance(JNIEnv*, jclass, jlong address) {
-    delete (physx::PxTransform*) address;
+JNIEXPORT void JNICALL Java_physx_common_PxTransform__1delete_1native_1instance(JNIEnv*, jclass, jlong _address) {
+    delete (physx::PxTransform*) _address;
 }
-JNIEXPORT jlong JNICALL Java_physx_common_PxTransform__1getQ(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxTransform* self = (physx::PxTransform*) address;
-    return (jlong) &self->q;
+JNIEXPORT jlong JNICALL Java_physx_common_PxTransform__1getQ(JNIEnv*, jclass, jlong _address) {
+    physx::PxTransform* _self = (physx::PxTransform*) _address;
+    return (jlong) &_self->q;
 }
-JNIEXPORT void JNICALL Java_physx_common_PxTransform__1setQ(JNIEnv* env, jclass, jlong address, jlong value) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxTransform* self = (physx::PxTransform*) address;
-    self->q = *((physx::PxQuat*) value);
+JNIEXPORT void JNICALL Java_physx_common_PxTransform__1setQ(JNIEnv*, jclass, jlong _address, jlong value) {
+    physx::PxTransform* _self = (physx::PxTransform*) _address;
+    _self->q = *((physx::PxQuat*) value);
 }
-JNIEXPORT jlong JNICALL Java_physx_common_PxTransform__1getP(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxTransform* self = (physx::PxTransform*) address;
-    return (jlong) &self->p;
+JNIEXPORT jlong JNICALL Java_physx_common_PxTransform__1getP(JNIEnv*, jclass, jlong _address) {
+    physx::PxTransform* _self = (physx::PxTransform*) _address;
+    return (jlong) &_self->p;
 }
-JNIEXPORT void JNICALL Java_physx_common_PxTransform__1setP(JNIEnv* env, jclass, jlong address, jlong value) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxTransform* self = (physx::PxTransform*) address;
-    self->p = *((physx::PxVec3*) value);
+JNIEXPORT void JNICALL Java_physx_common_PxTransform__1setP(JNIEnv*, jclass, jlong _address, jlong value) {
+    physx::PxTransform* _self = (physx::PxTransform*) _address;
+    _self->p = *((physx::PxVec3*) value);
 }
 
 // PxU16StridedData
-JNIEXPORT void JNICALL Java_physx_common_PxU16StridedData__1delete_1native_1instance(JNIEnv*, jclass, jlong address) {
-    delete (PxU16StridedData*) address;
+JNIEXPORT void JNICALL Java_physx_common_PxU16StridedData__1delete_1native_1instance(JNIEnv*, jclass, jlong _address) {
+    delete (PxU16StridedData*) _address;
 }
-JNIEXPORT jint JNICALL Java_physx_common_PxU16StridedData__1getStride(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    PxU16StridedData* self = (PxU16StridedData*) address;
-    return (jint) self->stride;
+JNIEXPORT jint JNICALL Java_physx_common_PxU16StridedData__1getStride(JNIEnv*, jclass, jlong _address) {
+    PxU16StridedData* _self = (PxU16StridedData*) _address;
+    return (jint) _self->stride;
 }
-JNIEXPORT void JNICALL Java_physx_common_PxU16StridedData__1setStride(JNIEnv* env, jclass, jlong address, jint value) {
-    (void) env;    // avoid unused parameter warning / error
-    PxU16StridedData* self = (PxU16StridedData*) address;
-    self->stride = value;
+JNIEXPORT void JNICALL Java_physx_common_PxU16StridedData__1setStride(JNIEnv*, jclass, jlong _address, jint value) {
+    PxU16StridedData* _self = (PxU16StridedData*) _address;
+    _self->stride = value;
 }
-JNIEXPORT jlong JNICALL Java_physx_common_PxU16StridedData__1getData(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    PxU16StridedData* self = (PxU16StridedData*) address;
-    return (jlong) &self->data;
+JNIEXPORT jlong JNICALL Java_physx_common_PxU16StridedData__1getData(JNIEnv*, jclass, jlong _address) {
+    PxU16StridedData* _self = (PxU16StridedData*) _address;
+    return (jlong) &_self->data;
 }
-JNIEXPORT void JNICALL Java_physx_common_PxU16StridedData__1setData(JNIEnv* env, jclass, jlong address, jlong value) {
-    (void) env;    // avoid unused parameter warning / error
-    PxU16StridedData* self = (PxU16StridedData*) address;
-    self->data = *((PxU16Ptr*) value);
+JNIEXPORT void JNICALL Java_physx_common_PxU16StridedData__1setData(JNIEnv*, jclass, jlong _address, jlong value) {
+    PxU16StridedData* _self = (PxU16StridedData*) _address;
+    _self->data = *((PxU16Ptr*) value);
 }
 
 // PxVec3
 JNIEXPORT jint JNICALL Java_physx_common_PxVec3__1_1sizeOf(JNIEnv*, jclass) {
     return sizeof(physx::PxVec3);
 }
-JNIEXPORT void JNICALL Java_physx_common_PxVec3__1_1placement_1new_1PxVec3__J(JNIEnv* env, jclass, jlong __placement_address) {
-    (void) env;    // avoid unused parameter warning / error
-    new((void*)__placement_address) physx::PxVec3();
+JNIEXPORT jlong JNICALL Java_physx_common_PxVec3__1_1placement_1new_1PxVec3__J(JNIEnv*, jclass, jlong _placement_address) {
+    return (jlong) new((void*)_placement_address) physx::PxVec3();
 }
-JNIEXPORT void JNICALL Java_physx_common_PxVec3__1_1placement_1new_1PxVec3__JFFF(JNIEnv* env, jclass, jlong __placement_address, jfloat x, jfloat y, jfloat z) {
-    (void) env;    // avoid unused parameter warning / error
-    new((void*)__placement_address) physx::PxVec3(x, y, z);
+JNIEXPORT jlong JNICALL Java_physx_common_PxVec3__1_1placement_1new_1PxVec3__JFFF(JNIEnv*, jclass, jlong _placement_address, jfloat x, jfloat y, jfloat z) {
+    return (jlong) new((void*)_placement_address) physx::PxVec3(x, y, z);
 }
-JNIEXPORT jlong JNICALL Java_physx_common_PxVec3__1PxVec3__(JNIEnv* env, jclass) {
-    (void) env;    // avoid unused parameter warning / error
+JNIEXPORT jlong JNICALL Java_physx_common_PxVec3__1PxVec3__(JNIEnv*, jclass) {
     return (jlong) new physx::PxVec3();
 }
-JNIEXPORT jlong JNICALL Java_physx_common_PxVec3__1PxVec3__FFF(JNIEnv* env, jclass, jfloat x, jfloat y, jfloat z) {
-    (void) env;    // avoid unused parameter warning / error
+JNIEXPORT jlong JNICALL Java_physx_common_PxVec3__1PxVec3__FFF(JNIEnv*, jclass, jfloat x, jfloat y, jfloat z) {
     return (jlong) new physx::PxVec3(x, y, z);
 }
-JNIEXPORT void JNICALL Java_physx_common_PxVec3__1delete_1native_1instance(JNIEnv*, jclass, jlong address) {
-    delete (physx::PxVec3*) address;
+JNIEXPORT void JNICALL Java_physx_common_PxVec3__1delete_1native_1instance(JNIEnv*, jclass, jlong _address) {
+    delete (physx::PxVec3*) _address;
 }
-JNIEXPORT jfloat JNICALL Java_physx_common_PxVec3__1getX(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVec3* self = (physx::PxVec3*) address;
-    return (jfloat) self->x;
+JNIEXPORT jfloat JNICALL Java_physx_common_PxVec3__1getX(JNIEnv*, jclass, jlong _address) {
+    physx::PxVec3* _self = (physx::PxVec3*) _address;
+    return (jfloat) _self->x;
 }
-JNIEXPORT void JNICALL Java_physx_common_PxVec3__1setX(JNIEnv* env, jclass, jlong address, jfloat value) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVec3* self = (physx::PxVec3*) address;
-    self->x = value;
+JNIEXPORT void JNICALL Java_physx_common_PxVec3__1setX(JNIEnv*, jclass, jlong _address, jfloat value) {
+    physx::PxVec3* _self = (physx::PxVec3*) _address;
+    _self->x = value;
 }
-JNIEXPORT jfloat JNICALL Java_physx_common_PxVec3__1getY(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVec3* self = (physx::PxVec3*) address;
-    return (jfloat) self->y;
+JNIEXPORT jfloat JNICALL Java_physx_common_PxVec3__1getY(JNIEnv*, jclass, jlong _address) {
+    physx::PxVec3* _self = (physx::PxVec3*) _address;
+    return (jfloat) _self->y;
 }
-JNIEXPORT void JNICALL Java_physx_common_PxVec3__1setY(JNIEnv* env, jclass, jlong address, jfloat value) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVec3* self = (physx::PxVec3*) address;
-    self->y = value;
+JNIEXPORT void JNICALL Java_physx_common_PxVec3__1setY(JNIEnv*, jclass, jlong _address, jfloat value) {
+    physx::PxVec3* _self = (physx::PxVec3*) _address;
+    _self->y = value;
 }
-JNIEXPORT jfloat JNICALL Java_physx_common_PxVec3__1getZ(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVec3* self = (physx::PxVec3*) address;
-    return (jfloat) self->z;
+JNIEXPORT jfloat JNICALL Java_physx_common_PxVec3__1getZ(JNIEnv*, jclass, jlong _address) {
+    physx::PxVec3* _self = (physx::PxVec3*) _address;
+    return (jfloat) _self->z;
 }
-JNIEXPORT void JNICALL Java_physx_common_PxVec3__1setZ(JNIEnv* env, jclass, jlong address, jfloat value) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVec3* self = (physx::PxVec3*) address;
-    self->z = value;
+JNIEXPORT void JNICALL Java_physx_common_PxVec3__1setZ(JNIEnv*, jclass, jlong _address, jfloat value) {
+    physx::PxVec3* _self = (physx::PxVec3*) _address;
+    _self->z = value;
 }
 
 // PxBaseFlagEnum
@@ -567,371 +610,343 @@ JNIEXPORT jint JNICALL Java_physx_common_PxBaseFlagEnum__1geteIS_1RELEASABLE(JNI
     return PxBaseFlagEnum::eIS_RELEASABLE;
 }
 
+// PxErrorCodeEnum
+JNIEXPORT jint JNICALL Java_physx_common_PxErrorCodeEnum__1geteNO_1ERROR(JNIEnv*, jclass) {
+    return PxErrorCodeEnum::eNO_ERROR;
+}
+JNIEXPORT jint JNICALL Java_physx_common_PxErrorCodeEnum__1geteDEBUG_1INFO(JNIEnv*, jclass) {
+    return PxErrorCodeEnum::eDEBUG_INFO;
+}
+JNIEXPORT jint JNICALL Java_physx_common_PxErrorCodeEnum__1geteDEBUG_1WARNING(JNIEnv*, jclass) {
+    return PxErrorCodeEnum::eDEBUG_WARNING;
+}
+JNIEXPORT jint JNICALL Java_physx_common_PxErrorCodeEnum__1geteINVALID_1PARAMETER(JNIEnv*, jclass) {
+    return PxErrorCodeEnum::eINVALID_PARAMETER;
+}
+JNIEXPORT jint JNICALL Java_physx_common_PxErrorCodeEnum__1geteINVALID_1OPERATION(JNIEnv*, jclass) {
+    return PxErrorCodeEnum::eINVALID_OPERATION;
+}
+JNIEXPORT jint JNICALL Java_physx_common_PxErrorCodeEnum__1geteOUT_1OF_1MEMORY(JNIEnv*, jclass) {
+    return PxErrorCodeEnum::eOUT_OF_MEMORY;
+}
+JNIEXPORT jint JNICALL Java_physx_common_PxErrorCodeEnum__1geteINTERNAL_1ERROR(JNIEnv*, jclass) {
+    return PxErrorCodeEnum::eINTERNAL_ERROR;
+}
+JNIEXPORT jint JNICALL Java_physx_common_PxErrorCodeEnum__1geteABORT(JNIEnv*, jclass) {
+    return PxErrorCodeEnum::eABORT;
+}
+JNIEXPORT jint JNICALL Java_physx_common_PxErrorCodeEnum__1getePERF_1WARNING(JNIEnv*, jclass) {
+    return PxErrorCodeEnum::ePERF_WARNING;
+}
+JNIEXPORT jint JNICALL Java_physx_common_PxErrorCodeEnum__1geteMASK_1ALL(JNIEnv*, jclass) {
+    return PxErrorCodeEnum::eMASK_ALL;
+}
+
 // PxIDENTITYEnum
 JNIEXPORT jint JNICALL Java_physx_common_PxIDENTITYEnum__1getPxIdentity(JNIEnv*, jclass) {
     return PxIDENTITYEnum::PxIdentity;
 }
 
 // PxBVH33MidphaseDesc
-JNIEXPORT void JNICALL Java_physx_cooking_PxBVH33MidphaseDesc__1setToDefault(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxBVH33MidphaseDesc* self = (physx::PxBVH33MidphaseDesc*) address;
+JNIEXPORT void JNICALL Java_physx_cooking_PxBVH33MidphaseDesc__1setToDefault(JNIEnv*, jclass, jlong _address) {
+    physx::PxBVH33MidphaseDesc* self = (physx::PxBVH33MidphaseDesc*) _address;
     self->setToDefault();
 }
-JNIEXPORT jboolean JNICALL Java_physx_cooking_PxBVH33MidphaseDesc__1isValid(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxBVH33MidphaseDesc* self = (physx::PxBVH33MidphaseDesc*) address;
+JNIEXPORT jboolean JNICALL Java_physx_cooking_PxBVH33MidphaseDesc__1isValid(JNIEnv*, jclass, jlong _address) {
+    physx::PxBVH33MidphaseDesc* self = (physx::PxBVH33MidphaseDesc*) _address;
     return (jboolean) self->isValid();
 }
-JNIEXPORT void JNICALL Java_physx_cooking_PxBVH33MidphaseDesc__1delete_1native_1instance(JNIEnv*, jclass, jlong address) {
-    delete (physx::PxBVH33MidphaseDesc*) address;
+JNIEXPORT void JNICALL Java_physx_cooking_PxBVH33MidphaseDesc__1delete_1native_1instance(JNIEnv*, jclass, jlong _address) {
+    delete (physx::PxBVH33MidphaseDesc*) _address;
 }
-JNIEXPORT jfloat JNICALL Java_physx_cooking_PxBVH33MidphaseDesc__1getMeshSizePerformanceTradeOff(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxBVH33MidphaseDesc* self = (physx::PxBVH33MidphaseDesc*) address;
-    return (jfloat) self->meshSizePerformanceTradeOff;
+JNIEXPORT jfloat JNICALL Java_physx_cooking_PxBVH33MidphaseDesc__1getMeshSizePerformanceTradeOff(JNIEnv*, jclass, jlong _address) {
+    physx::PxBVH33MidphaseDesc* _self = (physx::PxBVH33MidphaseDesc*) _address;
+    return (jfloat) _self->meshSizePerformanceTradeOff;
 }
-JNIEXPORT void JNICALL Java_physx_cooking_PxBVH33MidphaseDesc__1setMeshSizePerformanceTradeOff(JNIEnv* env, jclass, jlong address, jfloat value) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxBVH33MidphaseDesc* self = (physx::PxBVH33MidphaseDesc*) address;
-    self->meshSizePerformanceTradeOff = value;
+JNIEXPORT void JNICALL Java_physx_cooking_PxBVH33MidphaseDesc__1setMeshSizePerformanceTradeOff(JNIEnv*, jclass, jlong _address, jfloat value) {
+    physx::PxBVH33MidphaseDesc* _self = (physx::PxBVH33MidphaseDesc*) _address;
+    _self->meshSizePerformanceTradeOff = value;
 }
-JNIEXPORT jint JNICALL Java_physx_cooking_PxBVH33MidphaseDesc__1getMeshCookingHint(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxBVH33MidphaseDesc* self = (physx::PxBVH33MidphaseDesc*) address;
-    return (PxMeshCookingHintEnum) self->meshCookingHint;
+JNIEXPORT jint JNICALL Java_physx_cooking_PxBVH33MidphaseDesc__1getMeshCookingHint(JNIEnv*, jclass, jlong _address) {
+    physx::PxBVH33MidphaseDesc* _self = (physx::PxBVH33MidphaseDesc*) _address;
+    return (jint) _self->meshCookingHint;
 }
-JNIEXPORT void JNICALL Java_physx_cooking_PxBVH33MidphaseDesc__1setMeshCookingHint(JNIEnv* env, jclass, jlong address, jint value) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxBVH33MidphaseDesc* self = (physx::PxBVH33MidphaseDesc*) address;
-    self->meshCookingHint = (PxMeshCookingHintEnum) value;
+JNIEXPORT void JNICALL Java_physx_cooking_PxBVH33MidphaseDesc__1setMeshCookingHint(JNIEnv*, jclass, jlong _address, jint value) {
+    physx::PxBVH33MidphaseDesc* _self = (physx::PxBVH33MidphaseDesc*) _address;
+    _self->meshCookingHint = (PxMeshCookingHintEnum) value;
 }
 
 // PxBVH34MidphaseDesc
-JNIEXPORT void JNICALL Java_physx_cooking_PxBVH34MidphaseDesc__1setToDefault(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxBVH34MidphaseDesc* self = (physx::PxBVH34MidphaseDesc*) address;
+JNIEXPORT void JNICALL Java_physx_cooking_PxBVH34MidphaseDesc__1setToDefault(JNIEnv*, jclass, jlong _address) {
+    physx::PxBVH34MidphaseDesc* self = (physx::PxBVH34MidphaseDesc*) _address;
     self->setToDefault();
 }
-JNIEXPORT jboolean JNICALL Java_physx_cooking_PxBVH34MidphaseDesc__1isValid(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxBVH34MidphaseDesc* self = (physx::PxBVH34MidphaseDesc*) address;
+JNIEXPORT jboolean JNICALL Java_physx_cooking_PxBVH34MidphaseDesc__1isValid(JNIEnv*, jclass, jlong _address) {
+    physx::PxBVH34MidphaseDesc* self = (physx::PxBVH34MidphaseDesc*) _address;
     return (jboolean) self->isValid();
 }
-JNIEXPORT void JNICALL Java_physx_cooking_PxBVH34MidphaseDesc__1delete_1native_1instance(JNIEnv*, jclass, jlong address) {
-    delete (physx::PxBVH34MidphaseDesc*) address;
+JNIEXPORT void JNICALL Java_physx_cooking_PxBVH34MidphaseDesc__1delete_1native_1instance(JNIEnv*, jclass, jlong _address) {
+    delete (physx::PxBVH34MidphaseDesc*) _address;
 }
-JNIEXPORT jint JNICALL Java_physx_cooking_PxBVH34MidphaseDesc__1getNumPrimsPerLeaf(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxBVH34MidphaseDesc* self = (physx::PxBVH34MidphaseDesc*) address;
-    return (jint) self->numPrimsPerLeaf;
+JNIEXPORT jint JNICALL Java_physx_cooking_PxBVH34MidphaseDesc__1getNumPrimsPerLeaf(JNIEnv*, jclass, jlong _address) {
+    physx::PxBVH34MidphaseDesc* _self = (physx::PxBVH34MidphaseDesc*) _address;
+    return (jint) _self->numPrimsPerLeaf;
 }
-JNIEXPORT void JNICALL Java_physx_cooking_PxBVH34MidphaseDesc__1setNumPrimsPerLeaf(JNIEnv* env, jclass, jlong address, jint value) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxBVH34MidphaseDesc* self = (physx::PxBVH34MidphaseDesc*) address;
-    self->numPrimsPerLeaf = value;
+JNIEXPORT void JNICALL Java_physx_cooking_PxBVH34MidphaseDesc__1setNumPrimsPerLeaf(JNIEnv*, jclass, jlong _address, jint value) {
+    physx::PxBVH34MidphaseDesc* _self = (physx::PxBVH34MidphaseDesc*) _address;
+    _self->numPrimsPerLeaf = value;
 }
 
 // PxConvexFlags
 JNIEXPORT jint JNICALL Java_physx_cooking_PxConvexFlags__1_1sizeOf(JNIEnv*, jclass) {
     return sizeof(physx::PxConvexFlags);
 }
-JNIEXPORT void JNICALL Java_physx_cooking_PxConvexFlags__1_1placement_1new_1PxConvexFlags(JNIEnv* env, jclass, jlong __placement_address, jshort flags) {
-    (void) env;    // avoid unused parameter warning / error
-    new((void*)__placement_address) physx::PxConvexFlags(flags);
+JNIEXPORT jlong JNICALL Java_physx_cooking_PxConvexFlags__1_1placement_1new_1PxConvexFlags(JNIEnv*, jclass, jlong _placement_address, jshort flags) {
+    return (jlong) new((void*)_placement_address) physx::PxConvexFlags(flags);
 }
-JNIEXPORT jlong JNICALL Java_physx_cooking_PxConvexFlags__1PxConvexFlags(JNIEnv* env, jclass, jshort flags) {
-    (void) env;    // avoid unused parameter warning / error
+JNIEXPORT jlong JNICALL Java_physx_cooking_PxConvexFlags__1PxConvexFlags(JNIEnv*, jclass, jshort flags) {
     return (jlong) new physx::PxConvexFlags(flags);
 }
-JNIEXPORT jboolean JNICALL Java_physx_cooking_PxConvexFlags__1isSet(JNIEnv* env, jclass, jlong address, jint flag) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxConvexFlags* self = (physx::PxConvexFlags*) address;
+JNIEXPORT jboolean JNICALL Java_physx_cooking_PxConvexFlags__1isSet(JNIEnv*, jclass, jlong _address, jint flag) {
+    physx::PxConvexFlags* self = (physx::PxConvexFlags*) _address;
     return (jboolean) self->isSet((PxConvexFlagEnum) flag);
 }
-JNIEXPORT void JNICALL Java_physx_cooking_PxConvexFlags__1set(JNIEnv* env, jclass, jlong address, jint flag) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxConvexFlags* self = (physx::PxConvexFlags*) address;
+JNIEXPORT void JNICALL Java_physx_cooking_PxConvexFlags__1set(JNIEnv*, jclass, jlong _address, jint flag) {
+    physx::PxConvexFlags* self = (physx::PxConvexFlags*) _address;
     self->set((PxConvexFlagEnum) flag);
 }
-JNIEXPORT void JNICALL Java_physx_cooking_PxConvexFlags__1clear(JNIEnv* env, jclass, jlong address, jint flag) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxConvexFlags* self = (physx::PxConvexFlags*) address;
+JNIEXPORT void JNICALL Java_physx_cooking_PxConvexFlags__1clear(JNIEnv*, jclass, jlong _address, jint flag) {
+    physx::PxConvexFlags* self = (physx::PxConvexFlags*) _address;
     self->clear((PxConvexFlagEnum) flag);
 }
-JNIEXPORT void JNICALL Java_physx_cooking_PxConvexFlags__1delete_1native_1instance(JNIEnv*, jclass, jlong address) {
-    delete (physx::PxConvexFlags*) address;
+JNIEXPORT void JNICALL Java_physx_cooking_PxConvexFlags__1delete_1native_1instance(JNIEnv*, jclass, jlong _address) {
+    delete (physx::PxConvexFlags*) _address;
 }
 
 // PxConvexMeshDesc
 JNIEXPORT jint JNICALL Java_physx_cooking_PxConvexMeshDesc__1_1sizeOf(JNIEnv*, jclass) {
     return sizeof(physx::PxConvexMeshDesc);
 }
-JNIEXPORT void JNICALL Java_physx_cooking_PxConvexMeshDesc__1_1placement_1new_1PxConvexMeshDesc(JNIEnv* env, jclass, jlong __placement_address) {
-    (void) env;    // avoid unused parameter warning / error
-    new((void*)__placement_address) physx::PxConvexMeshDesc();
+JNIEXPORT jlong JNICALL Java_physx_cooking_PxConvexMeshDesc__1_1placement_1new_1PxConvexMeshDesc(JNIEnv*, jclass, jlong _placement_address) {
+    return (jlong) new((void*)_placement_address) physx::PxConvexMeshDesc();
 }
-JNIEXPORT jlong JNICALL Java_physx_cooking_PxConvexMeshDesc__1PxConvexMeshDesc(JNIEnv* env, jclass) {
-    (void) env;    // avoid unused parameter warning / error
+JNIEXPORT jlong JNICALL Java_physx_cooking_PxConvexMeshDesc__1PxConvexMeshDesc(JNIEnv*, jclass) {
     return (jlong) new physx::PxConvexMeshDesc();
 }
-JNIEXPORT void JNICALL Java_physx_cooking_PxConvexMeshDesc__1delete_1native_1instance(JNIEnv*, jclass, jlong address) {
-    delete (physx::PxConvexMeshDesc*) address;
+JNIEXPORT void JNICALL Java_physx_cooking_PxConvexMeshDesc__1delete_1native_1instance(JNIEnv*, jclass, jlong _address) {
+    delete (physx::PxConvexMeshDesc*) _address;
 }
-JNIEXPORT jlong JNICALL Java_physx_cooking_PxConvexMeshDesc__1getPoints(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxConvexMeshDesc* self = (physx::PxConvexMeshDesc*) address;
-    return (jlong) &self->points;
+JNIEXPORT jlong JNICALL Java_physx_cooking_PxConvexMeshDesc__1getPoints(JNIEnv*, jclass, jlong _address) {
+    physx::PxConvexMeshDesc* _self = (physx::PxConvexMeshDesc*) _address;
+    return (jlong) &_self->points;
 }
-JNIEXPORT void JNICALL Java_physx_cooking_PxConvexMeshDesc__1setPoints(JNIEnv* env, jclass, jlong address, jlong value) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxConvexMeshDesc* self = (physx::PxConvexMeshDesc*) address;
-    self->points = *((physx::PxBoundedData*) value);
+JNIEXPORT void JNICALL Java_physx_cooking_PxConvexMeshDesc__1setPoints(JNIEnv*, jclass, jlong _address, jlong value) {
+    physx::PxConvexMeshDesc* _self = (physx::PxConvexMeshDesc*) _address;
+    _self->points = *((physx::PxBoundedData*) value);
 }
-JNIEXPORT jlong JNICALL Java_physx_cooking_PxConvexMeshDesc__1getFlags(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxConvexMeshDesc* self = (physx::PxConvexMeshDesc*) address;
-    return (jlong) &self->flags;
+JNIEXPORT jlong JNICALL Java_physx_cooking_PxConvexMeshDesc__1getFlags(JNIEnv*, jclass, jlong _address) {
+    physx::PxConvexMeshDesc* _self = (physx::PxConvexMeshDesc*) _address;
+    return (jlong) &_self->flags;
 }
-JNIEXPORT void JNICALL Java_physx_cooking_PxConvexMeshDesc__1setFlags(JNIEnv* env, jclass, jlong address, jlong value) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxConvexMeshDesc* self = (physx::PxConvexMeshDesc*) address;
-    self->flags = *((physx::PxConvexFlags*) value);
+JNIEXPORT void JNICALL Java_physx_cooking_PxConvexMeshDesc__1setFlags(JNIEnv*, jclass, jlong _address, jlong value) {
+    physx::PxConvexMeshDesc* _self = (physx::PxConvexMeshDesc*) _address;
+    _self->flags = *((physx::PxConvexFlags*) value);
 }
 
 // PxCooking
-JNIEXPORT jlong JNICALL Java_physx_cooking_PxCooking__1createConvexMesh(JNIEnv* env, jclass, jlong address, jlong desc, jlong insertionCallback) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxCooking* self = (physx::PxCooking*) address;
+JNIEXPORT void JNICALL Java_physx_cooking_PxCooking__1release(JNIEnv*, jclass, jlong _address) {
+    physx::PxCooking* self = (physx::PxCooking*) _address;
+    self->release();
+}
+JNIEXPORT jlong JNICALL Java_physx_cooking_PxCooking__1createConvexMesh(JNIEnv*, jclass, jlong _address, jlong desc, jlong insertionCallback) {
+    physx::PxCooking* self = (physx::PxCooking*) _address;
     return (jlong) self->createConvexMesh(*((physx::PxConvexMeshDesc*) desc), *((physx::PxPhysicsInsertionCallback*) insertionCallback));
 }
-JNIEXPORT jlong JNICALL Java_physx_cooking_PxCooking__1createTriangleMesh(JNIEnv* env, jclass, jlong address, jlong desc, jlong insertionCallback) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxCooking* self = (physx::PxCooking*) address;
+JNIEXPORT jlong JNICALL Java_physx_cooking_PxCooking__1createTriangleMesh(JNIEnv*, jclass, jlong _address, jlong desc, jlong insertionCallback) {
+    physx::PxCooking* self = (physx::PxCooking*) _address;
     return (jlong) self->createTriangleMesh(*((physx::PxTriangleMeshDesc*) desc), *((physx::PxPhysicsInsertionCallback*) insertionCallback));
 }
 
 // PxCookingParams
-JNIEXPORT jlong JNICALL Java_physx_cooking_PxCookingParams__1PxCookingParams(JNIEnv* env, jclass, jlong sc) {
-    (void) env;    // avoid unused parameter warning / error
+JNIEXPORT jlong JNICALL Java_physx_cooking_PxCookingParams__1PxCookingParams(JNIEnv*, jclass, jlong sc) {
     return (jlong) new physx::PxCookingParams(*((physx::PxTolerancesScale*) sc));
 }
-JNIEXPORT void JNICALL Java_physx_cooking_PxCookingParams__1delete_1native_1instance(JNIEnv*, jclass, jlong address) {
-    delete (physx::PxCookingParams*) address;
+JNIEXPORT void JNICALL Java_physx_cooking_PxCookingParams__1delete_1native_1instance(JNIEnv*, jclass, jlong _address) {
+    delete (physx::PxCookingParams*) _address;
 }
-JNIEXPORT jfloat JNICALL Java_physx_cooking_PxCookingParams__1getAreaTestEpsilon(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxCookingParams* self = (physx::PxCookingParams*) address;
-    return (jfloat) self->areaTestEpsilon;
+JNIEXPORT jfloat JNICALL Java_physx_cooking_PxCookingParams__1getAreaTestEpsilon(JNIEnv*, jclass, jlong _address) {
+    physx::PxCookingParams* _self = (physx::PxCookingParams*) _address;
+    return (jfloat) _self->areaTestEpsilon;
 }
-JNIEXPORT void JNICALL Java_physx_cooking_PxCookingParams__1setAreaTestEpsilon(JNIEnv* env, jclass, jlong address, jfloat value) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxCookingParams* self = (physx::PxCookingParams*) address;
-    self->areaTestEpsilon = value;
+JNIEXPORT void JNICALL Java_physx_cooking_PxCookingParams__1setAreaTestEpsilon(JNIEnv*, jclass, jlong _address, jfloat value) {
+    physx::PxCookingParams* _self = (physx::PxCookingParams*) _address;
+    _self->areaTestEpsilon = value;
 }
-JNIEXPORT jfloat JNICALL Java_physx_cooking_PxCookingParams__1getPlaneTolerance(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxCookingParams* self = (physx::PxCookingParams*) address;
-    return (jfloat) self->planeTolerance;
+JNIEXPORT jfloat JNICALL Java_physx_cooking_PxCookingParams__1getPlaneTolerance(JNIEnv*, jclass, jlong _address) {
+    physx::PxCookingParams* _self = (physx::PxCookingParams*) _address;
+    return (jfloat) _self->planeTolerance;
 }
-JNIEXPORT void JNICALL Java_physx_cooking_PxCookingParams__1setPlaneTolerance(JNIEnv* env, jclass, jlong address, jfloat value) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxCookingParams* self = (physx::PxCookingParams*) address;
-    self->planeTolerance = value;
+JNIEXPORT void JNICALL Java_physx_cooking_PxCookingParams__1setPlaneTolerance(JNIEnv*, jclass, jlong _address, jfloat value) {
+    physx::PxCookingParams* _self = (physx::PxCookingParams*) _address;
+    _self->planeTolerance = value;
 }
-JNIEXPORT jint JNICALL Java_physx_cooking_PxCookingParams__1getConvexMeshCookingType(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxCookingParams* self = (physx::PxCookingParams*) address;
-    return (PxConvexMeshCookingTypeEnum) self->convexMeshCookingType;
+JNIEXPORT jint JNICALL Java_physx_cooking_PxCookingParams__1getConvexMeshCookingType(JNIEnv*, jclass, jlong _address) {
+    physx::PxCookingParams* _self = (physx::PxCookingParams*) _address;
+    return (jint) _self->convexMeshCookingType;
 }
-JNIEXPORT void JNICALL Java_physx_cooking_PxCookingParams__1setConvexMeshCookingType(JNIEnv* env, jclass, jlong address, jint value) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxCookingParams* self = (physx::PxCookingParams*) address;
-    self->convexMeshCookingType = (PxConvexMeshCookingTypeEnum) value;
+JNIEXPORT void JNICALL Java_physx_cooking_PxCookingParams__1setConvexMeshCookingType(JNIEnv*, jclass, jlong _address, jint value) {
+    physx::PxCookingParams* _self = (physx::PxCookingParams*) _address;
+    _self->convexMeshCookingType = (PxConvexMeshCookingTypeEnum) value;
 }
-JNIEXPORT jboolean JNICALL Java_physx_cooking_PxCookingParams__1getSuppressTriangleMeshRemapTable(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxCookingParams* self = (physx::PxCookingParams*) address;
-    return (jboolean) self->suppressTriangleMeshRemapTable;
+JNIEXPORT jboolean JNICALL Java_physx_cooking_PxCookingParams__1getSuppressTriangleMeshRemapTable(JNIEnv*, jclass, jlong _address) {
+    physx::PxCookingParams* _self = (physx::PxCookingParams*) _address;
+    return (jboolean) _self->suppressTriangleMeshRemapTable;
 }
-JNIEXPORT void JNICALL Java_physx_cooking_PxCookingParams__1setSuppressTriangleMeshRemapTable(JNIEnv* env, jclass, jlong address, jboolean value) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxCookingParams* self = (physx::PxCookingParams*) address;
-    self->suppressTriangleMeshRemapTable = value;
+JNIEXPORT void JNICALL Java_physx_cooking_PxCookingParams__1setSuppressTriangleMeshRemapTable(JNIEnv*, jclass, jlong _address, jboolean value) {
+    physx::PxCookingParams* _self = (physx::PxCookingParams*) _address;
+    _self->suppressTriangleMeshRemapTable = value;
 }
-JNIEXPORT jboolean JNICALL Java_physx_cooking_PxCookingParams__1getBuildTriangleAdjacencies(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxCookingParams* self = (physx::PxCookingParams*) address;
-    return (jboolean) self->buildTriangleAdjacencies;
+JNIEXPORT jboolean JNICALL Java_physx_cooking_PxCookingParams__1getBuildTriangleAdjacencies(JNIEnv*, jclass, jlong _address) {
+    physx::PxCookingParams* _self = (physx::PxCookingParams*) _address;
+    return (jboolean) _self->buildTriangleAdjacencies;
 }
-JNIEXPORT void JNICALL Java_physx_cooking_PxCookingParams__1setBuildTriangleAdjacencies(JNIEnv* env, jclass, jlong address, jboolean value) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxCookingParams* self = (physx::PxCookingParams*) address;
-    self->buildTriangleAdjacencies = value;
+JNIEXPORT void JNICALL Java_physx_cooking_PxCookingParams__1setBuildTriangleAdjacencies(JNIEnv*, jclass, jlong _address, jboolean value) {
+    physx::PxCookingParams* _self = (physx::PxCookingParams*) _address;
+    _self->buildTriangleAdjacencies = value;
 }
-JNIEXPORT jboolean JNICALL Java_physx_cooking_PxCookingParams__1getBuildGPUData(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxCookingParams* self = (physx::PxCookingParams*) address;
-    return (jboolean) self->buildGPUData;
+JNIEXPORT jboolean JNICALL Java_physx_cooking_PxCookingParams__1getBuildGPUData(JNIEnv*, jclass, jlong _address) {
+    physx::PxCookingParams* _self = (physx::PxCookingParams*) _address;
+    return (jboolean) _self->buildGPUData;
 }
-JNIEXPORT void JNICALL Java_physx_cooking_PxCookingParams__1setBuildGPUData(JNIEnv* env, jclass, jlong address, jboolean value) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxCookingParams* self = (physx::PxCookingParams*) address;
-    self->buildGPUData = value;
+JNIEXPORT void JNICALL Java_physx_cooking_PxCookingParams__1setBuildGPUData(JNIEnv*, jclass, jlong _address, jboolean value) {
+    physx::PxCookingParams* _self = (physx::PxCookingParams*) _address;
+    _self->buildGPUData = value;
 }
-JNIEXPORT jlong JNICALL Java_physx_cooking_PxCookingParams__1getScale(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxCookingParams* self = (physx::PxCookingParams*) address;
-    return (jlong) &self->scale;
+JNIEXPORT jlong JNICALL Java_physx_cooking_PxCookingParams__1getScale(JNIEnv*, jclass, jlong _address) {
+    physx::PxCookingParams* _self = (physx::PxCookingParams*) _address;
+    return (jlong) &_self->scale;
 }
-JNIEXPORT void JNICALL Java_physx_cooking_PxCookingParams__1setScale(JNIEnv* env, jclass, jlong address, jlong value) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxCookingParams* self = (physx::PxCookingParams*) address;
-    self->scale = *((physx::PxTolerancesScale*) value);
+JNIEXPORT void JNICALL Java_physx_cooking_PxCookingParams__1setScale(JNIEnv*, jclass, jlong _address, jlong value) {
+    physx::PxCookingParams* _self = (physx::PxCookingParams*) _address;
+    _self->scale = *((physx::PxTolerancesScale*) value);
 }
-JNIEXPORT jlong JNICALL Java_physx_cooking_PxCookingParams__1getMeshPreprocessParams(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxCookingParams* self = (physx::PxCookingParams*) address;
-    return (jlong) &self->meshPreprocessParams;
+JNIEXPORT jlong JNICALL Java_physx_cooking_PxCookingParams__1getMeshPreprocessParams(JNIEnv*, jclass, jlong _address) {
+    physx::PxCookingParams* _self = (physx::PxCookingParams*) _address;
+    return (jlong) &_self->meshPreprocessParams;
 }
-JNIEXPORT void JNICALL Java_physx_cooking_PxCookingParams__1setMeshPreprocessParams(JNIEnv* env, jclass, jlong address, jlong value) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxCookingParams* self = (physx::PxCookingParams*) address;
-    self->meshPreprocessParams = *((physx::PxMeshPreprocessingFlags*) value);
+JNIEXPORT void JNICALL Java_physx_cooking_PxCookingParams__1setMeshPreprocessParams(JNIEnv*, jclass, jlong _address, jlong value) {
+    physx::PxCookingParams* _self = (physx::PxCookingParams*) _address;
+    _self->meshPreprocessParams = *((physx::PxMeshPreprocessingFlags*) value);
 }
-JNIEXPORT jfloat JNICALL Java_physx_cooking_PxCookingParams__1getMeshWeldTolerance(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxCookingParams* self = (physx::PxCookingParams*) address;
-    return (jfloat) self->meshWeldTolerance;
+JNIEXPORT jfloat JNICALL Java_physx_cooking_PxCookingParams__1getMeshWeldTolerance(JNIEnv*, jclass, jlong _address) {
+    physx::PxCookingParams* _self = (physx::PxCookingParams*) _address;
+    return (jfloat) _self->meshWeldTolerance;
 }
-JNIEXPORT void JNICALL Java_physx_cooking_PxCookingParams__1setMeshWeldTolerance(JNIEnv* env, jclass, jlong address, jfloat value) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxCookingParams* self = (physx::PxCookingParams*) address;
-    self->meshWeldTolerance = value;
+JNIEXPORT void JNICALL Java_physx_cooking_PxCookingParams__1setMeshWeldTolerance(JNIEnv*, jclass, jlong _address, jfloat value) {
+    physx::PxCookingParams* _self = (physx::PxCookingParams*) _address;
+    _self->meshWeldTolerance = value;
 }
-JNIEXPORT jlong JNICALL Java_physx_cooking_PxCookingParams__1getMidphaseDesc(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxCookingParams* self = (physx::PxCookingParams*) address;
-    return (jlong) &self->midphaseDesc;
+JNIEXPORT jlong JNICALL Java_physx_cooking_PxCookingParams__1getMidphaseDesc(JNIEnv*, jclass, jlong _address) {
+    physx::PxCookingParams* _self = (physx::PxCookingParams*) _address;
+    return (jlong) &_self->midphaseDesc;
 }
-JNIEXPORT void JNICALL Java_physx_cooking_PxCookingParams__1setMidphaseDesc(JNIEnv* env, jclass, jlong address, jlong value) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxCookingParams* self = (physx::PxCookingParams*) address;
-    self->midphaseDesc = *((physx::PxMidphaseDesc*) value);
+JNIEXPORT void JNICALL Java_physx_cooking_PxCookingParams__1setMidphaseDesc(JNIEnv*, jclass, jlong _address, jlong value) {
+    physx::PxCookingParams* _self = (physx::PxCookingParams*) _address;
+    _self->midphaseDesc = *((physx::PxMidphaseDesc*) value);
 }
-JNIEXPORT jint JNICALL Java_physx_cooking_PxCookingParams__1getGaussMapLimit(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxCookingParams* self = (physx::PxCookingParams*) address;
-    return (jint) self->gaussMapLimit;
+JNIEXPORT jint JNICALL Java_physx_cooking_PxCookingParams__1getGaussMapLimit(JNIEnv*, jclass, jlong _address) {
+    physx::PxCookingParams* _self = (physx::PxCookingParams*) _address;
+    return (jint) _self->gaussMapLimit;
 }
-JNIEXPORT void JNICALL Java_physx_cooking_PxCookingParams__1setGaussMapLimit(JNIEnv* env, jclass, jlong address, jint value) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxCookingParams* self = (physx::PxCookingParams*) address;
-    self->gaussMapLimit = value;
+JNIEXPORT void JNICALL Java_physx_cooking_PxCookingParams__1setGaussMapLimit(JNIEnv*, jclass, jlong _address, jint value) {
+    physx::PxCookingParams* _self = (physx::PxCookingParams*) _address;
+    _self->gaussMapLimit = value;
 }
 
 // PxMeshPreprocessingFlags
-JNIEXPORT jlong JNICALL Java_physx_cooking_PxMeshPreprocessingFlags__1PxMeshPreprocessingFlags(JNIEnv* env, jclass, jint flags) {
-    (void) env;    // avoid unused parameter warning / error
+JNIEXPORT jlong JNICALL Java_physx_cooking_PxMeshPreprocessingFlags__1PxMeshPreprocessingFlags(JNIEnv*, jclass, jint flags) {
     return (jlong) new physx::PxMeshPreprocessingFlags(flags);
 }
-JNIEXPORT jboolean JNICALL Java_physx_cooking_PxMeshPreprocessingFlags__1isSet(JNIEnv* env, jclass, jlong address, jint flag) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxMeshPreprocessingFlags* self = (physx::PxMeshPreprocessingFlags*) address;
+JNIEXPORT jboolean JNICALL Java_physx_cooking_PxMeshPreprocessingFlags__1isSet(JNIEnv*, jclass, jlong _address, jint flag) {
+    physx::PxMeshPreprocessingFlags* self = (physx::PxMeshPreprocessingFlags*) _address;
     return (jboolean) self->isSet((PxMeshPreprocessingFlagEnum) flag);
 }
-JNIEXPORT void JNICALL Java_physx_cooking_PxMeshPreprocessingFlags__1set(JNIEnv* env, jclass, jlong address, jint flag) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxMeshPreprocessingFlags* self = (physx::PxMeshPreprocessingFlags*) address;
+JNIEXPORT void JNICALL Java_physx_cooking_PxMeshPreprocessingFlags__1set(JNIEnv*, jclass, jlong _address, jint flag) {
+    physx::PxMeshPreprocessingFlags* self = (physx::PxMeshPreprocessingFlags*) _address;
     self->set((PxMeshPreprocessingFlagEnum) flag);
 }
-JNIEXPORT void JNICALL Java_physx_cooking_PxMeshPreprocessingFlags__1clear(JNIEnv* env, jclass, jlong address, jint flag) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxMeshPreprocessingFlags* self = (physx::PxMeshPreprocessingFlags*) address;
+JNIEXPORT void JNICALL Java_physx_cooking_PxMeshPreprocessingFlags__1clear(JNIEnv*, jclass, jlong _address, jint flag) {
+    physx::PxMeshPreprocessingFlags* self = (physx::PxMeshPreprocessingFlags*) _address;
     self->clear((PxMeshPreprocessingFlagEnum) flag);
 }
-JNIEXPORT void JNICALL Java_physx_cooking_PxMeshPreprocessingFlags__1delete_1native_1instance(JNIEnv*, jclass, jlong address) {
-    delete (physx::PxMeshPreprocessingFlags*) address;
+JNIEXPORT void JNICALL Java_physx_cooking_PxMeshPreprocessingFlags__1delete_1native_1instance(JNIEnv*, jclass, jlong _address) {
+    delete (physx::PxMeshPreprocessingFlags*) _address;
 }
 
 // PxMidphaseDesc
-JNIEXPORT jlong JNICALL Java_physx_cooking_PxMidphaseDesc__1PxMidphaseDesc(JNIEnv* env, jclass) {
-    (void) env;    // avoid unused parameter warning / error
+JNIEXPORT jlong JNICALL Java_physx_cooking_PxMidphaseDesc__1PxMidphaseDesc(JNIEnv*, jclass) {
     return (jlong) new physx::PxMidphaseDesc();
 }
-JNIEXPORT jint JNICALL Java_physx_cooking_PxMidphaseDesc__1getType(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxMidphaseDesc* self = (physx::PxMidphaseDesc*) address;
-    return (PxMeshMidPhaseEnum) self->getType();
+JNIEXPORT jint JNICALL Java_physx_cooking_PxMidphaseDesc__1getType(JNIEnv*, jclass, jlong _address) {
+    physx::PxMidphaseDesc* self = (physx::PxMidphaseDesc*) _address;
+    return (jint) self->getType();
 }
-JNIEXPORT void JNICALL Java_physx_cooking_PxMidphaseDesc__1setToDefault(JNIEnv* env, jclass, jlong address, jint type) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxMidphaseDesc* self = (physx::PxMidphaseDesc*) address;
+JNIEXPORT void JNICALL Java_physx_cooking_PxMidphaseDesc__1setToDefault(JNIEnv*, jclass, jlong _address, jint type) {
+    physx::PxMidphaseDesc* self = (physx::PxMidphaseDesc*) _address;
     self->setToDefault((PxMeshMidPhaseEnum) type);
 }
-JNIEXPORT jboolean JNICALL Java_physx_cooking_PxMidphaseDesc__1isValid(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxMidphaseDesc* self = (physx::PxMidphaseDesc*) address;
+JNIEXPORT jboolean JNICALL Java_physx_cooking_PxMidphaseDesc__1isValid(JNIEnv*, jclass, jlong _address) {
+    physx::PxMidphaseDesc* self = (physx::PxMidphaseDesc*) _address;
     return (jboolean) self->isValid();
 }
-JNIEXPORT void JNICALL Java_physx_cooking_PxMidphaseDesc__1delete_1native_1instance(JNIEnv*, jclass, jlong address) {
-    delete (physx::PxMidphaseDesc*) address;
+JNIEXPORT void JNICALL Java_physx_cooking_PxMidphaseDesc__1delete_1native_1instance(JNIEnv*, jclass, jlong _address) {
+    delete (physx::PxMidphaseDesc*) _address;
 }
-JNIEXPORT jlong JNICALL Java_physx_cooking_PxMidphaseDesc__1getMBVH33Desc(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxMidphaseDesc* self = (physx::PxMidphaseDesc*) address;
-    return (jlong) &self->mBVH33Desc;
+JNIEXPORT jlong JNICALL Java_physx_cooking_PxMidphaseDesc__1getMBVH33Desc(JNIEnv*, jclass, jlong _address) {
+    physx::PxMidphaseDesc* _self = (physx::PxMidphaseDesc*) _address;
+    return (jlong) &_self->mBVH33Desc;
 }
-JNIEXPORT void JNICALL Java_physx_cooking_PxMidphaseDesc__1setMBVH33Desc(JNIEnv* env, jclass, jlong address, jlong value) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxMidphaseDesc* self = (physx::PxMidphaseDesc*) address;
-    self->mBVH33Desc = *((physx::PxBVH33MidphaseDesc*) value);
+JNIEXPORT void JNICALL Java_physx_cooking_PxMidphaseDesc__1setMBVH33Desc(JNIEnv*, jclass, jlong _address, jlong value) {
+    physx::PxMidphaseDesc* _self = (physx::PxMidphaseDesc*) _address;
+    _self->mBVH33Desc = *((physx::PxBVH33MidphaseDesc*) value);
 }
-JNIEXPORT jlong JNICALL Java_physx_cooking_PxMidphaseDesc__1getMBVH34Desc(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxMidphaseDesc* self = (physx::PxMidphaseDesc*) address;
-    return (jlong) &self->mBVH34Desc;
+JNIEXPORT jlong JNICALL Java_physx_cooking_PxMidphaseDesc__1getMBVH34Desc(JNIEnv*, jclass, jlong _address) {
+    physx::PxMidphaseDesc* _self = (physx::PxMidphaseDesc*) _address;
+    return (jlong) &_self->mBVH34Desc;
 }
-JNIEXPORT void JNICALL Java_physx_cooking_PxMidphaseDesc__1setMBVH34Desc(JNIEnv* env, jclass, jlong address, jlong value) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxMidphaseDesc* self = (physx::PxMidphaseDesc*) address;
-    self->mBVH34Desc = *((physx::PxBVH34MidphaseDesc*) value);
+JNIEXPORT void JNICALL Java_physx_cooking_PxMidphaseDesc__1setMBVH34Desc(JNIEnv*, jclass, jlong _address, jlong value) {
+    physx::PxMidphaseDesc* _self = (physx::PxMidphaseDesc*) _address;
+    _self->mBVH34Desc = *((physx::PxBVH34MidphaseDesc*) value);
 }
 
 // PxTriangleMeshDesc
 JNIEXPORT jint JNICALL Java_physx_cooking_PxTriangleMeshDesc__1_1sizeOf(JNIEnv*, jclass) {
     return sizeof(physx::PxTriangleMeshDesc);
 }
-JNIEXPORT void JNICALL Java_physx_cooking_PxTriangleMeshDesc__1_1placement_1new_1PxTriangleMeshDesc(JNIEnv* env, jclass, jlong __placement_address) {
-    (void) env;    // avoid unused parameter warning / error
-    new((void*)__placement_address) physx::PxTriangleMeshDesc();
+JNIEXPORT jlong JNICALL Java_physx_cooking_PxTriangleMeshDesc__1_1placement_1new_1PxTriangleMeshDesc(JNIEnv*, jclass, jlong _placement_address) {
+    return (jlong) new((void*)_placement_address) physx::PxTriangleMeshDesc();
 }
-JNIEXPORT jlong JNICALL Java_physx_cooking_PxTriangleMeshDesc__1PxTriangleMeshDesc(JNIEnv* env, jclass) {
-    (void) env;    // avoid unused parameter warning / error
+JNIEXPORT jlong JNICALL Java_physx_cooking_PxTriangleMeshDesc__1PxTriangleMeshDesc(JNIEnv*, jclass) {
     return (jlong) new physx::PxTriangleMeshDesc();
 }
-JNIEXPORT void JNICALL Java_physx_cooking_PxTriangleMeshDesc__1setToDefault(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxTriangleMeshDesc* self = (physx::PxTriangleMeshDesc*) address;
+JNIEXPORT void JNICALL Java_physx_cooking_PxTriangleMeshDesc__1setToDefault(JNIEnv*, jclass, jlong _address) {
+    physx::PxTriangleMeshDesc* self = (physx::PxTriangleMeshDesc*) _address;
     self->setToDefault();
 }
-JNIEXPORT jboolean JNICALL Java_physx_cooking_PxTriangleMeshDesc__1isValid(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxTriangleMeshDesc* self = (physx::PxTriangleMeshDesc*) address;
+JNIEXPORT jboolean JNICALL Java_physx_cooking_PxTriangleMeshDesc__1isValid(JNIEnv*, jclass, jlong _address) {
+    physx::PxTriangleMeshDesc* self = (physx::PxTriangleMeshDesc*) _address;
     return (jboolean) self->isValid();
 }
-JNIEXPORT void JNICALL Java_physx_cooking_PxTriangleMeshDesc__1delete_1native_1instance(JNIEnv*, jclass, jlong address) {
-    delete (physx::PxTriangleMeshDesc*) address;
+JNIEXPORT void JNICALL Java_physx_cooking_PxTriangleMeshDesc__1delete_1native_1instance(JNIEnv*, jclass, jlong _address) {
+    delete (physx::PxTriangleMeshDesc*) _address;
 }
-JNIEXPORT jlong JNICALL Java_physx_cooking_PxTriangleMeshDesc__1getMaterialIndices(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxTriangleMeshDesc* self = (physx::PxTriangleMeshDesc*) address;
-    return (jlong) &self->materialIndices;
+JNIEXPORT jlong JNICALL Java_physx_cooking_PxTriangleMeshDesc__1getMaterialIndices(JNIEnv*, jclass, jlong _address) {
+    physx::PxTriangleMeshDesc* _self = (physx::PxTriangleMeshDesc*) _address;
+    return (jlong) &_self->materialIndices;
 }
-JNIEXPORT void JNICALL Java_physx_cooking_PxTriangleMeshDesc__1setMaterialIndices(JNIEnv* env, jclass, jlong address, jlong value) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxTriangleMeshDesc* self = (physx::PxTriangleMeshDesc*) address;
-    self->materialIndices = *((PxU16StridedData*) value);
+JNIEXPORT void JNICALL Java_physx_cooking_PxTriangleMeshDesc__1setMaterialIndices(JNIEnv*, jclass, jlong _address, jlong value) {
+    physx::PxTriangleMeshDesc* _self = (physx::PxTriangleMeshDesc*) _address;
+    _self->materialIndices = *((PxU16StridedData*) value);
 }
 
 // PxConvexFlagEnum
@@ -999,107 +1014,91 @@ JNIEXPORT jint JNICALL Java_physx_cooking_PxMeshMidPhaseEnum__1geteBVH34(JNIEnv*
 }
 
 // PxDefaultAllocator
-JNIEXPORT jlong JNICALL Java_physx_extensions_PxDefaultAllocator__1PxDefaultAllocator(JNIEnv* env, jclass) {
-    (void) env;    // avoid unused parameter warning / error
+JNIEXPORT jlong JNICALL Java_physx_extensions_PxDefaultAllocator__1PxDefaultAllocator(JNIEnv*, jclass) {
     return (jlong) new physx::PxDefaultAllocator();
 }
-JNIEXPORT void JNICALL Java_physx_extensions_PxDefaultAllocator__1delete_1native_1instance(JNIEnv*, jclass, jlong address) {
-    delete (physx::PxDefaultAllocator*) address;
+JNIEXPORT void JNICALL Java_physx_extensions_PxDefaultAllocator__1delete_1native_1instance(JNIEnv*, jclass, jlong _address) {
+    delete (physx::PxDefaultAllocator*) _address;
 }
 
 // PxDefaultCpuDispatcher
-JNIEXPORT void JNICALL Java_physx_extensions_PxDefaultCpuDispatcher__1delete_1native_1instance(JNIEnv*, jclass, jlong address) {
-    delete (physx::PxDefaultCpuDispatcher*) address;
+JNIEXPORT void JNICALL Java_physx_extensions_PxDefaultCpuDispatcher__1delete_1native_1instance(JNIEnv*, jclass, jlong _address) {
+    delete (physx::PxDefaultCpuDispatcher*) _address;
 }
 
 // PxJoint
 
 // PxRevoluteJoint
-JNIEXPORT void JNICALL Java_physx_extensions_PxRevoluteJoint__1setDriveVelocity__JF(JNIEnv* env, jclass, jlong address, jfloat velocity) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxRevoluteJoint* self = (physx::PxRevoluteJoint*) address;
+JNIEXPORT void JNICALL Java_physx_extensions_PxRevoluteJoint__1setDriveVelocity__JF(JNIEnv*, jclass, jlong _address, jfloat velocity) {
+    physx::PxRevoluteJoint* self = (physx::PxRevoluteJoint*) _address;
     self->setDriveVelocity(velocity);
 }
-JNIEXPORT void JNICALL Java_physx_extensions_PxRevoluteJoint__1setDriveVelocity__JFZ(JNIEnv* env, jclass, jlong address, jfloat velocity, jboolean autowake) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxRevoluteJoint* self = (physx::PxRevoluteJoint*) address;
+JNIEXPORT void JNICALL Java_physx_extensions_PxRevoluteJoint__1setDriveVelocity__JFZ(JNIEnv*, jclass, jlong _address, jfloat velocity, jboolean autowake) {
+    physx::PxRevoluteJoint* self = (physx::PxRevoluteJoint*) _address;
     self->setDriveVelocity(velocity, autowake);
 }
-JNIEXPORT jfloat JNICALL Java_physx_extensions_PxRevoluteJoint__1getDriveVelocity(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxRevoluteJoint* self = (physx::PxRevoluteJoint*) address;
+JNIEXPORT jfloat JNICALL Java_physx_extensions_PxRevoluteJoint__1getDriveVelocity(JNIEnv*, jclass, jlong _address) {
+    physx::PxRevoluteJoint* self = (physx::PxRevoluteJoint*) _address;
     return (jfloat) self->getDriveVelocity();
 }
-JNIEXPORT void JNICALL Java_physx_extensions_PxRevoluteJoint__1setDriveForceLimit(JNIEnv* env, jclass, jlong address, jfloat limit) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxRevoluteJoint* self = (physx::PxRevoluteJoint*) address;
+JNIEXPORT void JNICALL Java_physx_extensions_PxRevoluteJoint__1setDriveForceLimit(JNIEnv*, jclass, jlong _address, jfloat limit) {
+    physx::PxRevoluteJoint* self = (physx::PxRevoluteJoint*) _address;
     self->setDriveForceLimit(limit);
 }
-JNIEXPORT jfloat JNICALL Java_physx_extensions_PxRevoluteJoint__1getDriveForceLimit(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxRevoluteJoint* self = (physx::PxRevoluteJoint*) address;
+JNIEXPORT jfloat JNICALL Java_physx_extensions_PxRevoluteJoint__1getDriveForceLimit(JNIEnv*, jclass, jlong _address) {
+    physx::PxRevoluteJoint* self = (physx::PxRevoluteJoint*) _address;
     return (jfloat) self->getDriveForceLimit();
 }
-JNIEXPORT void JNICALL Java_physx_extensions_PxRevoluteJoint__1setDriveGearRatio(JNIEnv* env, jclass, jlong address, jfloat ratio) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxRevoluteJoint* self = (physx::PxRevoluteJoint*) address;
+JNIEXPORT void JNICALL Java_physx_extensions_PxRevoluteJoint__1setDriveGearRatio(JNIEnv*, jclass, jlong _address, jfloat ratio) {
+    physx::PxRevoluteJoint* self = (physx::PxRevoluteJoint*) _address;
     self->setDriveGearRatio(ratio);
 }
-JNIEXPORT jfloat JNICALL Java_physx_extensions_PxRevoluteJoint__1getDriveGearRatio(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxRevoluteJoint* self = (physx::PxRevoluteJoint*) address;
+JNIEXPORT jfloat JNICALL Java_physx_extensions_PxRevoluteJoint__1getDriveGearRatio(JNIEnv*, jclass, jlong _address) {
+    physx::PxRevoluteJoint* self = (physx::PxRevoluteJoint*) _address;
     return (jfloat) self->getDriveGearRatio();
 }
-JNIEXPORT void JNICALL Java_physx_extensions_PxRevoluteJoint__1setRevoluteJointFlags(JNIEnv* env, jclass, jlong address, jlong flags) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxRevoluteJoint* self = (physx::PxRevoluteJoint*) address;
+JNIEXPORT void JNICALL Java_physx_extensions_PxRevoluteJoint__1setRevoluteJointFlags(JNIEnv*, jclass, jlong _address, jlong flags) {
+    physx::PxRevoluteJoint* self = (physx::PxRevoluteJoint*) _address;
     self->setRevoluteJointFlags(*((physx::PxRevoluteJointFlags*) flags));
 }
-JNIEXPORT void JNICALL Java_physx_extensions_PxRevoluteJoint__1setRevoluteJointFlag(JNIEnv* env, jclass, jlong address, jint flag, jboolean value) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxRevoluteJoint* self = (physx::PxRevoluteJoint*) address;
+JNIEXPORT void JNICALL Java_physx_extensions_PxRevoluteJoint__1setRevoluteJointFlag(JNIEnv*, jclass, jlong _address, jint flag, jboolean value) {
+    physx::PxRevoluteJoint* self = (physx::PxRevoluteJoint*) _address;
     self->setRevoluteJointFlag((PxRevoluteJointFlagEnum) flag, value);
 }
-JNIEXPORT jlong JNICALL Java_physx_extensions_PxRevoluteJoint__1getRevoluteJointFlags(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    static physx::PxRevoluteJointFlags cache;
-    physx::PxRevoluteJoint* self = (physx::PxRevoluteJoint*) address;
-    cache = self->getRevoluteJointFlags();
-    return (jlong) &cache;
+JNIEXPORT jlong JNICALL Java_physx_extensions_PxRevoluteJoint__1getRevoluteJointFlags(JNIEnv*, jclass, jlong _address) {
+    static thread_local physx::PxRevoluteJointFlags _cache;
+    physx::PxRevoluteJoint* self = (physx::PxRevoluteJoint*) _address;
+    _cache = self->getRevoluteJointFlags();
+    return (jlong) &_cache;
 }
-JNIEXPORT void JNICALL Java_physx_extensions_PxRevoluteJoint__1delete_1native_1instance(JNIEnv*, jclass, jlong address) {
-    delete (physx::PxRevoluteJoint*) address;
+JNIEXPORT void JNICALL Java_physx_extensions_PxRevoluteJoint__1delete_1native_1instance(JNIEnv*, jclass, jlong _address) {
+    delete (physx::PxRevoluteJoint*) _address;
 }
 
 // PxRevoluteJointFlags
 JNIEXPORT jint JNICALL Java_physx_extensions_PxRevoluteJointFlags__1_1sizeOf(JNIEnv*, jclass) {
     return sizeof(physx::PxRevoluteJointFlags);
 }
-JNIEXPORT void JNICALL Java_physx_extensions_PxRevoluteJointFlags__1_1placement_1new_1PxRevoluteJointFlags(JNIEnv* env, jclass, jlong __placement_address, jshort flags) {
-    (void) env;    // avoid unused parameter warning / error
-    new((void*)__placement_address) physx::PxRevoluteJointFlags(flags);
+JNIEXPORT jlong JNICALL Java_physx_extensions_PxRevoluteJointFlags__1_1placement_1new_1PxRevoluteJointFlags(JNIEnv*, jclass, jlong _placement_address, jshort flags) {
+    return (jlong) new((void*)_placement_address) physx::PxRevoluteJointFlags(flags);
 }
-JNIEXPORT jlong JNICALL Java_physx_extensions_PxRevoluteJointFlags__1PxRevoluteJointFlags(JNIEnv* env, jclass, jshort flags) {
-    (void) env;    // avoid unused parameter warning / error
+JNIEXPORT jlong JNICALL Java_physx_extensions_PxRevoluteJointFlags__1PxRevoluteJointFlags(JNIEnv*, jclass, jshort flags) {
     return (jlong) new physx::PxRevoluteJointFlags(flags);
 }
-JNIEXPORT jboolean JNICALL Java_physx_extensions_PxRevoluteJointFlags__1isSet(JNIEnv* env, jclass, jlong address, jint flag) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxRevoluteJointFlags* self = (physx::PxRevoluteJointFlags*) address;
+JNIEXPORT jboolean JNICALL Java_physx_extensions_PxRevoluteJointFlags__1isSet(JNIEnv*, jclass, jlong _address, jint flag) {
+    physx::PxRevoluteJointFlags* self = (physx::PxRevoluteJointFlags*) _address;
     return (jboolean) self->isSet((PxRevoluteJointFlagEnum) flag);
 }
-JNIEXPORT void JNICALL Java_physx_extensions_PxRevoluteJointFlags__1set(JNIEnv* env, jclass, jlong address, jint flag) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxRevoluteJointFlags* self = (physx::PxRevoluteJointFlags*) address;
+JNIEXPORT void JNICALL Java_physx_extensions_PxRevoluteJointFlags__1set(JNIEnv*, jclass, jlong _address, jint flag) {
+    physx::PxRevoluteJointFlags* self = (physx::PxRevoluteJointFlags*) _address;
     self->set((PxRevoluteJointFlagEnum) flag);
 }
-JNIEXPORT void JNICALL Java_physx_extensions_PxRevoluteJointFlags__1clear(JNIEnv* env, jclass, jlong address, jint flag) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxRevoluteJointFlags* self = (physx::PxRevoluteJointFlags*) address;
+JNIEXPORT void JNICALL Java_physx_extensions_PxRevoluteJointFlags__1clear(JNIEnv*, jclass, jlong _address, jint flag) {
+    physx::PxRevoluteJointFlags* self = (physx::PxRevoluteJointFlags*) _address;
     self->clear((PxRevoluteJointFlagEnum) flag);
 }
-JNIEXPORT void JNICALL Java_physx_extensions_PxRevoluteJointFlags__1delete_1native_1instance(JNIEnv*, jclass, jlong address) {
-    delete (physx::PxRevoluteJointFlags*) address;
+JNIEXPORT void JNICALL Java_physx_extensions_PxRevoluteJointFlags__1delete_1native_1instance(JNIEnv*, jclass, jlong _address) {
+    delete (physx::PxRevoluteJointFlags*) _address;
 }
 
 // PxRevoluteJointFlagEnum
@@ -1117,16 +1116,14 @@ JNIEXPORT jint JNICALL Java_physx_extensions_PxRevoluteJointFlagEnum__1geteDRIVE
 JNIEXPORT jint JNICALL Java_physx_geomutils_PxBoxGeometry__1_1sizeOf(JNIEnv*, jclass) {
     return sizeof(physx::PxBoxGeometry);
 }
-JNIEXPORT void JNICALL Java_physx_geomutils_PxBoxGeometry__1_1placement_1new_1PxBoxGeometry(JNIEnv* env, jclass, jlong __placement_address, jfloat hx, jfloat hy, jfloat hz) {
-    (void) env;    // avoid unused parameter warning / error
-    new((void*)__placement_address) physx::PxBoxGeometry(hx, hy, hz);
+JNIEXPORT jlong JNICALL Java_physx_geomutils_PxBoxGeometry__1_1placement_1new_1PxBoxGeometry(JNIEnv*, jclass, jlong _placement_address, jfloat hx, jfloat hy, jfloat hz) {
+    return (jlong) new((void*)_placement_address) physx::PxBoxGeometry(hx, hy, hz);
 }
-JNIEXPORT jlong JNICALL Java_physx_geomutils_PxBoxGeometry__1PxBoxGeometry(JNIEnv* env, jclass, jfloat hx, jfloat hy, jfloat hz) {
-    (void) env;    // avoid unused parameter warning / error
+JNIEXPORT jlong JNICALL Java_physx_geomutils_PxBoxGeometry__1PxBoxGeometry(JNIEnv*, jclass, jfloat hx, jfloat hy, jfloat hz) {
     return (jlong) new physx::PxBoxGeometry(hx, hy, hz);
 }
-JNIEXPORT void JNICALL Java_physx_geomutils_PxBoxGeometry__1delete_1native_1instance(JNIEnv*, jclass, jlong address) {
-    delete (physx::PxBoxGeometry*) address;
+JNIEXPORT void JNICALL Java_physx_geomutils_PxBoxGeometry__1delete_1native_1instance(JNIEnv*, jclass, jlong _address) {
+    delete (physx::PxBoxGeometry*) _address;
 }
 
 // PxBVHStructure
@@ -1135,66 +1132,55 @@ JNIEXPORT void JNICALL Java_physx_geomutils_PxBoxGeometry__1delete_1native_1inst
 JNIEXPORT jint JNICALL Java_physx_geomutils_PxCapsuleGeometry__1_1sizeOf(JNIEnv*, jclass) {
     return sizeof(physx::PxCapsuleGeometry);
 }
-JNIEXPORT void JNICALL Java_physx_geomutils_PxCapsuleGeometry__1_1placement_1new_1PxCapsuleGeometry(JNIEnv* env, jclass, jlong __placement_address, jfloat radius, jfloat halfHeight) {
-    (void) env;    // avoid unused parameter warning / error
-    new((void*)__placement_address) physx::PxCapsuleGeometry(radius, halfHeight);
+JNIEXPORT jlong JNICALL Java_physx_geomutils_PxCapsuleGeometry__1_1placement_1new_1PxCapsuleGeometry(JNIEnv*, jclass, jlong _placement_address, jfloat radius, jfloat halfHeight) {
+    return (jlong) new((void*)_placement_address) physx::PxCapsuleGeometry(radius, halfHeight);
 }
-JNIEXPORT jlong JNICALL Java_physx_geomutils_PxCapsuleGeometry__1PxCapsuleGeometry(JNIEnv* env, jclass, jfloat radius, jfloat halfHeight) {
-    (void) env;    // avoid unused parameter warning / error
+JNIEXPORT jlong JNICALL Java_physx_geomutils_PxCapsuleGeometry__1PxCapsuleGeometry(JNIEnv*, jclass, jfloat radius, jfloat halfHeight) {
     return (jlong) new physx::PxCapsuleGeometry(radius, halfHeight);
 }
-JNIEXPORT void JNICALL Java_physx_geomutils_PxCapsuleGeometry__1delete_1native_1instance(JNIEnv*, jclass, jlong address) {
-    delete (physx::PxCapsuleGeometry*) address;
+JNIEXPORT void JNICALL Java_physx_geomutils_PxCapsuleGeometry__1delete_1native_1instance(JNIEnv*, jclass, jlong _address) {
+    delete (physx::PxCapsuleGeometry*) _address;
 }
 
 // PxConvexMesh
-JNIEXPORT jint JNICALL Java_physx_geomutils_PxConvexMesh__1getNbVertices(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxConvexMesh* self = (physx::PxConvexMesh*) address;
+JNIEXPORT jint JNICALL Java_physx_geomutils_PxConvexMesh__1getNbVertices(JNIEnv*, jclass, jlong _address) {
+    physx::PxConvexMesh* self = (physx::PxConvexMesh*) _address;
     return (jint) self->getNbVertices();
 }
-JNIEXPORT jlong JNICALL Java_physx_geomutils_PxConvexMesh__1getVertices(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxConvexMesh* self = (physx::PxConvexMesh*) address;
+JNIEXPORT jlong JNICALL Java_physx_geomutils_PxConvexMesh__1getVertices(JNIEnv*, jclass, jlong _address) {
+    physx::PxConvexMesh* self = (physx::PxConvexMesh*) _address;
     return (jlong) self->getVertices();
 }
-JNIEXPORT jlong JNICALL Java_physx_geomutils_PxConvexMesh__1getIndexBuffer(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    static PxU8Ptr cache;
-    physx::PxConvexMesh* self = (physx::PxConvexMesh*) address;
-    cache = self->getIndexBuffer();
-    return (jlong) &cache;
+JNIEXPORT jlong JNICALL Java_physx_geomutils_PxConvexMesh__1getIndexBuffer(JNIEnv*, jclass, jlong _address) {
+    static thread_local PxU8Ptr _cache;
+    physx::PxConvexMesh* self = (physx::PxConvexMesh*) _address;
+    _cache = self->getIndexBuffer();
+    return (jlong) &_cache;
 }
-JNIEXPORT jint JNICALL Java_physx_geomutils_PxConvexMesh__1getNbPolygons(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxConvexMesh* self = (physx::PxConvexMesh*) address;
+JNIEXPORT jint JNICALL Java_physx_geomutils_PxConvexMesh__1getNbPolygons(JNIEnv*, jclass, jlong _address) {
+    physx::PxConvexMesh* self = (physx::PxConvexMesh*) _address;
     return (jint) self->getNbPolygons();
 }
-JNIEXPORT jboolean JNICALL Java_physx_geomutils_PxConvexMesh__1getPolygonData(JNIEnv* env, jclass, jlong address, jint index, jlong data) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxConvexMesh* self = (physx::PxConvexMesh*) address;
+JNIEXPORT jboolean JNICALL Java_physx_geomutils_PxConvexMesh__1getPolygonData(JNIEnv*, jclass, jlong _address, jint index, jlong data) {
+    physx::PxConvexMesh* self = (physx::PxConvexMesh*) _address;
     return (jboolean) self->getPolygonData(index, *((physx::PxHullPolygon*) data));
 }
-JNIEXPORT jint JNICALL Java_physx_geomutils_PxConvexMesh__1getReferenceCount(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxConvexMesh* self = (physx::PxConvexMesh*) address;
+JNIEXPORT jint JNICALL Java_physx_geomutils_PxConvexMesh__1getReferenceCount(JNIEnv*, jclass, jlong _address) {
+    physx::PxConvexMesh* self = (physx::PxConvexMesh*) _address;
     return (jint) self->getReferenceCount();
 }
-JNIEXPORT void JNICALL Java_physx_geomutils_PxConvexMesh__1acquireReference(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxConvexMesh* self = (physx::PxConvexMesh*) address;
+JNIEXPORT void JNICALL Java_physx_geomutils_PxConvexMesh__1acquireReference(JNIEnv*, jclass, jlong _address) {
+    physx::PxConvexMesh* self = (physx::PxConvexMesh*) _address;
     self->acquireReference();
 }
-JNIEXPORT jlong JNICALL Java_physx_geomutils_PxConvexMesh__1getLocalBounds(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    static physx::PxBounds3 cache;
-    physx::PxConvexMesh* self = (physx::PxConvexMesh*) address;
-    cache = self->getLocalBounds();
-    return (jlong) &cache;
+JNIEXPORT jlong JNICALL Java_physx_geomutils_PxConvexMesh__1getLocalBounds(JNIEnv*, jclass, jlong _address) {
+    static thread_local physx::PxBounds3 _cache;
+    physx::PxConvexMesh* self = (physx::PxConvexMesh*) _address;
+    _cache = self->getLocalBounds();
+    return (jlong) &_cache;
 }
-JNIEXPORT jboolean JNICALL Java_physx_geomutils_PxConvexMesh__1isGpuCompatible(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxConvexMesh* self = (physx::PxConvexMesh*) address;
+JNIEXPORT jboolean JNICALL Java_physx_geomutils_PxConvexMesh__1isGpuCompatible(JNIEnv*, jclass, jlong _address) {
+    physx::PxConvexMesh* self = (physx::PxConvexMesh*) _address;
     return (jboolean) self->isGpuCompatible();
 }
 
@@ -1202,327 +1188,272 @@ JNIEXPORT jboolean JNICALL Java_physx_geomutils_PxConvexMesh__1isGpuCompatible(J
 JNIEXPORT jint JNICALL Java_physx_geomutils_PxConvexMeshGeometry__1_1sizeOf(JNIEnv*, jclass) {
     return sizeof(physx::PxConvexMeshGeometry);
 }
-JNIEXPORT void JNICALL Java_physx_geomutils_PxConvexMeshGeometry__1_1placement_1new_1PxConvexMeshGeometry__JJ(JNIEnv* env, jclass, jlong __placement_address, jlong mesh) {
-    (void) env;    // avoid unused parameter warning / error
-    new((void*)__placement_address) physx::PxConvexMeshGeometry((physx::PxConvexMesh*) mesh);
+JNIEXPORT jlong JNICALL Java_physx_geomutils_PxConvexMeshGeometry__1_1placement_1new_1PxConvexMeshGeometry__JJ(JNIEnv*, jclass, jlong _placement_address, jlong mesh) {
+    return (jlong) new((void*)_placement_address) physx::PxConvexMeshGeometry((physx::PxConvexMesh*) mesh);
 }
-JNIEXPORT void JNICALL Java_physx_geomutils_PxConvexMeshGeometry__1_1placement_1new_1PxConvexMeshGeometry__JJJ(JNIEnv* env, jclass, jlong __placement_address, jlong mesh, jlong scaling) {
-    (void) env;    // avoid unused parameter warning / error
-    new((void*)__placement_address) physx::PxConvexMeshGeometry((physx::PxConvexMesh*) mesh, *((physx::PxMeshScale*) scaling));
+JNIEXPORT jlong JNICALL Java_physx_geomutils_PxConvexMeshGeometry__1_1placement_1new_1PxConvexMeshGeometry__JJJ(JNIEnv*, jclass, jlong _placement_address, jlong mesh, jlong scaling) {
+    return (jlong) new((void*)_placement_address) physx::PxConvexMeshGeometry((physx::PxConvexMesh*) mesh, *((physx::PxMeshScale*) scaling));
 }
-JNIEXPORT void JNICALL Java_physx_geomutils_PxConvexMeshGeometry__1_1placement_1new_1PxConvexMeshGeometry__JJJJ(JNIEnv* env, jclass, jlong __placement_address, jlong mesh, jlong scaling, jlong flags) {
-    (void) env;    // avoid unused parameter warning / error
-    new((void*)__placement_address) physx::PxConvexMeshGeometry((physx::PxConvexMesh*) mesh, *((physx::PxMeshScale*) scaling), *((physx::PxConvexMeshGeometryFlags*) flags));
+JNIEXPORT jlong JNICALL Java_physx_geomutils_PxConvexMeshGeometry__1_1placement_1new_1PxConvexMeshGeometry__JJJJ(JNIEnv*, jclass, jlong _placement_address, jlong mesh, jlong scaling, jlong flags) {
+    return (jlong) new((void*)_placement_address) physx::PxConvexMeshGeometry((physx::PxConvexMesh*) mesh, *((physx::PxMeshScale*) scaling), *((physx::PxConvexMeshGeometryFlags*) flags));
 }
-JNIEXPORT jlong JNICALL Java_physx_geomutils_PxConvexMeshGeometry__1PxConvexMeshGeometry__J(JNIEnv* env, jclass, jlong mesh) {
-    (void) env;    // avoid unused parameter warning / error
+JNIEXPORT jlong JNICALL Java_physx_geomutils_PxConvexMeshGeometry__1PxConvexMeshGeometry__J(JNIEnv*, jclass, jlong mesh) {
     return (jlong) new physx::PxConvexMeshGeometry((physx::PxConvexMesh*) mesh);
 }
-JNIEXPORT jlong JNICALL Java_physx_geomutils_PxConvexMeshGeometry__1PxConvexMeshGeometry__JJ(JNIEnv* env, jclass, jlong mesh, jlong scaling) {
-    (void) env;    // avoid unused parameter warning / error
+JNIEXPORT jlong JNICALL Java_physx_geomutils_PxConvexMeshGeometry__1PxConvexMeshGeometry__JJ(JNIEnv*, jclass, jlong mesh, jlong scaling) {
     return (jlong) new physx::PxConvexMeshGeometry((physx::PxConvexMesh*) mesh, *((physx::PxMeshScale*) scaling));
 }
-JNIEXPORT jlong JNICALL Java_physx_geomutils_PxConvexMeshGeometry__1PxConvexMeshGeometry__JJJ(JNIEnv* env, jclass, jlong mesh, jlong scaling, jlong flags) {
-    (void) env;    // avoid unused parameter warning / error
+JNIEXPORT jlong JNICALL Java_physx_geomutils_PxConvexMeshGeometry__1PxConvexMeshGeometry__JJJ(JNIEnv*, jclass, jlong mesh, jlong scaling, jlong flags) {
     return (jlong) new physx::PxConvexMeshGeometry((physx::PxConvexMesh*) mesh, *((physx::PxMeshScale*) scaling), *((physx::PxConvexMeshGeometryFlags*) flags));
 }
-JNIEXPORT void JNICALL Java_physx_geomutils_PxConvexMeshGeometry__1delete_1native_1instance(JNIEnv*, jclass, jlong address) {
-    delete (physx::PxConvexMeshGeometry*) address;
+JNIEXPORT void JNICALL Java_physx_geomutils_PxConvexMeshGeometry__1delete_1native_1instance(JNIEnv*, jclass, jlong _address) {
+    delete (physx::PxConvexMeshGeometry*) _address;
 }
 
 // PxConvexMeshGeometryFlags
 JNIEXPORT jint JNICALL Java_physx_geomutils_PxConvexMeshGeometryFlags__1_1sizeOf(JNIEnv*, jclass) {
     return sizeof(physx::PxConvexMeshGeometryFlags);
 }
-JNIEXPORT void JNICALL Java_physx_geomutils_PxConvexMeshGeometryFlags__1_1placement_1new_1PxConvexMeshGeometryFlags(JNIEnv* env, jclass, jlong __placement_address, jbyte flags) {
-    (void) env;    // avoid unused parameter warning / error
-    new((void*)__placement_address) physx::PxConvexMeshGeometryFlags(flags);
+JNIEXPORT jlong JNICALL Java_physx_geomutils_PxConvexMeshGeometryFlags__1_1placement_1new_1PxConvexMeshGeometryFlags(JNIEnv*, jclass, jlong _placement_address, jbyte flags) {
+    return (jlong) new((void*)_placement_address) physx::PxConvexMeshGeometryFlags(flags);
 }
-JNIEXPORT jlong JNICALL Java_physx_geomutils_PxConvexMeshGeometryFlags__1PxConvexMeshGeometryFlags(JNIEnv* env, jclass, jbyte flags) {
-    (void) env;    // avoid unused parameter warning / error
+JNIEXPORT jlong JNICALL Java_physx_geomutils_PxConvexMeshGeometryFlags__1PxConvexMeshGeometryFlags(JNIEnv*, jclass, jbyte flags) {
     return (jlong) new physx::PxConvexMeshGeometryFlags(flags);
 }
-JNIEXPORT jboolean JNICALL Java_physx_geomutils_PxConvexMeshGeometryFlags__1isSet(JNIEnv* env, jclass, jlong address, jint flag) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxConvexMeshGeometryFlags* self = (physx::PxConvexMeshGeometryFlags*) address;
+JNIEXPORT jboolean JNICALL Java_physx_geomutils_PxConvexMeshGeometryFlags__1isSet(JNIEnv*, jclass, jlong _address, jint flag) {
+    physx::PxConvexMeshGeometryFlags* self = (physx::PxConvexMeshGeometryFlags*) _address;
     return (jboolean) self->isSet((PxConvexMeshGeometryFlagEnum) flag);
 }
-JNIEXPORT void JNICALL Java_physx_geomutils_PxConvexMeshGeometryFlags__1set(JNIEnv* env, jclass, jlong address, jint flag) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxConvexMeshGeometryFlags* self = (physx::PxConvexMeshGeometryFlags*) address;
+JNIEXPORT void JNICALL Java_physx_geomutils_PxConvexMeshGeometryFlags__1set(JNIEnv*, jclass, jlong _address, jint flag) {
+    physx::PxConvexMeshGeometryFlags* self = (physx::PxConvexMeshGeometryFlags*) _address;
     self->set((PxConvexMeshGeometryFlagEnum) flag);
 }
-JNIEXPORT void JNICALL Java_physx_geomutils_PxConvexMeshGeometryFlags__1clear(JNIEnv* env, jclass, jlong address, jint flag) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxConvexMeshGeometryFlags* self = (physx::PxConvexMeshGeometryFlags*) address;
+JNIEXPORT void JNICALL Java_physx_geomutils_PxConvexMeshGeometryFlags__1clear(JNIEnv*, jclass, jlong _address, jint flag) {
+    physx::PxConvexMeshGeometryFlags* self = (physx::PxConvexMeshGeometryFlags*) _address;
     self->clear((PxConvexMeshGeometryFlagEnum) flag);
 }
-JNIEXPORT void JNICALL Java_physx_geomutils_PxConvexMeshGeometryFlags__1delete_1native_1instance(JNIEnv*, jclass, jlong address) {
-    delete (physx::PxConvexMeshGeometryFlags*) address;
+JNIEXPORT void JNICALL Java_physx_geomutils_PxConvexMeshGeometryFlags__1delete_1native_1instance(JNIEnv*, jclass, jlong _address) {
+    delete (physx::PxConvexMeshGeometryFlags*) _address;
 }
 
 // PxGeometry
-JNIEXPORT void JNICALL Java_physx_geomutils_PxGeometry__1delete_1native_1instance(JNIEnv*, jclass, jlong address) {
-    delete (physx::PxGeometry*) address;
+JNIEXPORT void JNICALL Java_physx_geomutils_PxGeometry__1delete_1native_1instance(JNIEnv*, jclass, jlong _address) {
+    delete (physx::PxGeometry*) _address;
 }
 
 // PxHullPolygon
-JNIEXPORT jlong JNICALL Java_physx_geomutils_PxHullPolygon__1PxHullPolygon(JNIEnv* env, jclass) {
-    (void) env;    // avoid unused parameter warning / error
+JNIEXPORT jlong JNICALL Java_physx_geomutils_PxHullPolygon__1PxHullPolygon(JNIEnv*, jclass) {
     return (jlong) new physx::PxHullPolygon();
 }
-JNIEXPORT void JNICALL Java_physx_geomutils_PxHullPolygon__1delete_1native_1instance(JNIEnv*, jclass, jlong address) {
-    delete (physx::PxHullPolygon*) address;
+JNIEXPORT void JNICALL Java_physx_geomutils_PxHullPolygon__1delete_1native_1instance(JNIEnv*, jclass, jlong _address) {
+    delete (physx::PxHullPolygon*) _address;
 }
-JNIEXPORT jfloat JNICALL Java_physx_geomutils_PxHullPolygon__1getMPlane(JNIEnv* env, jclass, jlong address, jint index) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxHullPolygon* self = (physx::PxHullPolygon*) address;
-    return (jfloat) self->mPlane[index];
+JNIEXPORT jfloat JNICALL Java_physx_geomutils_PxHullPolygon__1getMPlane(JNIEnv*, jclass, jlong _address, jint _index) {
+    physx::PxHullPolygon* _self = (physx::PxHullPolygon*) _address;
+    return (jfloat) _self->mPlane[_index];
 }
-JNIEXPORT void JNICALL Java_physx_geomutils_PxHullPolygon__1setMPlane(JNIEnv* env, jclass, jlong address, jint index, jfloat value) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxHullPolygon* self = (physx::PxHullPolygon*) address;
-    self->mPlane[index] = value;
+JNIEXPORT void JNICALL Java_physx_geomutils_PxHullPolygon__1setMPlane(JNIEnv*, jclass, jlong _address, jint _index, jfloat value) {
+    physx::PxHullPolygon* _self = (physx::PxHullPolygon*) _address;
+    _self->mPlane[_index] = value;
 }
-JNIEXPORT jshort JNICALL Java_physx_geomutils_PxHullPolygon__1getMNbVerts(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxHullPolygon* self = (physx::PxHullPolygon*) address;
-    return (jshort) self->mNbVerts;
+JNIEXPORT jshort JNICALL Java_physx_geomutils_PxHullPolygon__1getMNbVerts(JNIEnv*, jclass, jlong _address) {
+    physx::PxHullPolygon* _self = (physx::PxHullPolygon*) _address;
+    return (jshort) _self->mNbVerts;
 }
-JNIEXPORT void JNICALL Java_physx_geomutils_PxHullPolygon__1setMNbVerts(JNIEnv* env, jclass, jlong address, jshort value) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxHullPolygon* self = (physx::PxHullPolygon*) address;
-    self->mNbVerts = value;
+JNIEXPORT void JNICALL Java_physx_geomutils_PxHullPolygon__1setMNbVerts(JNIEnv*, jclass, jlong _address, jshort value) {
+    physx::PxHullPolygon* _self = (physx::PxHullPolygon*) _address;
+    _self->mNbVerts = value;
 }
-JNIEXPORT jshort JNICALL Java_physx_geomutils_PxHullPolygon__1getMIndexBase(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxHullPolygon* self = (physx::PxHullPolygon*) address;
-    return (jshort) self->mIndexBase;
+JNIEXPORT jshort JNICALL Java_physx_geomutils_PxHullPolygon__1getMIndexBase(JNIEnv*, jclass, jlong _address) {
+    physx::PxHullPolygon* _self = (physx::PxHullPolygon*) _address;
+    return (jshort) _self->mIndexBase;
 }
-JNIEXPORT void JNICALL Java_physx_geomutils_PxHullPolygon__1setMIndexBase(JNIEnv* env, jclass, jlong address, jshort value) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxHullPolygon* self = (physx::PxHullPolygon*) address;
-    self->mIndexBase = value;
+JNIEXPORT void JNICALL Java_physx_geomutils_PxHullPolygon__1setMIndexBase(JNIEnv*, jclass, jlong _address, jshort value) {
+    physx::PxHullPolygon* _self = (physx::PxHullPolygon*) _address;
+    _self->mIndexBase = value;
 }
 
 // PxMeshFlags
 JNIEXPORT jint JNICALL Java_physx_geomutils_PxMeshFlags__1_1sizeOf(JNIEnv*, jclass) {
     return sizeof(physx::PxMeshFlags);
 }
-JNIEXPORT void JNICALL Java_physx_geomutils_PxMeshFlags__1_1placement_1new_1PxMeshFlags(JNIEnv* env, jclass, jlong __placement_address, jbyte flags) {
-    (void) env;    // avoid unused parameter warning / error
-    new((void*)__placement_address) physx::PxMeshFlags(flags);
+JNIEXPORT jlong JNICALL Java_physx_geomutils_PxMeshFlags__1_1placement_1new_1PxMeshFlags(JNIEnv*, jclass, jlong _placement_address, jbyte flags) {
+    return (jlong) new((void*)_placement_address) physx::PxMeshFlags(flags);
 }
-JNIEXPORT jlong JNICALL Java_physx_geomutils_PxMeshFlags__1PxMeshFlags(JNIEnv* env, jclass, jbyte flags) {
-    (void) env;    // avoid unused parameter warning / error
+JNIEXPORT jlong JNICALL Java_physx_geomutils_PxMeshFlags__1PxMeshFlags(JNIEnv*, jclass, jbyte flags) {
     return (jlong) new physx::PxMeshFlags(flags);
 }
-JNIEXPORT jboolean JNICALL Java_physx_geomutils_PxMeshFlags__1isSet(JNIEnv* env, jclass, jlong address, jint flag) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxMeshFlags* self = (physx::PxMeshFlags*) address;
+JNIEXPORT jboolean JNICALL Java_physx_geomutils_PxMeshFlags__1isSet(JNIEnv*, jclass, jlong _address, jint flag) {
+    physx::PxMeshFlags* self = (physx::PxMeshFlags*) _address;
     return (jboolean) self->isSet((PxMeshFlagEnum) flag);
 }
-JNIEXPORT void JNICALL Java_physx_geomutils_PxMeshFlags__1set(JNIEnv* env, jclass, jlong address, jint flag) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxMeshFlags* self = (physx::PxMeshFlags*) address;
+JNIEXPORT void JNICALL Java_physx_geomutils_PxMeshFlags__1set(JNIEnv*, jclass, jlong _address, jint flag) {
+    physx::PxMeshFlags* self = (physx::PxMeshFlags*) _address;
     self->set((PxMeshFlagEnum) flag);
 }
-JNIEXPORT void JNICALL Java_physx_geomutils_PxMeshFlags__1clear(JNIEnv* env, jclass, jlong address, jint flag) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxMeshFlags* self = (physx::PxMeshFlags*) address;
+JNIEXPORT void JNICALL Java_physx_geomutils_PxMeshFlags__1clear(JNIEnv*, jclass, jlong _address, jint flag) {
+    physx::PxMeshFlags* self = (physx::PxMeshFlags*) _address;
     self->clear((PxMeshFlagEnum) flag);
 }
-JNIEXPORT void JNICALL Java_physx_geomutils_PxMeshFlags__1delete_1native_1instance(JNIEnv*, jclass, jlong address) {
-    delete (physx::PxMeshFlags*) address;
+JNIEXPORT void JNICALL Java_physx_geomutils_PxMeshFlags__1delete_1native_1instance(JNIEnv*, jclass, jlong _address) {
+    delete (physx::PxMeshFlags*) _address;
 }
 
 // PxMeshGeometryFlags
-JNIEXPORT jlong JNICALL Java_physx_geomutils_PxMeshGeometryFlags__1PxMeshGeometryFlags(JNIEnv* env, jclass, jbyte flags) {
-    (void) env;    // avoid unused parameter warning / error
+JNIEXPORT jlong JNICALL Java_physx_geomutils_PxMeshGeometryFlags__1PxMeshGeometryFlags(JNIEnv*, jclass, jbyte flags) {
     return (jlong) new physx::PxMeshGeometryFlags(flags);
 }
-JNIEXPORT jboolean JNICALL Java_physx_geomutils_PxMeshGeometryFlags__1isSet(JNIEnv* env, jclass, jlong address, jint flag) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxMeshGeometryFlags* self = (physx::PxMeshGeometryFlags*) address;
+JNIEXPORT jboolean JNICALL Java_physx_geomutils_PxMeshGeometryFlags__1isSet(JNIEnv*, jclass, jlong _address, jint flag) {
+    physx::PxMeshGeometryFlags* self = (physx::PxMeshGeometryFlags*) _address;
     return (jboolean) self->isSet((PxMeshGeometryFlagEnum) flag);
 }
-JNIEXPORT void JNICALL Java_physx_geomutils_PxMeshGeometryFlags__1set(JNIEnv* env, jclass, jlong address, jint flag) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxMeshGeometryFlags* self = (physx::PxMeshGeometryFlags*) address;
+JNIEXPORT void JNICALL Java_physx_geomutils_PxMeshGeometryFlags__1set(JNIEnv*, jclass, jlong _address, jint flag) {
+    physx::PxMeshGeometryFlags* self = (physx::PxMeshGeometryFlags*) _address;
     self->set((PxMeshGeometryFlagEnum) flag);
 }
-JNIEXPORT void JNICALL Java_physx_geomutils_PxMeshGeometryFlags__1clear(JNIEnv* env, jclass, jlong address, jint flag) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxMeshGeometryFlags* self = (physx::PxMeshGeometryFlags*) address;
+JNIEXPORT void JNICALL Java_physx_geomutils_PxMeshGeometryFlags__1clear(JNIEnv*, jclass, jlong _address, jint flag) {
+    physx::PxMeshGeometryFlags* self = (physx::PxMeshGeometryFlags*) _address;
     self->clear((PxMeshGeometryFlagEnum) flag);
 }
-JNIEXPORT void JNICALL Java_physx_geomutils_PxMeshGeometryFlags__1delete_1native_1instance(JNIEnv*, jclass, jlong address) {
-    delete (physx::PxMeshGeometryFlags*) address;
+JNIEXPORT void JNICALL Java_physx_geomutils_PxMeshGeometryFlags__1delete_1native_1instance(JNIEnv*, jclass, jlong _address) {
+    delete (physx::PxMeshGeometryFlags*) _address;
 }
 
 // PxMeshScale
-JNIEXPORT jlong JNICALL Java_physx_geomutils_PxMeshScale__1PxMeshScale__(JNIEnv* env, jclass) {
-    (void) env;    // avoid unused parameter warning / error
+JNIEXPORT jlong JNICALL Java_physx_geomutils_PxMeshScale__1PxMeshScale__(JNIEnv*, jclass) {
     return (jlong) new physx::PxMeshScale();
 }
-JNIEXPORT jlong JNICALL Java_physx_geomutils_PxMeshScale__1PxMeshScale__F(JNIEnv* env, jclass, jfloat r) {
-    (void) env;    // avoid unused parameter warning / error
+JNIEXPORT jlong JNICALL Java_physx_geomutils_PxMeshScale__1PxMeshScale__F(JNIEnv*, jclass, jfloat r) {
     return (jlong) new physx::PxMeshScale(r);
 }
-JNIEXPORT jlong JNICALL Java_physx_geomutils_PxMeshScale__1PxMeshScale__JJ(JNIEnv* env, jclass, jlong s, jlong r) {
-    (void) env;    // avoid unused parameter warning / error
+JNIEXPORT jlong JNICALL Java_physx_geomutils_PxMeshScale__1PxMeshScale__JJ(JNIEnv*, jclass, jlong s, jlong r) {
     return (jlong) new physx::PxMeshScale(*((physx::PxVec3*) s), *((physx::PxQuat*) r));
 }
-JNIEXPORT void JNICALL Java_physx_geomutils_PxMeshScale__1delete_1native_1instance(JNIEnv*, jclass, jlong address) {
-    delete (physx::PxMeshScale*) address;
+JNIEXPORT void JNICALL Java_physx_geomutils_PxMeshScale__1delete_1native_1instance(JNIEnv*, jclass, jlong _address) {
+    delete (physx::PxMeshScale*) _address;
 }
 
 // PxPlaneGeometry
 JNIEXPORT jint JNICALL Java_physx_geomutils_PxPlaneGeometry__1_1sizeOf(JNIEnv*, jclass) {
     return sizeof(physx::PxPlaneGeometry);
 }
-JNIEXPORT void JNICALL Java_physx_geomutils_PxPlaneGeometry__1_1placement_1new_1PxPlaneGeometry(JNIEnv* env, jclass, jlong __placement_address) {
-    (void) env;    // avoid unused parameter warning / error
-    new((void*)__placement_address) physx::PxPlaneGeometry();
+JNIEXPORT jlong JNICALL Java_physx_geomutils_PxPlaneGeometry__1_1placement_1new_1PxPlaneGeometry(JNIEnv*, jclass, jlong _placement_address) {
+    return (jlong) new((void*)_placement_address) physx::PxPlaneGeometry();
 }
-JNIEXPORT jlong JNICALL Java_physx_geomutils_PxPlaneGeometry__1PxPlaneGeometry(JNIEnv* env, jclass) {
-    (void) env;    // avoid unused parameter warning / error
+JNIEXPORT jlong JNICALL Java_physx_geomutils_PxPlaneGeometry__1PxPlaneGeometry(JNIEnv*, jclass) {
     return (jlong) new physx::PxPlaneGeometry();
 }
-JNIEXPORT void JNICALL Java_physx_geomutils_PxPlaneGeometry__1delete_1native_1instance(JNIEnv*, jclass, jlong address) {
-    delete (physx::PxPlaneGeometry*) address;
+JNIEXPORT void JNICALL Java_physx_geomutils_PxPlaneGeometry__1delete_1native_1instance(JNIEnv*, jclass, jlong _address) {
+    delete (physx::PxPlaneGeometry*) _address;
 }
 
 // PxSimpleTriangleMesh
-JNIEXPORT jlong JNICALL Java_physx_geomutils_PxSimpleTriangleMesh__1PxSimpleTriangleMesh(JNIEnv* env, jclass) {
-    (void) env;    // avoid unused parameter warning / error
+JNIEXPORT jlong JNICALL Java_physx_geomutils_PxSimpleTriangleMesh__1PxSimpleTriangleMesh(JNIEnv*, jclass) {
     return (jlong) new physx::PxSimpleTriangleMesh();
 }
-JNIEXPORT void JNICALL Java_physx_geomutils_PxSimpleTriangleMesh__1setToDefault(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxSimpleTriangleMesh* self = (physx::PxSimpleTriangleMesh*) address;
+JNIEXPORT void JNICALL Java_physx_geomutils_PxSimpleTriangleMesh__1setToDefault(JNIEnv*, jclass, jlong _address) {
+    physx::PxSimpleTriangleMesh* self = (physx::PxSimpleTriangleMesh*) _address;
     self->setToDefault();
 }
-JNIEXPORT jboolean JNICALL Java_physx_geomutils_PxSimpleTriangleMesh__1isValid(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxSimpleTriangleMesh* self = (physx::PxSimpleTriangleMesh*) address;
+JNIEXPORT jboolean JNICALL Java_physx_geomutils_PxSimpleTriangleMesh__1isValid(JNIEnv*, jclass, jlong _address) {
+    physx::PxSimpleTriangleMesh* self = (physx::PxSimpleTriangleMesh*) _address;
     return (jboolean) self->isValid();
 }
-JNIEXPORT void JNICALL Java_physx_geomutils_PxSimpleTriangleMesh__1delete_1native_1instance(JNIEnv*, jclass, jlong address) {
-    delete (physx::PxSimpleTriangleMesh*) address;
+JNIEXPORT void JNICALL Java_physx_geomutils_PxSimpleTriangleMesh__1delete_1native_1instance(JNIEnv*, jclass, jlong _address) {
+    delete (physx::PxSimpleTriangleMesh*) _address;
 }
-JNIEXPORT jlong JNICALL Java_physx_geomutils_PxSimpleTriangleMesh__1getPoints(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxSimpleTriangleMesh* self = (physx::PxSimpleTriangleMesh*) address;
-    return (jlong) &self->points;
+JNIEXPORT jlong JNICALL Java_physx_geomutils_PxSimpleTriangleMesh__1getPoints(JNIEnv*, jclass, jlong _address) {
+    physx::PxSimpleTriangleMesh* _self = (physx::PxSimpleTriangleMesh*) _address;
+    return (jlong) &_self->points;
 }
-JNIEXPORT void JNICALL Java_physx_geomutils_PxSimpleTriangleMesh__1setPoints(JNIEnv* env, jclass, jlong address, jlong value) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxSimpleTriangleMesh* self = (physx::PxSimpleTriangleMesh*) address;
-    self->points = *((physx::PxBoundedData*) value);
+JNIEXPORT void JNICALL Java_physx_geomutils_PxSimpleTriangleMesh__1setPoints(JNIEnv*, jclass, jlong _address, jlong value) {
+    physx::PxSimpleTriangleMesh* _self = (physx::PxSimpleTriangleMesh*) _address;
+    _self->points = *((physx::PxBoundedData*) value);
 }
-JNIEXPORT jlong JNICALL Java_physx_geomutils_PxSimpleTriangleMesh__1getTriangles(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxSimpleTriangleMesh* self = (physx::PxSimpleTriangleMesh*) address;
-    return (jlong) &self->triangles;
+JNIEXPORT jlong JNICALL Java_physx_geomutils_PxSimpleTriangleMesh__1getTriangles(JNIEnv*, jclass, jlong _address) {
+    physx::PxSimpleTriangleMesh* _self = (physx::PxSimpleTriangleMesh*) _address;
+    return (jlong) &_self->triangles;
 }
-JNIEXPORT void JNICALL Java_physx_geomutils_PxSimpleTriangleMesh__1setTriangles(JNIEnv* env, jclass, jlong address, jlong value) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxSimpleTriangleMesh* self = (physx::PxSimpleTriangleMesh*) address;
-    self->triangles = *((physx::PxBoundedData*) value);
+JNIEXPORT void JNICALL Java_physx_geomutils_PxSimpleTriangleMesh__1setTriangles(JNIEnv*, jclass, jlong _address, jlong value) {
+    physx::PxSimpleTriangleMesh* _self = (physx::PxSimpleTriangleMesh*) _address;
+    _self->triangles = *((physx::PxBoundedData*) value);
 }
-JNIEXPORT jlong JNICALL Java_physx_geomutils_PxSimpleTriangleMesh__1getFlags(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxSimpleTriangleMesh* self = (physx::PxSimpleTriangleMesh*) address;
-    return (jlong) &self->flags;
+JNIEXPORT jlong JNICALL Java_physx_geomutils_PxSimpleTriangleMesh__1getFlags(JNIEnv*, jclass, jlong _address) {
+    physx::PxSimpleTriangleMesh* _self = (physx::PxSimpleTriangleMesh*) _address;
+    return (jlong) &_self->flags;
 }
-JNIEXPORT void JNICALL Java_physx_geomutils_PxSimpleTriangleMesh__1setFlags(JNIEnv* env, jclass, jlong address, jlong value) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxSimpleTriangleMesh* self = (physx::PxSimpleTriangleMesh*) address;
-    self->flags = *((physx::PxMeshFlags*) value);
+JNIEXPORT void JNICALL Java_physx_geomutils_PxSimpleTriangleMesh__1setFlags(JNIEnv*, jclass, jlong _address, jlong value) {
+    physx::PxSimpleTriangleMesh* _self = (physx::PxSimpleTriangleMesh*) _address;
+    _self->flags = *((physx::PxMeshFlags*) value);
 }
 
 // PxSphereGeometry
 JNIEXPORT jint JNICALL Java_physx_geomutils_PxSphereGeometry__1_1sizeOf(JNIEnv*, jclass) {
     return sizeof(physx::PxSphereGeometry);
 }
-JNIEXPORT void JNICALL Java_physx_geomutils_PxSphereGeometry__1_1placement_1new_1PxSphereGeometry(JNIEnv* env, jclass, jlong __placement_address, jfloat ir) {
-    (void) env;    // avoid unused parameter warning / error
-    new((void*)__placement_address) physx::PxSphereGeometry(ir);
+JNIEXPORT jlong JNICALL Java_physx_geomutils_PxSphereGeometry__1_1placement_1new_1PxSphereGeometry(JNIEnv*, jclass, jlong _placement_address, jfloat ir) {
+    return (jlong) new((void*)_placement_address) physx::PxSphereGeometry(ir);
 }
-JNIEXPORT jlong JNICALL Java_physx_geomutils_PxSphereGeometry__1PxSphereGeometry(JNIEnv* env, jclass, jfloat ir) {
-    (void) env;    // avoid unused parameter warning / error
+JNIEXPORT jlong JNICALL Java_physx_geomutils_PxSphereGeometry__1PxSphereGeometry(JNIEnv*, jclass, jfloat ir) {
     return (jlong) new physx::PxSphereGeometry(ir);
 }
-JNIEXPORT void JNICALL Java_physx_geomutils_PxSphereGeometry__1delete_1native_1instance(JNIEnv*, jclass, jlong address) {
-    delete (physx::PxSphereGeometry*) address;
+JNIEXPORT void JNICALL Java_physx_geomutils_PxSphereGeometry__1delete_1native_1instance(JNIEnv*, jclass, jlong _address) {
+    delete (physx::PxSphereGeometry*) _address;
 }
 
 // PxTriangleMesh
-JNIEXPORT jint JNICALL Java_physx_geomutils_PxTriangleMesh__1getNbVertices(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxTriangleMesh* self = (physx::PxTriangleMesh*) address;
+JNIEXPORT jint JNICALL Java_physx_geomutils_PxTriangleMesh__1getNbVertices(JNIEnv*, jclass, jlong _address) {
+    physx::PxTriangleMesh* self = (physx::PxTriangleMesh*) _address;
     return (jint) self->getNbVertices();
 }
-JNIEXPORT jlong JNICALL Java_physx_geomutils_PxTriangleMesh__1getVertices(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxTriangleMesh* self = (physx::PxTriangleMesh*) address;
+JNIEXPORT jlong JNICALL Java_physx_geomutils_PxTriangleMesh__1getVertices(JNIEnv*, jclass, jlong _address) {
+    physx::PxTriangleMesh* self = (physx::PxTriangleMesh*) _address;
     return (jlong) self->getVertices();
 }
-JNIEXPORT jlong JNICALL Java_physx_geomutils_PxTriangleMesh__1getVerticesForModification(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxTriangleMesh* self = (physx::PxTriangleMesh*) address;
+JNIEXPORT jlong JNICALL Java_physx_geomutils_PxTriangleMesh__1getVerticesForModification(JNIEnv*, jclass, jlong _address) {
+    physx::PxTriangleMesh* self = (physx::PxTriangleMesh*) _address;
     return (jlong) self->getVerticesForModification();
 }
-JNIEXPORT jlong JNICALL Java_physx_geomutils_PxTriangleMesh__1refitBVH(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    static physx::PxBounds3 cache;
-    physx::PxTriangleMesh* self = (physx::PxTriangleMesh*) address;
-    cache = self->refitBVH();
-    return (jlong) &cache;
+JNIEXPORT jlong JNICALL Java_physx_geomutils_PxTriangleMesh__1refitBVH(JNIEnv*, jclass, jlong _address) {
+    static thread_local physx::PxBounds3 _cache;
+    physx::PxTriangleMesh* self = (physx::PxTriangleMesh*) _address;
+    _cache = self->refitBVH();
+    return (jlong) &_cache;
 }
-JNIEXPORT jint JNICALL Java_physx_geomutils_PxTriangleMesh__1getNbTriangles(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxTriangleMesh* self = (physx::PxTriangleMesh*) address;
+JNIEXPORT jint JNICALL Java_physx_geomutils_PxTriangleMesh__1getNbTriangles(JNIEnv*, jclass, jlong _address) {
+    physx::PxTriangleMesh* self = (physx::PxTriangleMesh*) _address;
     return (jint) self->getNbTriangles();
 }
-JNIEXPORT jlong JNICALL Java_physx_geomutils_PxTriangleMesh__1getTriangles(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxTriangleMesh* self = (physx::PxTriangleMesh*) address;
+JNIEXPORT jlong JNICALL Java_physx_geomutils_PxTriangleMesh__1getTriangles(JNIEnv*, jclass, jlong _address) {
+    physx::PxTriangleMesh* self = (physx::PxTriangleMesh*) _address;
     return (jlong) self->getTriangles();
 }
-JNIEXPORT jlong JNICALL Java_physx_geomutils_PxTriangleMesh__1getTriangleMeshFlags(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    static physx::PxTriangleMeshFlags cache;
-    physx::PxTriangleMesh* self = (physx::PxTriangleMesh*) address;
-    cache = self->getTriangleMeshFlags();
-    return (jlong) &cache;
+JNIEXPORT jlong JNICALL Java_physx_geomutils_PxTriangleMesh__1getTriangleMeshFlags(JNIEnv*, jclass, jlong _address) {
+    static thread_local physx::PxTriangleMeshFlags _cache;
+    physx::PxTriangleMesh* self = (physx::PxTriangleMesh*) _address;
+    _cache = self->getTriangleMeshFlags();
+    return (jlong) &_cache;
 }
-JNIEXPORT jlong JNICALL Java_physx_geomutils_PxTriangleMesh__1getTrianglesRemap(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxTriangleMesh* self = (physx::PxTriangleMesh*) address;
+JNIEXPORT jlong JNICALL Java_physx_geomutils_PxTriangleMesh__1getTrianglesRemap(JNIEnv*, jclass, jlong _address) {
+    physx::PxTriangleMesh* self = (physx::PxTriangleMesh*) _address;
     return (jlong) self->getTrianglesRemap();
 }
-JNIEXPORT jshort JNICALL Java_physx_geomutils_PxTriangleMesh__1getTriangleMaterialIndex(JNIEnv* env, jclass, jlong address, jint triangleIndex) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxTriangleMesh* self = (physx::PxTriangleMesh*) address;
+JNIEXPORT jshort JNICALL Java_physx_geomutils_PxTriangleMesh__1getTriangleMaterialIndex(JNIEnv*, jclass, jlong _address, jint triangleIndex) {
+    physx::PxTriangleMesh* self = (physx::PxTriangleMesh*) _address;
     return (jshort) self->getTriangleMaterialIndex(triangleIndex);
 }
-JNIEXPORT jlong JNICALL Java_physx_geomutils_PxTriangleMesh__1getLocalBounds(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    static physx::PxBounds3 cache;
-    physx::PxTriangleMesh* self = (physx::PxTriangleMesh*) address;
-    cache = self->getLocalBounds();
-    return (jlong) &cache;
+JNIEXPORT jlong JNICALL Java_physx_geomutils_PxTriangleMesh__1getLocalBounds(JNIEnv*, jclass, jlong _address) {
+    static thread_local physx::PxBounds3 _cache;
+    physx::PxTriangleMesh* self = (physx::PxTriangleMesh*) _address;
+    _cache = self->getLocalBounds();
+    return (jlong) &_cache;
 }
-JNIEXPORT jint JNICALL Java_physx_geomutils_PxTriangleMesh__1getReferenceCount(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxTriangleMesh* self = (physx::PxTriangleMesh*) address;
+JNIEXPORT jint JNICALL Java_physx_geomutils_PxTriangleMesh__1getReferenceCount(JNIEnv*, jclass, jlong _address) {
+    physx::PxTriangleMesh* self = (physx::PxTriangleMesh*) _address;
     return (jint) self->getReferenceCount();
 }
-JNIEXPORT void JNICALL Java_physx_geomutils_PxTriangleMesh__1acquireReference(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxTriangleMesh* self = (physx::PxTriangleMesh*) address;
+JNIEXPORT void JNICALL Java_physx_geomutils_PxTriangleMesh__1acquireReference(JNIEnv*, jclass, jlong _address) {
+    physx::PxTriangleMesh* self = (physx::PxTriangleMesh*) _address;
     self->acquireReference();
 }
 
@@ -1530,68 +1461,56 @@ JNIEXPORT void JNICALL Java_physx_geomutils_PxTriangleMesh__1acquireReference(JN
 JNIEXPORT jint JNICALL Java_physx_geomutils_PxTriangleMeshFlags__1_1sizeOf(JNIEnv*, jclass) {
     return sizeof(physx::PxTriangleMeshFlags);
 }
-JNIEXPORT void JNICALL Java_physx_geomutils_PxTriangleMeshFlags__1_1placement_1new_1PxTriangleMeshFlags(JNIEnv* env, jclass, jlong __placement_address, jbyte flags) {
-    (void) env;    // avoid unused parameter warning / error
-    new((void*)__placement_address) physx::PxTriangleMeshFlags(flags);
+JNIEXPORT jlong JNICALL Java_physx_geomutils_PxTriangleMeshFlags__1_1placement_1new_1PxTriangleMeshFlags(JNIEnv*, jclass, jlong _placement_address, jbyte flags) {
+    return (jlong) new((void*)_placement_address) physx::PxTriangleMeshFlags(flags);
 }
-JNIEXPORT jlong JNICALL Java_physx_geomutils_PxTriangleMeshFlags__1PxTriangleMeshFlags(JNIEnv* env, jclass, jbyte flags) {
-    (void) env;    // avoid unused parameter warning / error
+JNIEXPORT jlong JNICALL Java_physx_geomutils_PxTriangleMeshFlags__1PxTriangleMeshFlags(JNIEnv*, jclass, jbyte flags) {
     return (jlong) new physx::PxTriangleMeshFlags(flags);
 }
-JNIEXPORT jboolean JNICALL Java_physx_geomutils_PxTriangleMeshFlags__1isSet(JNIEnv* env, jclass, jlong address, jint flag) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxTriangleMeshFlags* self = (physx::PxTriangleMeshFlags*) address;
+JNIEXPORT jboolean JNICALL Java_physx_geomutils_PxTriangleMeshFlags__1isSet(JNIEnv*, jclass, jlong _address, jint flag) {
+    physx::PxTriangleMeshFlags* self = (physx::PxTriangleMeshFlags*) _address;
     return (jboolean) self->isSet((PxTriangleMeshFlagEnum) flag);
 }
-JNIEXPORT void JNICALL Java_physx_geomutils_PxTriangleMeshFlags__1set(JNIEnv* env, jclass, jlong address, jint flag) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxTriangleMeshFlags* self = (physx::PxTriangleMeshFlags*) address;
+JNIEXPORT void JNICALL Java_physx_geomutils_PxTriangleMeshFlags__1set(JNIEnv*, jclass, jlong _address, jint flag) {
+    physx::PxTriangleMeshFlags* self = (physx::PxTriangleMeshFlags*) _address;
     self->set((PxTriangleMeshFlagEnum) flag);
 }
-JNIEXPORT void JNICALL Java_physx_geomutils_PxTriangleMeshFlags__1clear(JNIEnv* env, jclass, jlong address, jint flag) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxTriangleMeshFlags* self = (physx::PxTriangleMeshFlags*) address;
+JNIEXPORT void JNICALL Java_physx_geomutils_PxTriangleMeshFlags__1clear(JNIEnv*, jclass, jlong _address, jint flag) {
+    physx::PxTriangleMeshFlags* self = (physx::PxTriangleMeshFlags*) _address;
     self->clear((PxTriangleMeshFlagEnum) flag);
 }
-JNIEXPORT void JNICALL Java_physx_geomutils_PxTriangleMeshFlags__1delete_1native_1instance(JNIEnv*, jclass, jlong address) {
-    delete (physx::PxTriangleMeshFlags*) address;
+JNIEXPORT void JNICALL Java_physx_geomutils_PxTriangleMeshFlags__1delete_1native_1instance(JNIEnv*, jclass, jlong _address) {
+    delete (physx::PxTriangleMeshFlags*) _address;
 }
 
 // PxTriangleMeshGeometry
 JNIEXPORT jint JNICALL Java_physx_geomutils_PxTriangleMeshGeometry__1_1sizeOf(JNIEnv*, jclass) {
     return sizeof(physx::PxTriangleMeshGeometry);
 }
-JNIEXPORT void JNICALL Java_physx_geomutils_PxTriangleMeshGeometry__1_1placement_1new_1PxTriangleMeshGeometry__JJ(JNIEnv* env, jclass, jlong __placement_address, jlong mesh) {
-    (void) env;    // avoid unused parameter warning / error
-    new((void*)__placement_address) physx::PxTriangleMeshGeometry((physx::PxTriangleMesh*) mesh);
+JNIEXPORT jlong JNICALL Java_physx_geomutils_PxTriangleMeshGeometry__1_1placement_1new_1PxTriangleMeshGeometry__JJ(JNIEnv*, jclass, jlong _placement_address, jlong mesh) {
+    return (jlong) new((void*)_placement_address) physx::PxTriangleMeshGeometry((physx::PxTriangleMesh*) mesh);
 }
-JNIEXPORT void JNICALL Java_physx_geomutils_PxTriangleMeshGeometry__1_1placement_1new_1PxTriangleMeshGeometry__JJJ(JNIEnv* env, jclass, jlong __placement_address, jlong mesh, jlong scaling) {
-    (void) env;    // avoid unused parameter warning / error
-    new((void*)__placement_address) physx::PxTriangleMeshGeometry((physx::PxTriangleMesh*) mesh, *((physx::PxMeshScale*) scaling));
+JNIEXPORT jlong JNICALL Java_physx_geomutils_PxTriangleMeshGeometry__1_1placement_1new_1PxTriangleMeshGeometry__JJJ(JNIEnv*, jclass, jlong _placement_address, jlong mesh, jlong scaling) {
+    return (jlong) new((void*)_placement_address) physx::PxTriangleMeshGeometry((physx::PxTriangleMesh*) mesh, *((physx::PxMeshScale*) scaling));
 }
-JNIEXPORT void JNICALL Java_physx_geomutils_PxTriangleMeshGeometry__1_1placement_1new_1PxTriangleMeshGeometry__JJJJ(JNIEnv* env, jclass, jlong __placement_address, jlong mesh, jlong scaling, jlong flags) {
-    (void) env;    // avoid unused parameter warning / error
-    new((void*)__placement_address) physx::PxTriangleMeshGeometry((physx::PxTriangleMesh*) mesh, *((physx::PxMeshScale*) scaling), *((physx::PxMeshGeometryFlags*) flags));
+JNIEXPORT jlong JNICALL Java_physx_geomutils_PxTriangleMeshGeometry__1_1placement_1new_1PxTriangleMeshGeometry__JJJJ(JNIEnv*, jclass, jlong _placement_address, jlong mesh, jlong scaling, jlong flags) {
+    return (jlong) new((void*)_placement_address) physx::PxTriangleMeshGeometry((physx::PxTriangleMesh*) mesh, *((physx::PxMeshScale*) scaling), *((physx::PxMeshGeometryFlags*) flags));
 }
-JNIEXPORT jlong JNICALL Java_physx_geomutils_PxTriangleMeshGeometry__1PxTriangleMeshGeometry__J(JNIEnv* env, jclass, jlong mesh) {
-    (void) env;    // avoid unused parameter warning / error
+JNIEXPORT jlong JNICALL Java_physx_geomutils_PxTriangleMeshGeometry__1PxTriangleMeshGeometry__J(JNIEnv*, jclass, jlong mesh) {
     return (jlong) new physx::PxTriangleMeshGeometry((physx::PxTriangleMesh*) mesh);
 }
-JNIEXPORT jlong JNICALL Java_physx_geomutils_PxTriangleMeshGeometry__1PxTriangleMeshGeometry__JJ(JNIEnv* env, jclass, jlong mesh, jlong scaling) {
-    (void) env;    // avoid unused parameter warning / error
+JNIEXPORT jlong JNICALL Java_physx_geomutils_PxTriangleMeshGeometry__1PxTriangleMeshGeometry__JJ(JNIEnv*, jclass, jlong mesh, jlong scaling) {
     return (jlong) new physx::PxTriangleMeshGeometry((physx::PxTriangleMesh*) mesh, *((physx::PxMeshScale*) scaling));
 }
-JNIEXPORT jlong JNICALL Java_physx_geomutils_PxTriangleMeshGeometry__1PxTriangleMeshGeometry__JJJ(JNIEnv* env, jclass, jlong mesh, jlong scaling, jlong flags) {
-    (void) env;    // avoid unused parameter warning / error
+JNIEXPORT jlong JNICALL Java_physx_geomutils_PxTriangleMeshGeometry__1PxTriangleMeshGeometry__JJJ(JNIEnv*, jclass, jlong mesh, jlong scaling, jlong flags) {
     return (jlong) new physx::PxTriangleMeshGeometry((physx::PxTriangleMesh*) mesh, *((physx::PxMeshScale*) scaling), *((physx::PxMeshGeometryFlags*) flags));
 }
-JNIEXPORT jboolean JNICALL Java_physx_geomutils_PxTriangleMeshGeometry__1isValid(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxTriangleMeshGeometry* self = (physx::PxTriangleMeshGeometry*) address;
+JNIEXPORT jboolean JNICALL Java_physx_geomutils_PxTriangleMeshGeometry__1isValid(JNIEnv*, jclass, jlong _address) {
+    physx::PxTriangleMeshGeometry* self = (physx::PxTriangleMeshGeometry*) _address;
     return (jboolean) self->isValid();
 }
-JNIEXPORT void JNICALL Java_physx_geomutils_PxTriangleMeshGeometry__1delete_1native_1instance(JNIEnv*, jclass, jlong address) {
-    delete (physx::PxTriangleMeshGeometry*) address;
+JNIEXPORT void JNICALL Java_physx_geomutils_PxTriangleMeshGeometry__1delete_1native_1instance(JNIEnv*, jclass, jlong _address) {
+    delete (physx::PxTriangleMeshGeometry*) _address;
 }
 
 // PxConvexMeshGeometryFlagEnum
@@ -1621,70 +1540,58 @@ JNIEXPORT jint JNICALL Java_physx_geomutils_PxTriangleMeshFlagEnum__1geteADJACEN
 }
 
 // PxActor
-JNIEXPORT jint JNICALL Java_physx_physics_PxActor__1getType(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxActor* self = (physx::PxActor*) address;
-    return (PxActorTypeEnum) self->getType();
+JNIEXPORT jint JNICALL Java_physx_physics_PxActor__1getType(JNIEnv*, jclass, jlong _address) {
+    physx::PxActor* self = (physx::PxActor*) _address;
+    return (jint) self->getType();
 }
-JNIEXPORT jlong JNICALL Java_physx_physics_PxActor__1getScene(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxActor* self = (physx::PxActor*) address;
+JNIEXPORT jlong JNICALL Java_physx_physics_PxActor__1getScene(JNIEnv*, jclass, jlong _address) {
+    physx::PxActor* self = (physx::PxActor*) _address;
     return (jlong) self->getScene();
 }
-JNIEXPORT void JNICALL Java_physx_physics_PxActor__1setName(JNIEnv* env, jclass, jlong address, jstring name) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxActor* self = (physx::PxActor*) address;
-    self->setName(env->GetStringUTFChars(name, 0));
+JNIEXPORT void JNICALL Java_physx_physics_PxActor__1setName(JNIEnv* _env, jclass, jlong _address, jstring name) {
+    physx::PxActor* self = (physx::PxActor*) _address;
+    self->setName(_env->GetStringUTFChars(name, 0));
 }
-JNIEXPORT jstring JNICALL Java_physx_physics_PxActor__1getName(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxActor* self = (physx::PxActor*) address;
-    return env->NewStringUTF(self->getName());
+JNIEXPORT jstring JNICALL Java_physx_physics_PxActor__1getName(JNIEnv* _env, jclass, jlong _address) {
+    physx::PxActor* self = (physx::PxActor*) _address;
+    return _env->NewStringUTF(self->getName());
 }
-JNIEXPORT jlong JNICALL Java_physx_physics_PxActor__1getWorldBounds__J(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    static physx::PxBounds3 cache;
-    physx::PxActor* self = (physx::PxActor*) address;
-    cache = self->getWorldBounds();
-    return (jlong) &cache;
+JNIEXPORT jlong JNICALL Java_physx_physics_PxActor__1getWorldBounds__J(JNIEnv*, jclass, jlong _address) {
+    static thread_local physx::PxBounds3 _cache;
+    physx::PxActor* self = (physx::PxActor*) _address;
+    _cache = self->getWorldBounds();
+    return (jlong) &_cache;
 }
-JNIEXPORT jlong JNICALL Java_physx_physics_PxActor__1getWorldBounds__JF(JNIEnv* env, jclass, jlong address, jfloat inflation) {
-    (void) env;    // avoid unused parameter warning / error
-    static physx::PxBounds3 cache;
-    physx::PxActor* self = (physx::PxActor*) address;
-    cache = self->getWorldBounds(inflation);
-    return (jlong) &cache;
+JNIEXPORT jlong JNICALL Java_physx_physics_PxActor__1getWorldBounds__JF(JNIEnv*, jclass, jlong _address, jfloat inflation) {
+    static thread_local physx::PxBounds3 _cache;
+    physx::PxActor* self = (physx::PxActor*) _address;
+    _cache = self->getWorldBounds(inflation);
+    return (jlong) &_cache;
 }
-JNIEXPORT void JNICALL Java_physx_physics_PxActor__1setActorFlags(JNIEnv* env, jclass, jlong address, jlong flags) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxActor* self = (physx::PxActor*) address;
+JNIEXPORT void JNICALL Java_physx_physics_PxActor__1setActorFlags(JNIEnv*, jclass, jlong _address, jlong flags) {
+    physx::PxActor* self = (physx::PxActor*) _address;
     self->setActorFlags(*((physx::PxActorFlags*) flags));
 }
-JNIEXPORT jlong JNICALL Java_physx_physics_PxActor__1getActorFlags(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    static physx::PxActorFlags cache;
-    physx::PxActor* self = (physx::PxActor*) address;
-    cache = self->getActorFlags();
-    return (jlong) &cache;
+JNIEXPORT jlong JNICALL Java_physx_physics_PxActor__1getActorFlags(JNIEnv*, jclass, jlong _address) {
+    static thread_local physx::PxActorFlags _cache;
+    physx::PxActor* self = (physx::PxActor*) _address;
+    _cache = self->getActorFlags();
+    return (jlong) &_cache;
 }
-JNIEXPORT void JNICALL Java_physx_physics_PxActor__1setDominanceGroup(JNIEnv* env, jclass, jlong address, jbyte dominanceGroup) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxActor* self = (physx::PxActor*) address;
+JNIEXPORT void JNICALL Java_physx_physics_PxActor__1setDominanceGroup(JNIEnv*, jclass, jlong _address, jbyte dominanceGroup) {
+    physx::PxActor* self = (physx::PxActor*) _address;
     self->setDominanceGroup(dominanceGroup);
 }
-JNIEXPORT jbyte JNICALL Java_physx_physics_PxActor__1getDominanceGroup(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxActor* self = (physx::PxActor*) address;
+JNIEXPORT jbyte JNICALL Java_physx_physics_PxActor__1getDominanceGroup(JNIEnv*, jclass, jlong _address) {
+    physx::PxActor* self = (physx::PxActor*) _address;
     return (jbyte) self->getDominanceGroup();
 }
-JNIEXPORT void JNICALL Java_physx_physics_PxActor__1setOwnerClient(JNIEnv* env, jclass, jlong address, jbyte inClient) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxActor* self = (physx::PxActor*) address;
+JNIEXPORT void JNICALL Java_physx_physics_PxActor__1setOwnerClient(JNIEnv*, jclass, jlong _address, jbyte inClient) {
+    physx::PxActor* self = (physx::PxActor*) _address;
     self->setOwnerClient(inClient);
 }
-JNIEXPORT jbyte JNICALL Java_physx_physics_PxActor__1getOwnerClient(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxActor* self = (physx::PxActor*) address;
+JNIEXPORT jbyte JNICALL Java_physx_physics_PxActor__1getOwnerClient(JNIEnv*, jclass, jlong _address) {
+    physx::PxActor* self = (physx::PxActor*) _address;
     return (jbyte) self->getOwnerClient();
 }
 
@@ -1692,939 +1599,1014 @@ JNIEXPORT jbyte JNICALL Java_physx_physics_PxActor__1getOwnerClient(JNIEnv* env,
 JNIEXPORT jint JNICALL Java_physx_physics_PxActorFlags__1_1sizeOf(JNIEnv*, jclass) {
     return sizeof(physx::PxActorFlags);
 }
-JNIEXPORT void JNICALL Java_physx_physics_PxActorFlags__1_1placement_1new_1PxActorFlags(JNIEnv* env, jclass, jlong __placement_address, jbyte flags) {
-    (void) env;    // avoid unused parameter warning / error
-    new((void*)__placement_address) physx::PxActorFlags(flags);
+JNIEXPORT jlong JNICALL Java_physx_physics_PxActorFlags__1_1placement_1new_1PxActorFlags(JNIEnv*, jclass, jlong _placement_address, jbyte flags) {
+    return (jlong) new((void*)_placement_address) physx::PxActorFlags(flags);
 }
-JNIEXPORT jlong JNICALL Java_physx_physics_PxActorFlags__1PxActorFlags(JNIEnv* env, jclass, jbyte flags) {
-    (void) env;    // avoid unused parameter warning / error
+JNIEXPORT jlong JNICALL Java_physx_physics_PxActorFlags__1PxActorFlags(JNIEnv*, jclass, jbyte flags) {
     return (jlong) new physx::PxActorFlags(flags);
 }
-JNIEXPORT jboolean JNICALL Java_physx_physics_PxActorFlags__1isSet(JNIEnv* env, jclass, jlong address, jint flag) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxActorFlags* self = (physx::PxActorFlags*) address;
+JNIEXPORT jboolean JNICALL Java_physx_physics_PxActorFlags__1isSet(JNIEnv*, jclass, jlong _address, jint flag) {
+    physx::PxActorFlags* self = (physx::PxActorFlags*) _address;
     return (jboolean) self->isSet((PxActorFlagEnum) flag);
 }
-JNIEXPORT void JNICALL Java_physx_physics_PxActorFlags__1set(JNIEnv* env, jclass, jlong address, jint flag) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxActorFlags* self = (physx::PxActorFlags*) address;
+JNIEXPORT void JNICALL Java_physx_physics_PxActorFlags__1set(JNIEnv*, jclass, jlong _address, jint flag) {
+    physx::PxActorFlags* self = (physx::PxActorFlags*) _address;
     self->set((PxActorFlagEnum) flag);
 }
-JNIEXPORT void JNICALL Java_physx_physics_PxActorFlags__1clear(JNIEnv* env, jclass, jlong address, jint flag) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxActorFlags* self = (physx::PxActorFlags*) address;
+JNIEXPORT void JNICALL Java_physx_physics_PxActorFlags__1clear(JNIEnv*, jclass, jlong _address, jint flag) {
+    physx::PxActorFlags* self = (physx::PxActorFlags*) _address;
     self->clear((PxActorFlagEnum) flag);
 }
-JNIEXPORT void JNICALL Java_physx_physics_PxActorFlags__1delete_1native_1instance(JNIEnv*, jclass, jlong address) {
-    delete (physx::PxActorFlags*) address;
+JNIEXPORT void JNICALL Java_physx_physics_PxActorFlags__1delete_1native_1instance(JNIEnv*, jclass, jlong _address) {
+    delete (physx::PxActorFlags*) _address;
 }
 
 // PxActorShape
-JNIEXPORT void JNICALL Java_physx_physics_PxActorShape__1delete_1native_1instance(JNIEnv*, jclass, jlong address) {
-    delete (physx::PxActorShape*) address;
+JNIEXPORT void JNICALL Java_physx_physics_PxActorShape__1delete_1native_1instance(JNIEnv*, jclass, jlong _address) {
+    delete (physx::PxActorShape*) _address;
 }
-JNIEXPORT jlong JNICALL Java_physx_physics_PxActorShape__1getActor(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxActorShape* self = (physx::PxActorShape*) address;
-    return (jlong) self->actor;
+JNIEXPORT jlong JNICALL Java_physx_physics_PxActorShape__1getActor(JNIEnv*, jclass, jlong _address) {
+    physx::PxActorShape* _self = (physx::PxActorShape*) _address;
+    return (jlong) _self->actor;
 }
-JNIEXPORT void JNICALL Java_physx_physics_PxActorShape__1setActor(JNIEnv* env, jclass, jlong address, jlong value) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxActorShape* self = (physx::PxActorShape*) address;
-    self->actor = (physx::PxRigidActor*) value;
+JNIEXPORT void JNICALL Java_physx_physics_PxActorShape__1setActor(JNIEnv*, jclass, jlong _address, jlong value) {
+    physx::PxActorShape* _self = (physx::PxActorShape*) _address;
+    _self->actor = (physx::PxRigidActor*) value;
 }
-JNIEXPORT jlong JNICALL Java_physx_physics_PxActorShape__1getShape(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxActorShape* self = (physx::PxActorShape*) address;
-    return (jlong) self->shape;
+JNIEXPORT jlong JNICALL Java_physx_physics_PxActorShape__1getShape(JNIEnv*, jclass, jlong _address) {
+    physx::PxActorShape* _self = (physx::PxActorShape*) _address;
+    return (jlong) _self->shape;
 }
-JNIEXPORT void JNICALL Java_physx_physics_PxActorShape__1setShape(JNIEnv* env, jclass, jlong address, jlong value) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxActorShape* self = (physx::PxActorShape*) address;
-    self->shape = (physx::PxShape*) value;
+JNIEXPORT void JNICALL Java_physx_physics_PxActorShape__1setShape(JNIEnv*, jclass, jlong _address, jlong value) {
+    physx::PxActorShape* _self = (physx::PxActorShape*) _address;
+    _self->shape = (physx::PxShape*) value;
 }
 
 // PxBatchQuery
-JNIEXPORT void JNICALL Java_physx_physics_PxBatchQuery__1execute(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxBatchQuery* self = (physx::PxBatchQuery*) address;
+JNIEXPORT void JNICALL Java_physx_physics_PxBatchQuery__1execute(JNIEnv*, jclass, jlong _address) {
+    physx::PxBatchQuery* self = (physx::PxBatchQuery*) _address;
     self->execute();
 }
-JNIEXPORT jlong JNICALL Java_physx_physics_PxBatchQuery__1getPreFilterShader(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    static physx::PxBatchQueryPreFilterShader cache;
-    physx::PxBatchQuery* self = (physx::PxBatchQuery*) address;
-    cache = self->getPreFilterShader();
-    return (jlong) &cache;
+JNIEXPORT jlong JNICALL Java_physx_physics_PxBatchQuery__1getPreFilterShader(JNIEnv*, jclass, jlong _address) {
+    static thread_local physx::PxBatchQueryPreFilterShader _cache;
+    physx::PxBatchQuery* self = (physx::PxBatchQuery*) _address;
+    _cache = self->getPreFilterShader();
+    return (jlong) &_cache;
 }
-JNIEXPORT jlong JNICALL Java_physx_physics_PxBatchQuery__1getPostFilterShader(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    static physx::PxBatchQueryPostFilterShader cache;
-    physx::PxBatchQuery* self = (physx::PxBatchQuery*) address;
-    cache = self->getPostFilterShader();
-    return (jlong) &cache;
+JNIEXPORT jlong JNICALL Java_physx_physics_PxBatchQuery__1getPostFilterShader(JNIEnv*, jclass, jlong _address) {
+    static thread_local physx::PxBatchQueryPostFilterShader _cache;
+    physx::PxBatchQuery* self = (physx::PxBatchQuery*) _address;
+    _cache = self->getPostFilterShader();
+    return (jlong) &_cache;
 }
-JNIEXPORT jlong JNICALL Java_physx_physics_PxBatchQuery__1getFilterShaderData(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxBatchQuery* self = (physx::PxBatchQuery*) address;
+JNIEXPORT jlong JNICALL Java_physx_physics_PxBatchQuery__1getFilterShaderData(JNIEnv*, jclass, jlong _address) {
+    physx::PxBatchQuery* self = (physx::PxBatchQuery*) _address;
     return (jlong) self->getFilterShaderData();
 }
-JNIEXPORT jint JNICALL Java_physx_physics_PxBatchQuery__1getFilterShaderDataSize(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxBatchQuery* self = (physx::PxBatchQuery*) address;
+JNIEXPORT jint JNICALL Java_physx_physics_PxBatchQuery__1getFilterShaderDataSize(JNIEnv*, jclass, jlong _address) {
+    physx::PxBatchQuery* self = (physx::PxBatchQuery*) _address;
     return (jint) self->getFilterShaderDataSize();
 }
-JNIEXPORT void JNICALL Java_physx_physics_PxBatchQuery__1setUserMemory(JNIEnv* env, jclass, jlong address, jlong userMemory) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxBatchQuery* self = (physx::PxBatchQuery*) address;
+JNIEXPORT void JNICALL Java_physx_physics_PxBatchQuery__1setUserMemory(JNIEnv*, jclass, jlong _address, jlong userMemory) {
+    physx::PxBatchQuery* self = (physx::PxBatchQuery*) _address;
     self->setUserMemory(*((physx::PxBatchQueryMemory*) userMemory));
 }
-JNIEXPORT jlong JNICALL Java_physx_physics_PxBatchQuery__1getUserMemory(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxBatchQuery* self = (physx::PxBatchQuery*) address;
+JNIEXPORT jlong JNICALL Java_physx_physics_PxBatchQuery__1getUserMemory(JNIEnv*, jclass, jlong _address) {
+    physx::PxBatchQuery* self = (physx::PxBatchQuery*) _address;
     return (jlong) &self->getUserMemory();
 }
-JNIEXPORT void JNICALL Java_physx_physics_PxBatchQuery__1release(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxBatchQuery* self = (physx::PxBatchQuery*) address;
+JNIEXPORT void JNICALL Java_physx_physics_PxBatchQuery__1release(JNIEnv*, jclass, jlong _address) {
+    physx::PxBatchQuery* self = (physx::PxBatchQuery*) _address;
     self->release();
 }
 
 // PxBatchQueryDesc
-JNIEXPORT jlong JNICALL Java_physx_physics_PxBatchQueryDesc__1PxBatchQueryDesc(JNIEnv* env, jclass, jint maxRaycastsPerExecute, jint maxSweepsPerExecute, jint maxOverlapsPerExecute) {
-    (void) env;    // avoid unused parameter warning / error
+JNIEXPORT jlong JNICALL Java_physx_physics_PxBatchQueryDesc__1PxBatchQueryDesc(JNIEnv*, jclass, jint maxRaycastsPerExecute, jint maxSweepsPerExecute, jint maxOverlapsPerExecute) {
     return (jlong) new physx::PxBatchQueryDesc(maxRaycastsPerExecute, maxSweepsPerExecute, maxOverlapsPerExecute);
 }
-JNIEXPORT jboolean JNICALL Java_physx_physics_PxBatchQueryDesc__1isValid(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxBatchQueryDesc* self = (physx::PxBatchQueryDesc*) address;
+JNIEXPORT jboolean JNICALL Java_physx_physics_PxBatchQueryDesc__1isValid(JNIEnv*, jclass, jlong _address) {
+    physx::PxBatchQueryDesc* self = (physx::PxBatchQueryDesc*) _address;
     return (jboolean) self->isValid();
 }
-JNIEXPORT void JNICALL Java_physx_physics_PxBatchQueryDesc__1delete_1native_1instance(JNIEnv*, jclass, jlong address) {
-    delete (physx::PxBatchQueryDesc*) address;
+JNIEXPORT void JNICALL Java_physx_physics_PxBatchQueryDesc__1delete_1native_1instance(JNIEnv*, jclass, jlong _address) {
+    delete (physx::PxBatchQueryDesc*) _address;
 }
-JNIEXPORT jlong JNICALL Java_physx_physics_PxBatchQueryDesc__1getFilterShaderData(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxBatchQueryDesc* self = (physx::PxBatchQueryDesc*) address;
-    return (jlong) self->filterShaderData;
+JNIEXPORT jlong JNICALL Java_physx_physics_PxBatchQueryDesc__1getFilterShaderData(JNIEnv*, jclass, jlong _address) {
+    physx::PxBatchQueryDesc* _self = (physx::PxBatchQueryDesc*) _address;
+    return (jlong) _self->filterShaderData;
 }
-JNIEXPORT void JNICALL Java_physx_physics_PxBatchQueryDesc__1setFilterShaderData(JNIEnv* env, jclass, jlong address, jlong value) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxBatchQueryDesc* self = (physx::PxBatchQueryDesc*) address;
-    self->filterShaderData = (void*) value;
+JNIEXPORT void JNICALL Java_physx_physics_PxBatchQueryDesc__1setFilterShaderData(JNIEnv*, jclass, jlong _address, jlong value) {
+    physx::PxBatchQueryDesc* _self = (physx::PxBatchQueryDesc*) _address;
+    _self->filterShaderData = (void*) value;
 }
-JNIEXPORT jint JNICALL Java_physx_physics_PxBatchQueryDesc__1getFilterShaderDataSize(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxBatchQueryDesc* self = (physx::PxBatchQueryDesc*) address;
-    return (jint) self->filterShaderDataSize;
+JNIEXPORT jint JNICALL Java_physx_physics_PxBatchQueryDesc__1getFilterShaderDataSize(JNIEnv*, jclass, jlong _address) {
+    physx::PxBatchQueryDesc* _self = (physx::PxBatchQueryDesc*) _address;
+    return (jint) _self->filterShaderDataSize;
 }
-JNIEXPORT void JNICALL Java_physx_physics_PxBatchQueryDesc__1setFilterShaderDataSize(JNIEnv* env, jclass, jlong address, jint value) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxBatchQueryDesc* self = (physx::PxBatchQueryDesc*) address;
-    self->filterShaderDataSize = value;
+JNIEXPORT void JNICALL Java_physx_physics_PxBatchQueryDesc__1setFilterShaderDataSize(JNIEnv*, jclass, jlong _address, jint value) {
+    physx::PxBatchQueryDesc* _self = (physx::PxBatchQueryDesc*) _address;
+    _self->filterShaderDataSize = value;
 }
-JNIEXPORT jlong JNICALL Java_physx_physics_PxBatchQueryDesc__1getPreFilterShader(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxBatchQueryDesc* self = (physx::PxBatchQueryDesc*) address;
-    return (jlong) &self->preFilterShader;
+JNIEXPORT jlong JNICALL Java_physx_physics_PxBatchQueryDesc__1getPreFilterShader(JNIEnv*, jclass, jlong _address) {
+    physx::PxBatchQueryDesc* _self = (physx::PxBatchQueryDesc*) _address;
+    return (jlong) &_self->preFilterShader;
 }
-JNIEXPORT void JNICALL Java_physx_physics_PxBatchQueryDesc__1setPreFilterShader(JNIEnv* env, jclass, jlong address, jlong value) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxBatchQueryDesc* self = (physx::PxBatchQueryDesc*) address;
-    self->preFilterShader = *((physx::PxBatchQueryPreFilterShader*) value);
+JNIEXPORT void JNICALL Java_physx_physics_PxBatchQueryDesc__1setPreFilterShader(JNIEnv*, jclass, jlong _address, jlong value) {
+    physx::PxBatchQueryDesc* _self = (physx::PxBatchQueryDesc*) _address;
+    _self->preFilterShader = *((physx::PxBatchQueryPreFilterShader*) value);
 }
-JNIEXPORT jlong JNICALL Java_physx_physics_PxBatchQueryDesc__1getPostFilterShader(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxBatchQueryDesc* self = (physx::PxBatchQueryDesc*) address;
-    return (jlong) &self->postFilterShader;
+JNIEXPORT jlong JNICALL Java_physx_physics_PxBatchQueryDesc__1getPostFilterShader(JNIEnv*, jclass, jlong _address) {
+    physx::PxBatchQueryDesc* _self = (physx::PxBatchQueryDesc*) _address;
+    return (jlong) &_self->postFilterShader;
 }
-JNIEXPORT void JNICALL Java_physx_physics_PxBatchQueryDesc__1setPostFilterShader(JNIEnv* env, jclass, jlong address, jlong value) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxBatchQueryDesc* self = (physx::PxBatchQueryDesc*) address;
-    self->postFilterShader = *((physx::PxBatchQueryPostFilterShader*) value);
+JNIEXPORT void JNICALL Java_physx_physics_PxBatchQueryDesc__1setPostFilterShader(JNIEnv*, jclass, jlong _address, jlong value) {
+    physx::PxBatchQueryDesc* _self = (physx::PxBatchQueryDesc*) _address;
+    _self->postFilterShader = *((physx::PxBatchQueryPostFilterShader*) value);
 }
-JNIEXPORT jlong JNICALL Java_physx_physics_PxBatchQueryDesc__1getQueryMemory(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxBatchQueryDesc* self = (physx::PxBatchQueryDesc*) address;
-    return (jlong) &self->queryMemory;
+JNIEXPORT jlong JNICALL Java_physx_physics_PxBatchQueryDesc__1getQueryMemory(JNIEnv*, jclass, jlong _address) {
+    physx::PxBatchQueryDesc* _self = (physx::PxBatchQueryDesc*) _address;
+    return (jlong) &_self->queryMemory;
 }
-JNIEXPORT void JNICALL Java_physx_physics_PxBatchQueryDesc__1setQueryMemory(JNIEnv* env, jclass, jlong address, jlong value) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxBatchQueryDesc* self = (physx::PxBatchQueryDesc*) address;
-    self->queryMemory = *((physx::PxBatchQueryMemory*) value);
+JNIEXPORT void JNICALL Java_physx_physics_PxBatchQueryDesc__1setQueryMemory(JNIEnv*, jclass, jlong _address, jlong value) {
+    physx::PxBatchQueryDesc* _self = (physx::PxBatchQueryDesc*) _address;
+    _self->queryMemory = *((physx::PxBatchQueryMemory*) value);
 }
 
 // PxBatchQueryMemory
-JNIEXPORT void JNICALL Java_physx_physics_PxBatchQueryMemory__1delete_1native_1instance(JNIEnv*, jclass, jlong address) {
-    delete (physx::PxBatchQueryMemory*) address;
+JNIEXPORT void JNICALL Java_physx_physics_PxBatchQueryMemory__1delete_1native_1instance(JNIEnv*, jclass, jlong _address) {
+    delete (physx::PxBatchQueryMemory*) _address;
 }
-JNIEXPORT jlong JNICALL Java_physx_physics_PxBatchQueryMemory__1getUserRaycastResultBuffer(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxBatchQueryMemory* self = (physx::PxBatchQueryMemory*) address;
-    return (jlong) self->userRaycastResultBuffer;
+JNIEXPORT jlong JNICALL Java_physx_physics_PxBatchQueryMemory__1getUserRaycastResultBuffer(JNIEnv*, jclass, jlong _address) {
+    physx::PxBatchQueryMemory* _self = (physx::PxBatchQueryMemory*) _address;
+    return (jlong) _self->userRaycastResultBuffer;
 }
-JNIEXPORT void JNICALL Java_physx_physics_PxBatchQueryMemory__1setUserRaycastResultBuffer(JNIEnv* env, jclass, jlong address, jlong value) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxBatchQueryMemory* self = (physx::PxBatchQueryMemory*) address;
-    self->userRaycastResultBuffer = (physx::PxRaycastQueryResult*) value;
+JNIEXPORT void JNICALL Java_physx_physics_PxBatchQueryMemory__1setUserRaycastResultBuffer(JNIEnv*, jclass, jlong _address, jlong value) {
+    physx::PxBatchQueryMemory* _self = (physx::PxBatchQueryMemory*) _address;
+    _self->userRaycastResultBuffer = (physx::PxRaycastQueryResult*) value;
 }
-JNIEXPORT jlong JNICALL Java_physx_physics_PxBatchQueryMemory__1getUserRaycastTouchBuffer(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxBatchQueryMemory* self = (physx::PxBatchQueryMemory*) address;
-    return (jlong) self->userRaycastTouchBuffer;
+JNIEXPORT jlong JNICALL Java_physx_physics_PxBatchQueryMemory__1getUserRaycastTouchBuffer(JNIEnv*, jclass, jlong _address) {
+    physx::PxBatchQueryMemory* _self = (physx::PxBatchQueryMemory*) _address;
+    return (jlong) _self->userRaycastTouchBuffer;
 }
-JNIEXPORT void JNICALL Java_physx_physics_PxBatchQueryMemory__1setUserRaycastTouchBuffer(JNIEnv* env, jclass, jlong address, jlong value) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxBatchQueryMemory* self = (physx::PxBatchQueryMemory*) address;
-    self->userRaycastTouchBuffer = (physx::PxRaycastHit*) value;
+JNIEXPORT void JNICALL Java_physx_physics_PxBatchQueryMemory__1setUserRaycastTouchBuffer(JNIEnv*, jclass, jlong _address, jlong value) {
+    physx::PxBatchQueryMemory* _self = (physx::PxBatchQueryMemory*) _address;
+    _self->userRaycastTouchBuffer = (physx::PxRaycastHit*) value;
 }
-JNIEXPORT jlong JNICALL Java_physx_physics_PxBatchQueryMemory__1getUserSweepResultBuffer(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxBatchQueryMemory* self = (physx::PxBatchQueryMemory*) address;
-    return (jlong) self->userSweepResultBuffer;
+JNIEXPORT jlong JNICALL Java_physx_physics_PxBatchQueryMemory__1getUserSweepResultBuffer(JNIEnv*, jclass, jlong _address) {
+    physx::PxBatchQueryMemory* _self = (physx::PxBatchQueryMemory*) _address;
+    return (jlong) _self->userSweepResultBuffer;
 }
-JNIEXPORT void JNICALL Java_physx_physics_PxBatchQueryMemory__1setUserSweepResultBuffer(JNIEnv* env, jclass, jlong address, jlong value) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxBatchQueryMemory* self = (physx::PxBatchQueryMemory*) address;
-    self->userSweepResultBuffer = (physx::PxSweepQueryResult*) value;
+JNIEXPORT void JNICALL Java_physx_physics_PxBatchQueryMemory__1setUserSweepResultBuffer(JNIEnv*, jclass, jlong _address, jlong value) {
+    physx::PxBatchQueryMemory* _self = (physx::PxBatchQueryMemory*) _address;
+    _self->userSweepResultBuffer = (physx::PxSweepQueryResult*) value;
 }
-JNIEXPORT jlong JNICALL Java_physx_physics_PxBatchQueryMemory__1getUserSweepTouchBuffer(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxBatchQueryMemory* self = (physx::PxBatchQueryMemory*) address;
-    return (jlong) self->userSweepTouchBuffer;
+JNIEXPORT jlong JNICALL Java_physx_physics_PxBatchQueryMemory__1getUserSweepTouchBuffer(JNIEnv*, jclass, jlong _address) {
+    physx::PxBatchQueryMemory* _self = (physx::PxBatchQueryMemory*) _address;
+    return (jlong) _self->userSweepTouchBuffer;
 }
-JNIEXPORT void JNICALL Java_physx_physics_PxBatchQueryMemory__1setUserSweepTouchBuffer(JNIEnv* env, jclass, jlong address, jlong value) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxBatchQueryMemory* self = (physx::PxBatchQueryMemory*) address;
-    self->userSweepTouchBuffer = (physx::PxSweepHit*) value;
+JNIEXPORT void JNICALL Java_physx_physics_PxBatchQueryMemory__1setUserSweepTouchBuffer(JNIEnv*, jclass, jlong _address, jlong value) {
+    physx::PxBatchQueryMemory* _self = (physx::PxBatchQueryMemory*) _address;
+    _self->userSweepTouchBuffer = (physx::PxSweepHit*) value;
 }
-JNIEXPORT jlong JNICALL Java_physx_physics_PxBatchQueryMemory__1getUserOverlapResultBuffer(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxBatchQueryMemory* self = (physx::PxBatchQueryMemory*) address;
-    return (jlong) self->userOverlapResultBuffer;
+JNIEXPORT jlong JNICALL Java_physx_physics_PxBatchQueryMemory__1getUserOverlapResultBuffer(JNIEnv*, jclass, jlong _address) {
+    physx::PxBatchQueryMemory* _self = (physx::PxBatchQueryMemory*) _address;
+    return (jlong) _self->userOverlapResultBuffer;
 }
-JNIEXPORT void JNICALL Java_physx_physics_PxBatchQueryMemory__1setUserOverlapResultBuffer(JNIEnv* env, jclass, jlong address, jlong value) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxBatchQueryMemory* self = (physx::PxBatchQueryMemory*) address;
-    self->userOverlapResultBuffer = (physx::PxOverlapQueryResult*) value;
+JNIEXPORT void JNICALL Java_physx_physics_PxBatchQueryMemory__1setUserOverlapResultBuffer(JNIEnv*, jclass, jlong _address, jlong value) {
+    physx::PxBatchQueryMemory* _self = (physx::PxBatchQueryMemory*) _address;
+    _self->userOverlapResultBuffer = (physx::PxOverlapQueryResult*) value;
 }
-JNIEXPORT jlong JNICALL Java_physx_physics_PxBatchQueryMemory__1getUserOverlapTouchBuffer(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxBatchQueryMemory* self = (physx::PxBatchQueryMemory*) address;
-    return (jlong) self->userOverlapTouchBuffer;
+JNIEXPORT jlong JNICALL Java_physx_physics_PxBatchQueryMemory__1getUserOverlapTouchBuffer(JNIEnv*, jclass, jlong _address) {
+    physx::PxBatchQueryMemory* _self = (physx::PxBatchQueryMemory*) _address;
+    return (jlong) _self->userOverlapTouchBuffer;
 }
-JNIEXPORT void JNICALL Java_physx_physics_PxBatchQueryMemory__1setUserOverlapTouchBuffer(JNIEnv* env, jclass, jlong address, jlong value) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxBatchQueryMemory* self = (physx::PxBatchQueryMemory*) address;
-    self->userOverlapTouchBuffer = (physx::PxOverlapHit*) value;
+JNIEXPORT void JNICALL Java_physx_physics_PxBatchQueryMemory__1setUserOverlapTouchBuffer(JNIEnv*, jclass, jlong _address, jlong value) {
+    physx::PxBatchQueryMemory* _self = (physx::PxBatchQueryMemory*) _address;
+    _self->userOverlapTouchBuffer = (physx::PxOverlapHit*) value;
 }
-JNIEXPORT jint JNICALL Java_physx_physics_PxBatchQueryMemory__1getRaycastTouchBufferSize(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxBatchQueryMemory* self = (physx::PxBatchQueryMemory*) address;
-    return (jint) self->raycastTouchBufferSize;
+JNIEXPORT jint JNICALL Java_physx_physics_PxBatchQueryMemory__1getRaycastTouchBufferSize(JNIEnv*, jclass, jlong _address) {
+    physx::PxBatchQueryMemory* _self = (physx::PxBatchQueryMemory*) _address;
+    return (jint) _self->raycastTouchBufferSize;
 }
-JNIEXPORT void JNICALL Java_physx_physics_PxBatchQueryMemory__1setRaycastTouchBufferSize(JNIEnv* env, jclass, jlong address, jint value) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxBatchQueryMemory* self = (physx::PxBatchQueryMemory*) address;
-    self->raycastTouchBufferSize = value;
+JNIEXPORT void JNICALL Java_physx_physics_PxBatchQueryMemory__1setRaycastTouchBufferSize(JNIEnv*, jclass, jlong _address, jint value) {
+    physx::PxBatchQueryMemory* _self = (physx::PxBatchQueryMemory*) _address;
+    _self->raycastTouchBufferSize = value;
 }
-JNIEXPORT jint JNICALL Java_physx_physics_PxBatchQueryMemory__1getSweepTouchBufferSize(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxBatchQueryMemory* self = (physx::PxBatchQueryMemory*) address;
-    return (jint) self->sweepTouchBufferSize;
+JNIEXPORT jint JNICALL Java_physx_physics_PxBatchQueryMemory__1getSweepTouchBufferSize(JNIEnv*, jclass, jlong _address) {
+    physx::PxBatchQueryMemory* _self = (physx::PxBatchQueryMemory*) _address;
+    return (jint) _self->sweepTouchBufferSize;
 }
-JNIEXPORT void JNICALL Java_physx_physics_PxBatchQueryMemory__1setSweepTouchBufferSize(JNIEnv* env, jclass, jlong address, jint value) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxBatchQueryMemory* self = (physx::PxBatchQueryMemory*) address;
-    self->sweepTouchBufferSize = value;
+JNIEXPORT void JNICALL Java_physx_physics_PxBatchQueryMemory__1setSweepTouchBufferSize(JNIEnv*, jclass, jlong _address, jint value) {
+    physx::PxBatchQueryMemory* _self = (physx::PxBatchQueryMemory*) _address;
+    _self->sweepTouchBufferSize = value;
 }
-JNIEXPORT jint JNICALL Java_physx_physics_PxBatchQueryMemory__1getOverlapTouchBufferSize(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxBatchQueryMemory* self = (physx::PxBatchQueryMemory*) address;
-    return (jint) self->overlapTouchBufferSize;
+JNIEXPORT jint JNICALL Java_physx_physics_PxBatchQueryMemory__1getOverlapTouchBufferSize(JNIEnv*, jclass, jlong _address) {
+    physx::PxBatchQueryMemory* _self = (physx::PxBatchQueryMemory*) _address;
+    return (jint) _self->overlapTouchBufferSize;
 }
-JNIEXPORT void JNICALL Java_physx_physics_PxBatchQueryMemory__1setOverlapTouchBufferSize(JNIEnv* env, jclass, jlong address, jint value) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxBatchQueryMemory* self = (physx::PxBatchQueryMemory*) address;
-    self->overlapTouchBufferSize = value;
+JNIEXPORT void JNICALL Java_physx_physics_PxBatchQueryMemory__1setOverlapTouchBufferSize(JNIEnv*, jclass, jlong _address, jint value) {
+    physx::PxBatchQueryMemory* _self = (physx::PxBatchQueryMemory*) _address;
+    _self->overlapTouchBufferSize = value;
 }
 
 // PxBatchQueryPostFilterShader
-JNIEXPORT void JNICALL Java_physx_physics_PxBatchQueryPostFilterShader__1delete_1native_1instance(JNIEnv*, jclass, jlong address) {
-    delete (physx::PxBatchQueryPostFilterShader*) address;
+JNIEXPORT void JNICALL Java_physx_physics_PxBatchQueryPostFilterShader__1delete_1native_1instance(JNIEnv*, jclass, jlong _address) {
+    delete (physx::PxBatchQueryPostFilterShader*) _address;
 }
 
 // PxBatchQueryPreFilterShader
-JNIEXPORT void JNICALL Java_physx_physics_PxBatchQueryPreFilterShader__1delete_1native_1instance(JNIEnv*, jclass, jlong address) {
-    delete (physx::PxBatchQueryPreFilterShader*) address;
+JNIEXPORT void JNICALL Java_physx_physics_PxBatchQueryPreFilterShader__1delete_1native_1instance(JNIEnv*, jclass, jlong _address) {
+    delete (physx::PxBatchQueryPreFilterShader*) _address;
+}
+
+// PxConstraint
+JNIEXPORT void JNICALL Java_physx_physics_PxConstraint__1release(JNIEnv*, jclass, jlong _address) {
+    physx::PxConstraint* self = (physx::PxConstraint*) _address;
+    self->release();
+}
+JNIEXPORT jlong JNICALL Java_physx_physics_PxConstraint__1getScene(JNIEnv*, jclass, jlong _address) {
+    physx::PxConstraint* self = (physx::PxConstraint*) _address;
+    return (jlong) self->getScene();
+}
+JNIEXPORT void JNICALL Java_physx_physics_PxConstraint__1setActors(JNIEnv*, jclass, jlong _address, jlong actor0, jlong actor1) {
+    physx::PxConstraint* self = (physx::PxConstraint*) _address;
+    self->setActors((physx::PxRigidActor*) actor0, (physx::PxRigidActor*) actor1);
+}
+JNIEXPORT void JNICALL Java_physx_physics_PxConstraint__1markDirty(JNIEnv*, jclass, jlong _address) {
+    physx::PxConstraint* self = (physx::PxConstraint*) _address;
+    self->markDirty();
+}
+JNIEXPORT void JNICALL Java_physx_physics_PxConstraint__1setFlags(JNIEnv*, jclass, jlong _address, jlong flags) {
+    physx::PxConstraint* self = (physx::PxConstraint*) _address;
+    self->setFlags(*((physx::PxConstraintFlags*) flags));
+}
+JNIEXPORT jlong JNICALL Java_physx_physics_PxConstraint__1getFlags(JNIEnv*, jclass, jlong _address) {
+    static thread_local physx::PxConstraintFlags _cache;
+    physx::PxConstraint* self = (physx::PxConstraint*) _address;
+    _cache = self->getFlags();
+    return (jlong) &_cache;
+}
+JNIEXPORT void JNICALL Java_physx_physics_PxConstraint__1setFlag(JNIEnv*, jclass, jlong _address, jint flag, jboolean value) {
+    physx::PxConstraint* self = (physx::PxConstraint*) _address;
+    self->setFlag((PxConstraintFlagEnum) flag, value);
+}
+JNIEXPORT void JNICALL Java_physx_physics_PxConstraint__1getForce(JNIEnv*, jclass, jlong _address, jlong linear, jlong angular) {
+    physx::PxConstraint* self = (physx::PxConstraint*) _address;
+    self->getForce(*((physx::PxVec3*) linear), *((physx::PxVec3*) angular));
+}
+JNIEXPORT jboolean JNICALL Java_physx_physics_PxConstraint__1isValid(JNIEnv*, jclass, jlong _address) {
+    physx::PxConstraint* self = (physx::PxConstraint*) _address;
+    return (jboolean) self->isValid();
+}
+JNIEXPORT void JNICALL Java_physx_physics_PxConstraint__1setBreakForce(JNIEnv*, jclass, jlong _address, jfloat linear, jfloat angular) {
+    physx::PxConstraint* self = (physx::PxConstraint*) _address;
+    self->setBreakForce(linear, angular);
+}
+JNIEXPORT void JNICALL Java_physx_physics_PxConstraint__1setMinResponseThreshold(JNIEnv*, jclass, jlong _address, jfloat threshold) {
+    physx::PxConstraint* self = (physx::PxConstraint*) _address;
+    self->setMinResponseThreshold(threshold);
+}
+JNIEXPORT jfloat JNICALL Java_physx_physics_PxConstraint__1getMinResponseThreshold(JNIEnv*, jclass, jlong _address) {
+    physx::PxConstraint* self = (physx::PxConstraint*) _address;
+    return (jfloat) self->getMinResponseThreshold();
+}
+
+// PxConstraintFlags
+JNIEXPORT jlong JNICALL Java_physx_physics_PxConstraintFlags__1PxConstraintFlags(JNIEnv*, jclass, jshort flags) {
+    return (jlong) new physx::PxConstraintFlags(flags);
+}
+JNIEXPORT jboolean JNICALL Java_physx_physics_PxConstraintFlags__1isSet(JNIEnv*, jclass, jlong _address, jint flag) {
+    physx::PxConstraintFlags* self = (physx::PxConstraintFlags*) _address;
+    return (jboolean) self->isSet((PxConstraintFlagEnum) flag);
+}
+JNIEXPORT void JNICALL Java_physx_physics_PxConstraintFlags__1set(JNIEnv*, jclass, jlong _address, jint flag) {
+    physx::PxConstraintFlags* self = (physx::PxConstraintFlags*) _address;
+    self->set((PxConstraintFlagEnum) flag);
+}
+JNIEXPORT void JNICALL Java_physx_physics_PxConstraintFlags__1clear(JNIEnv*, jclass, jlong _address, jint flag) {
+    physx::PxConstraintFlags* self = (physx::PxConstraintFlags*) _address;
+    self->clear((PxConstraintFlagEnum) flag);
+}
+JNIEXPORT void JNICALL Java_physx_physics_PxConstraintFlags__1delete_1native_1instance(JNIEnv*, jclass, jlong _address) {
+    delete (physx::PxConstraintFlags*) _address;
+}
+
+// PxConstraintInfo
+JNIEXPORT void JNICALL Java_physx_physics_PxConstraintInfo__1delete_1native_1instance(JNIEnv*, jclass, jlong _address) {
+    delete (physx::PxConstraintInfo*) _address;
+}
+JNIEXPORT jlong JNICALL Java_physx_physics_PxConstraintInfo__1getConstraint(JNIEnv*, jclass, jlong _address) {
+    physx::PxConstraintInfo* _self = (physx::PxConstraintInfo*) _address;
+    return (jlong) _self->constraint;
+}
+JNIEXPORT void JNICALL Java_physx_physics_PxConstraintInfo__1setConstraint(JNIEnv*, jclass, jlong _address, jlong value) {
+    physx::PxConstraintInfo* _self = (physx::PxConstraintInfo*) _address;
+    _self->constraint = (physx::PxConstraint*) value;
+}
+JNIEXPORT jlong JNICALL Java_physx_physics_PxConstraintInfo__1getExternalReference(JNIEnv*, jclass, jlong _address) {
+    physx::PxConstraintInfo* _self = (physx::PxConstraintInfo*) _address;
+    return (jlong) _self->externalReference;
+}
+JNIEXPORT void JNICALL Java_physx_physics_PxConstraintInfo__1setExternalReference(JNIEnv*, jclass, jlong _address, jlong value) {
+    physx::PxConstraintInfo* _self = (physx::PxConstraintInfo*) _address;
+    _self->externalReference = (void*) value;
+}
+JNIEXPORT jint JNICALL Java_physx_physics_PxConstraintInfo__1getType(JNIEnv*, jclass, jlong _address) {
+    physx::PxConstraintInfo* _self = (physx::PxConstraintInfo*) _address;
+    return (jint) _self->type;
+}
+JNIEXPORT void JNICALL Java_physx_physics_PxConstraintInfo__1setType(JNIEnv*, jclass, jlong _address, jint value) {
+    physx::PxConstraintInfo* _self = (physx::PxConstraintInfo*) _address;
+    _self->type = value;
+}
+
+// PxContactPairHeaderFlags
+JNIEXPORT jlong JNICALL Java_physx_physics_PxContactPairHeaderFlags__1PxContactPairHeaderFlags(JNIEnv*, jclass, jshort flags) {
+    return (jlong) new physx::PxContactPairHeaderFlags(flags);
+}
+JNIEXPORT jboolean JNICALL Java_physx_physics_PxContactPairHeaderFlags__1isSet(JNIEnv*, jclass, jlong _address, jint flag) {
+    physx::PxContactPairHeaderFlags* self = (physx::PxContactPairHeaderFlags*) _address;
+    return (jboolean) self->isSet((PxContactPairHeaderFlagEnum) flag);
+}
+JNIEXPORT void JNICALL Java_physx_physics_PxContactPairHeaderFlags__1set(JNIEnv*, jclass, jlong _address, jint flag) {
+    physx::PxContactPairHeaderFlags* self = (physx::PxContactPairHeaderFlags*) _address;
+    self->set((PxContactPairHeaderFlagEnum) flag);
+}
+JNIEXPORT void JNICALL Java_physx_physics_PxContactPairHeaderFlags__1clear(JNIEnv*, jclass, jlong _address, jint flag) {
+    physx::PxContactPairHeaderFlags* self = (physx::PxContactPairHeaderFlags*) _address;
+    self->clear((PxContactPairHeaderFlagEnum) flag);
+}
+JNIEXPORT void JNICALL Java_physx_physics_PxContactPairHeaderFlags__1delete_1native_1instance(JNIEnv*, jclass, jlong _address) {
+    delete (physx::PxContactPairHeaderFlags*) _address;
+}
+
+// PxContactPair
+JNIEXPORT void JNICALL Java_physx_physics_PxContactPair__1delete_1native_1instance(JNIEnv*, jclass, jlong _address) {
+    delete (physx::PxContactPair*) _address;
+}
+JNIEXPORT jlong JNICALL Java_physx_physics_PxContactPair__1getShapes(JNIEnv*, jclass, jlong _address, jint _index) {
+    physx::PxContactPair* _self = (physx::PxContactPair*) _address;
+    return (jlong) _self->shapes[_index];
+}
+JNIEXPORT void JNICALL Java_physx_physics_PxContactPair__1setShapes(JNIEnv*, jclass, jlong _address, jint _index, jlong value) {
+    physx::PxContactPair* _self = (physx::PxContactPair*) _address;
+    _self->shapes[_index] = (physx::PxShape*) value;
+}
+JNIEXPORT jbyte JNICALL Java_physx_physics_PxContactPair__1getContactCount(JNIEnv*, jclass, jlong _address) {
+    physx::PxContactPair* _self = (physx::PxContactPair*) _address;
+    return (jbyte) _self->contactCount;
+}
+JNIEXPORT void JNICALL Java_physx_physics_PxContactPair__1setContactCount(JNIEnv*, jclass, jlong _address, jbyte value) {
+    physx::PxContactPair* _self = (physx::PxContactPair*) _address;
+    _self->contactCount = value;
+}
+JNIEXPORT jbyte JNICALL Java_physx_physics_PxContactPair__1getPatchCount(JNIEnv*, jclass, jlong _address) {
+    physx::PxContactPair* _self = (physx::PxContactPair*) _address;
+    return (jbyte) _self->patchCount;
+}
+JNIEXPORT void JNICALL Java_physx_physics_PxContactPair__1setPatchCount(JNIEnv*, jclass, jlong _address, jbyte value) {
+    physx::PxContactPair* _self = (physx::PxContactPair*) _address;
+    _self->patchCount = value;
+}
+JNIEXPORT jlong JNICALL Java_physx_physics_PxContactPair__1getFlags(JNIEnv*, jclass, jlong _address) {
+    physx::PxContactPair* _self = (physx::PxContactPair*) _address;
+    return (jlong) &_self->flags;
+}
+JNIEXPORT void JNICALL Java_physx_physics_PxContactPair__1setFlags(JNIEnv*, jclass, jlong _address, jlong value) {
+    physx::PxContactPair* _self = (physx::PxContactPair*) _address;
+    _self->flags = *((physx::PxContactPairFlags*) value);
+}
+JNIEXPORT jlong JNICALL Java_physx_physics_PxContactPair__1getEvents(JNIEnv*, jclass, jlong _address) {
+    physx::PxContactPair* _self = (physx::PxContactPair*) _address;
+    return (jlong) &_self->events;
+}
+JNIEXPORT void JNICALL Java_physx_physics_PxContactPair__1setEvents(JNIEnv*, jclass, jlong _address, jlong value) {
+    physx::PxContactPair* _self = (physx::PxContactPair*) _address;
+    _self->events = *((physx::PxPairFlags*) value);
+}
+
+// PxContactPairFlags
+JNIEXPORT jlong JNICALL Java_physx_physics_PxContactPairFlags__1PxContactPairFlags(JNIEnv*, jclass, jshort flags) {
+    return (jlong) new physx::PxContactPairFlags(flags);
+}
+JNIEXPORT jboolean JNICALL Java_physx_physics_PxContactPairFlags__1isSet(JNIEnv*, jclass, jlong _address, jint flag) {
+    physx::PxContactPairFlags* self = (physx::PxContactPairFlags*) _address;
+    return (jboolean) self->isSet((PxContactPairFlagEnum) flag);
+}
+JNIEXPORT void JNICALL Java_physx_physics_PxContactPairFlags__1set(JNIEnv*, jclass, jlong _address, jint flag) {
+    physx::PxContactPairFlags* self = (physx::PxContactPairFlags*) _address;
+    self->set((PxContactPairFlagEnum) flag);
+}
+JNIEXPORT void JNICALL Java_physx_physics_PxContactPairFlags__1clear(JNIEnv*, jclass, jlong _address, jint flag) {
+    physx::PxContactPairFlags* self = (physx::PxContactPairFlags*) _address;
+    self->clear((PxContactPairFlagEnum) flag);
+}
+JNIEXPORT void JNICALL Java_physx_physics_PxContactPairFlags__1delete_1native_1instance(JNIEnv*, jclass, jlong _address) {
+    delete (physx::PxContactPairFlags*) _address;
+}
+
+// PxContactPairHeader
+JNIEXPORT void JNICALL Java_physx_physics_PxContactPairHeader__1delete_1native_1instance(JNIEnv*, jclass, jlong _address) {
+    delete (physx::PxContactPairHeader*) _address;
+}
+JNIEXPORT jlong JNICALL Java_physx_physics_PxContactPairHeader__1getActors(JNIEnv*, jclass, jlong _address, jint _index) {
+    physx::PxContactPairHeader* _self = (physx::PxContactPairHeader*) _address;
+    return (jlong) _self->actors[_index];
+}
+JNIEXPORT void JNICALL Java_physx_physics_PxContactPairHeader__1setActors(JNIEnv*, jclass, jlong _address, jint _index, jlong value) {
+    physx::PxContactPairHeader* _self = (physx::PxContactPairHeader*) _address;
+    _self->actors[_index] = (physx::PxRigidActor*) value;
+}
+JNIEXPORT jlong JNICALL Java_physx_physics_PxContactPairHeader__1getFlags(JNIEnv*, jclass, jlong _address) {
+    physx::PxContactPairHeader* _self = (physx::PxContactPairHeader*) _address;
+    return (jlong) &_self->flags;
+}
+JNIEXPORT void JNICALL Java_physx_physics_PxContactPairHeader__1setFlags(JNIEnv*, jclass, jlong _address, jlong value) {
+    physx::PxContactPairHeader* _self = (physx::PxContactPairHeader*) _address;
+    _self->flags = *((physx::PxContactPairHeaderFlags*) value);
+}
+JNIEXPORT jlong JNICALL Java_physx_physics_PxContactPairHeader__1getPairs(JNIEnv*, jclass, jlong _address) {
+    physx::PxContactPairHeader* _self = (physx::PxContactPairHeader*) _address;
+    return (jlong) _self->pairs;
+}
+JNIEXPORT void JNICALL Java_physx_physics_PxContactPairHeader__1setPairs(JNIEnv*, jclass, jlong _address, jlong value) {
+    physx::PxContactPairHeader* _self = (physx::PxContactPairHeader*) _address;
+    _self->pairs = (physx::PxContactPair*) value;
+}
+JNIEXPORT jint JNICALL Java_physx_physics_PxContactPairHeader__1getNbPairs(JNIEnv*, jclass, jlong _address) {
+    physx::PxContactPairHeader* _self = (physx::PxContactPairHeader*) _address;
+    return (jint) _self->nbPairs;
+}
+JNIEXPORT void JNICALL Java_physx_physics_PxContactPairHeader__1setNbPairs(JNIEnv*, jclass, jlong _address, jint value) {
+    physx::PxContactPairHeader* _self = (physx::PxContactPairHeader*) _address;
+    _self->nbPairs = value;
 }
 
 // PxFilterData
 JNIEXPORT jint JNICALL Java_physx_physics_PxFilterData__1_1sizeOf(JNIEnv*, jclass) {
     return sizeof(physx::PxFilterData);
 }
-JNIEXPORT void JNICALL Java_physx_physics_PxFilterData__1_1placement_1new_1PxFilterData__J(JNIEnv* env, jclass, jlong __placement_address) {
-    (void) env;    // avoid unused parameter warning / error
-    new((void*)__placement_address) physx::PxFilterData();
+JNIEXPORT jlong JNICALL Java_physx_physics_PxFilterData__1_1placement_1new_1PxFilterData__J(JNIEnv*, jclass, jlong _placement_address) {
+    return (jlong) new((void*)_placement_address) physx::PxFilterData();
 }
-JNIEXPORT void JNICALL Java_physx_physics_PxFilterData__1_1placement_1new_1PxFilterData__JIIII(JNIEnv* env, jclass, jlong __placement_address, jint w0, jint w1, jint w2, jint w3) {
-    (void) env;    // avoid unused parameter warning / error
-    new((void*)__placement_address) physx::PxFilterData(w0, w1, w2, w3);
+JNIEXPORT jlong JNICALL Java_physx_physics_PxFilterData__1_1placement_1new_1PxFilterData__JIIII(JNIEnv*, jclass, jlong _placement_address, jint w0, jint w1, jint w2, jint w3) {
+    return (jlong) new((void*)_placement_address) physx::PxFilterData(w0, w1, w2, w3);
 }
-JNIEXPORT jlong JNICALL Java_physx_physics_PxFilterData__1PxFilterData__(JNIEnv* env, jclass) {
-    (void) env;    // avoid unused parameter warning / error
+JNIEXPORT jlong JNICALL Java_physx_physics_PxFilterData__1PxFilterData__(JNIEnv*, jclass) {
     return (jlong) new physx::PxFilterData();
 }
-JNIEXPORT jlong JNICALL Java_physx_physics_PxFilterData__1PxFilterData__IIII(JNIEnv* env, jclass, jint w0, jint w1, jint w2, jint w3) {
-    (void) env;    // avoid unused parameter warning / error
+JNIEXPORT jlong JNICALL Java_physx_physics_PxFilterData__1PxFilterData__IIII(JNIEnv*, jclass, jint w0, jint w1, jint w2, jint w3) {
     return (jlong) new physx::PxFilterData(w0, w1, w2, w3);
 }
-JNIEXPORT void JNICALL Java_physx_physics_PxFilterData__1delete_1native_1instance(JNIEnv*, jclass, jlong address) {
-    delete (physx::PxFilterData*) address;
+JNIEXPORT void JNICALL Java_physx_physics_PxFilterData__1delete_1native_1instance(JNIEnv*, jclass, jlong _address) {
+    delete (physx::PxFilterData*) _address;
 }
-JNIEXPORT jint JNICALL Java_physx_physics_PxFilterData__1getWord0(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxFilterData* self = (physx::PxFilterData*) address;
-    return (jint) self->word0;
+JNIEXPORT jint JNICALL Java_physx_physics_PxFilterData__1getWord0(JNIEnv*, jclass, jlong _address) {
+    physx::PxFilterData* _self = (physx::PxFilterData*) _address;
+    return (jint) _self->word0;
 }
-JNIEXPORT void JNICALL Java_physx_physics_PxFilterData__1setWord0(JNIEnv* env, jclass, jlong address, jint value) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxFilterData* self = (physx::PxFilterData*) address;
-    self->word0 = value;
+JNIEXPORT void JNICALL Java_physx_physics_PxFilterData__1setWord0(JNIEnv*, jclass, jlong _address, jint value) {
+    physx::PxFilterData* _self = (physx::PxFilterData*) _address;
+    _self->word0 = value;
 }
-JNIEXPORT jint JNICALL Java_physx_physics_PxFilterData__1getWord1(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxFilterData* self = (physx::PxFilterData*) address;
-    return (jint) self->word1;
+JNIEXPORT jint JNICALL Java_physx_physics_PxFilterData__1getWord1(JNIEnv*, jclass, jlong _address) {
+    physx::PxFilterData* _self = (physx::PxFilterData*) _address;
+    return (jint) _self->word1;
 }
-JNIEXPORT void JNICALL Java_physx_physics_PxFilterData__1setWord1(JNIEnv* env, jclass, jlong address, jint value) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxFilterData* self = (physx::PxFilterData*) address;
-    self->word1 = value;
+JNIEXPORT void JNICALL Java_physx_physics_PxFilterData__1setWord1(JNIEnv*, jclass, jlong _address, jint value) {
+    physx::PxFilterData* _self = (physx::PxFilterData*) _address;
+    _self->word1 = value;
 }
-JNIEXPORT jint JNICALL Java_physx_physics_PxFilterData__1getWord2(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxFilterData* self = (physx::PxFilterData*) address;
-    return (jint) self->word2;
+JNIEXPORT jint JNICALL Java_physx_physics_PxFilterData__1getWord2(JNIEnv*, jclass, jlong _address) {
+    physx::PxFilterData* _self = (physx::PxFilterData*) _address;
+    return (jint) _self->word2;
 }
-JNIEXPORT void JNICALL Java_physx_physics_PxFilterData__1setWord2(JNIEnv* env, jclass, jlong address, jint value) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxFilterData* self = (physx::PxFilterData*) address;
-    self->word2 = value;
+JNIEXPORT void JNICALL Java_physx_physics_PxFilterData__1setWord2(JNIEnv*, jclass, jlong _address, jint value) {
+    physx::PxFilterData* _self = (physx::PxFilterData*) _address;
+    _self->word2 = value;
 }
-JNIEXPORT jint JNICALL Java_physx_physics_PxFilterData__1getWord3(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxFilterData* self = (physx::PxFilterData*) address;
-    return (jint) self->word3;
+JNIEXPORT jint JNICALL Java_physx_physics_PxFilterData__1getWord3(JNIEnv*, jclass, jlong _address) {
+    physx::PxFilterData* _self = (physx::PxFilterData*) _address;
+    return (jint) _self->word3;
 }
-JNIEXPORT void JNICALL Java_physx_physics_PxFilterData__1setWord3(JNIEnv* env, jclass, jlong address, jint value) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxFilterData* self = (physx::PxFilterData*) address;
-    self->word3 = value;
+JNIEXPORT void JNICALL Java_physx_physics_PxFilterData__1setWord3(JNIEnv*, jclass, jlong _address, jint value) {
+    physx::PxFilterData* _self = (physx::PxFilterData*) _address;
+    _self->word3 = value;
 }
 
 // PxHitFlags
 JNIEXPORT jint JNICALL Java_physx_physics_PxHitFlags__1_1sizeOf(JNIEnv*, jclass) {
     return sizeof(physx::PxHitFlags);
 }
-JNIEXPORT void JNICALL Java_physx_physics_PxHitFlags__1_1placement_1new_1PxHitFlags(JNIEnv* env, jclass, jlong __placement_address, jshort flags) {
-    (void) env;    // avoid unused parameter warning / error
-    new((void*)__placement_address) physx::PxHitFlags(flags);
+JNIEXPORT jlong JNICALL Java_physx_physics_PxHitFlags__1_1placement_1new_1PxHitFlags(JNIEnv*, jclass, jlong _placement_address, jshort flags) {
+    return (jlong) new((void*)_placement_address) physx::PxHitFlags(flags);
 }
-JNIEXPORT jlong JNICALL Java_physx_physics_PxHitFlags__1PxHitFlags(JNIEnv* env, jclass, jshort flags) {
-    (void) env;    // avoid unused parameter warning / error
+JNIEXPORT jlong JNICALL Java_physx_physics_PxHitFlags__1PxHitFlags(JNIEnv*, jclass, jshort flags) {
     return (jlong) new physx::PxHitFlags(flags);
 }
-JNIEXPORT jboolean JNICALL Java_physx_physics_PxHitFlags__1isSet(JNIEnv* env, jclass, jlong address, jint flag) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxHitFlags* self = (physx::PxHitFlags*) address;
+JNIEXPORT jboolean JNICALL Java_physx_physics_PxHitFlags__1isSet(JNIEnv*, jclass, jlong _address, jint flag) {
+    physx::PxHitFlags* self = (physx::PxHitFlags*) _address;
     return (jboolean) self->isSet((PxHitFlagEnum) flag);
 }
-JNIEXPORT void JNICALL Java_physx_physics_PxHitFlags__1set(JNIEnv* env, jclass, jlong address, jint flag) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxHitFlags* self = (physx::PxHitFlags*) address;
+JNIEXPORT void JNICALL Java_physx_physics_PxHitFlags__1set(JNIEnv*, jclass, jlong _address, jint flag) {
+    physx::PxHitFlags* self = (physx::PxHitFlags*) _address;
     self->set((PxHitFlagEnum) flag);
 }
-JNIEXPORT void JNICALL Java_physx_physics_PxHitFlags__1clear(JNIEnv* env, jclass, jlong address, jint flag) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxHitFlags* self = (physx::PxHitFlags*) address;
+JNIEXPORT void JNICALL Java_physx_physics_PxHitFlags__1clear(JNIEnv*, jclass, jlong _address, jint flag) {
+    physx::PxHitFlags* self = (physx::PxHitFlags*) _address;
     self->clear((PxHitFlagEnum) flag);
 }
-JNIEXPORT void JNICALL Java_physx_physics_PxHitFlags__1delete_1native_1instance(JNIEnv*, jclass, jlong address) {
-    delete (physx::PxHitFlags*) address;
+JNIEXPORT void JNICALL Java_physx_physics_PxHitFlags__1delete_1native_1instance(JNIEnv*, jclass, jlong _address) {
+    delete (physx::PxHitFlags*) _address;
 }
 
 // PxLocationHit
-JNIEXPORT void JNICALL Java_physx_physics_PxLocationHit__1delete_1native_1instance(JNIEnv*, jclass, jlong address) {
-    delete (physx::PxLocationHit*) address;
+JNIEXPORT void JNICALL Java_physx_physics_PxLocationHit__1delete_1native_1instance(JNIEnv*, jclass, jlong _address) {
+    delete (physx::PxLocationHit*) _address;
 }
-JNIEXPORT jlong JNICALL Java_physx_physics_PxLocationHit__1getFlags(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxLocationHit* self = (physx::PxLocationHit*) address;
-    return (jlong) &self->flags;
+JNIEXPORT jlong JNICALL Java_physx_physics_PxLocationHit__1getFlags(JNIEnv*, jclass, jlong _address) {
+    physx::PxLocationHit* _self = (physx::PxLocationHit*) _address;
+    return (jlong) &_self->flags;
 }
-JNIEXPORT void JNICALL Java_physx_physics_PxLocationHit__1setFlags(JNIEnv* env, jclass, jlong address, jlong value) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxLocationHit* self = (physx::PxLocationHit*) address;
-    self->flags = *((physx::PxHitFlags*) value);
+JNIEXPORT void JNICALL Java_physx_physics_PxLocationHit__1setFlags(JNIEnv*, jclass, jlong _address, jlong value) {
+    physx::PxLocationHit* _self = (physx::PxLocationHit*) _address;
+    _self->flags = *((physx::PxHitFlags*) value);
 }
-JNIEXPORT jlong JNICALL Java_physx_physics_PxLocationHit__1getPosition(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxLocationHit* self = (physx::PxLocationHit*) address;
-    return (jlong) &self->position;
+JNIEXPORT jlong JNICALL Java_physx_physics_PxLocationHit__1getPosition(JNIEnv*, jclass, jlong _address) {
+    physx::PxLocationHit* _self = (physx::PxLocationHit*) _address;
+    return (jlong) &_self->position;
 }
-JNIEXPORT void JNICALL Java_physx_physics_PxLocationHit__1setPosition(JNIEnv* env, jclass, jlong address, jlong value) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxLocationHit* self = (physx::PxLocationHit*) address;
-    self->position = *((physx::PxVec3*) value);
+JNIEXPORT void JNICALL Java_physx_physics_PxLocationHit__1setPosition(JNIEnv*, jclass, jlong _address, jlong value) {
+    physx::PxLocationHit* _self = (physx::PxLocationHit*) _address;
+    _self->position = *((physx::PxVec3*) value);
 }
-JNIEXPORT jlong JNICALL Java_physx_physics_PxLocationHit__1getNormal(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxLocationHit* self = (physx::PxLocationHit*) address;
-    return (jlong) &self->normal;
+JNIEXPORT jlong JNICALL Java_physx_physics_PxLocationHit__1getNormal(JNIEnv*, jclass, jlong _address) {
+    physx::PxLocationHit* _self = (physx::PxLocationHit*) _address;
+    return (jlong) &_self->normal;
 }
-JNIEXPORT void JNICALL Java_physx_physics_PxLocationHit__1setNormal(JNIEnv* env, jclass, jlong address, jlong value) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxLocationHit* self = (physx::PxLocationHit*) address;
-    self->normal = *((physx::PxVec3*) value);
+JNIEXPORT void JNICALL Java_physx_physics_PxLocationHit__1setNormal(JNIEnv*, jclass, jlong _address, jlong value) {
+    physx::PxLocationHit* _self = (physx::PxLocationHit*) _address;
+    _self->normal = *((physx::PxVec3*) value);
 }
-JNIEXPORT jfloat JNICALL Java_physx_physics_PxLocationHit__1getDistance(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxLocationHit* self = (physx::PxLocationHit*) address;
-    return (jfloat) self->distance;
+JNIEXPORT jfloat JNICALL Java_physx_physics_PxLocationHit__1getDistance(JNIEnv*, jclass, jlong _address) {
+    physx::PxLocationHit* _self = (physx::PxLocationHit*) _address;
+    return (jfloat) _self->distance;
 }
-JNIEXPORT void JNICALL Java_physx_physics_PxLocationHit__1setDistance(JNIEnv* env, jclass, jlong address, jfloat value) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxLocationHit* self = (physx::PxLocationHit*) address;
-    self->distance = value;
+JNIEXPORT void JNICALL Java_physx_physics_PxLocationHit__1setDistance(JNIEnv*, jclass, jlong _address, jfloat value) {
+    physx::PxLocationHit* _self = (physx::PxLocationHit*) _address;
+    _self->distance = value;
 }
 
 // PxOverlapHit
-JNIEXPORT void JNICALL Java_physx_physics_PxOverlapHit__1delete_1native_1instance(JNIEnv*, jclass, jlong address) {
-    delete (physx::PxOverlapHit*) address;
+JNIEXPORT void JNICALL Java_physx_physics_PxOverlapHit__1delete_1native_1instance(JNIEnv*, jclass, jlong _address) {
+    delete (physx::PxOverlapHit*) _address;
 }
 
 // PxOverlapQueryResult
-JNIEXPORT jint JNICALL Java_physx_physics_PxOverlapQueryResult__1getNbAnyHits(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxOverlapQueryResult* self = (physx::PxOverlapQueryResult*) address;
+JNIEXPORT jint JNICALL Java_physx_physics_PxOverlapQueryResult__1getNbAnyHits(JNIEnv*, jclass, jlong _address) {
+    physx::PxOverlapQueryResult* self = (physx::PxOverlapQueryResult*) _address;
     return (jint) self->getNbAnyHits();
 }
-JNIEXPORT jlong JNICALL Java_physx_physics_PxOverlapQueryResult__1getAnyHit(JNIEnv* env, jclass, jlong address, jint index) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxOverlapQueryResult* self = (physx::PxOverlapQueryResult*) address;
+JNIEXPORT jlong JNICALL Java_physx_physics_PxOverlapQueryResult__1getAnyHit(JNIEnv*, jclass, jlong _address, jint index) {
+    physx::PxOverlapQueryResult* self = (physx::PxOverlapQueryResult*) _address;
     return (jlong) &self->getAnyHit(index);
 }
-JNIEXPORT void JNICALL Java_physx_physics_PxOverlapQueryResult__1delete_1native_1instance(JNIEnv*, jclass, jlong address) {
-    delete (physx::PxOverlapQueryResult*) address;
+JNIEXPORT void JNICALL Java_physx_physics_PxOverlapQueryResult__1delete_1native_1instance(JNIEnv*, jclass, jlong _address) {
+    delete (physx::PxOverlapQueryResult*) _address;
 }
-JNIEXPORT jlong JNICALL Java_physx_physics_PxOverlapQueryResult__1getBlock(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxOverlapQueryResult* self = (physx::PxOverlapQueryResult*) address;
-    return (jlong) &self->block;
+JNIEXPORT jlong JNICALL Java_physx_physics_PxOverlapQueryResult__1getBlock(JNIEnv*, jclass, jlong _address) {
+    physx::PxOverlapQueryResult* _self = (physx::PxOverlapQueryResult*) _address;
+    return (jlong) &_self->block;
 }
-JNIEXPORT void JNICALL Java_physx_physics_PxOverlapQueryResult__1setBlock(JNIEnv* env, jclass, jlong address, jlong value) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxOverlapQueryResult* self = (physx::PxOverlapQueryResult*) address;
-    self->block = *((physx::PxOverlapHit*) value);
+JNIEXPORT void JNICALL Java_physx_physics_PxOverlapQueryResult__1setBlock(JNIEnv*, jclass, jlong _address, jlong value) {
+    physx::PxOverlapQueryResult* _self = (physx::PxOverlapQueryResult*) _address;
+    _self->block = *((physx::PxOverlapHit*) value);
 }
-JNIEXPORT jlong JNICALL Java_physx_physics_PxOverlapQueryResult__1getTouches(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxOverlapQueryResult* self = (physx::PxOverlapQueryResult*) address;
-    return (jlong) self->touches;
+JNIEXPORT jlong JNICALL Java_physx_physics_PxOverlapQueryResult__1getTouches(JNIEnv*, jclass, jlong _address) {
+    physx::PxOverlapQueryResult* _self = (physx::PxOverlapQueryResult*) _address;
+    return (jlong) _self->touches;
 }
-JNIEXPORT void JNICALL Java_physx_physics_PxOverlapQueryResult__1setTouches(JNIEnv* env, jclass, jlong address, jlong value) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxOverlapQueryResult* self = (physx::PxOverlapQueryResult*) address;
-    self->touches = (physx::PxOverlapHit*) value;
+JNIEXPORT void JNICALL Java_physx_physics_PxOverlapQueryResult__1setTouches(JNIEnv*, jclass, jlong _address, jlong value) {
+    physx::PxOverlapQueryResult* _self = (physx::PxOverlapQueryResult*) _address;
+    _self->touches = (physx::PxOverlapHit*) value;
 }
-JNIEXPORT jint JNICALL Java_physx_physics_PxOverlapQueryResult__1getNbTouches(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxOverlapQueryResult* self = (physx::PxOverlapQueryResult*) address;
-    return (jint) self->nbTouches;
+JNIEXPORT jint JNICALL Java_physx_physics_PxOverlapQueryResult__1getNbTouches(JNIEnv*, jclass, jlong _address) {
+    physx::PxOverlapQueryResult* _self = (physx::PxOverlapQueryResult*) _address;
+    return (jint) _self->nbTouches;
 }
-JNIEXPORT void JNICALL Java_physx_physics_PxOverlapQueryResult__1setNbTouches(JNIEnv* env, jclass, jlong address, jint value) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxOverlapQueryResult* self = (physx::PxOverlapQueryResult*) address;
-    self->nbTouches = value;
+JNIEXPORT void JNICALL Java_physx_physics_PxOverlapQueryResult__1setNbTouches(JNIEnv*, jclass, jlong _address, jint value) {
+    physx::PxOverlapQueryResult* _self = (physx::PxOverlapQueryResult*) _address;
+    _self->nbTouches = value;
 }
-JNIEXPORT jlong JNICALL Java_physx_physics_PxOverlapQueryResult__1getUserData(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxOverlapQueryResult* self = (physx::PxOverlapQueryResult*) address;
-    return (jlong) self->userData;
+JNIEXPORT jlong JNICALL Java_physx_physics_PxOverlapQueryResult__1getUserData(JNIEnv*, jclass, jlong _address) {
+    physx::PxOverlapQueryResult* _self = (physx::PxOverlapQueryResult*) _address;
+    return (jlong) _self->userData;
 }
-JNIEXPORT void JNICALL Java_physx_physics_PxOverlapQueryResult__1setUserData(JNIEnv* env, jclass, jlong address, jlong value) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxOverlapQueryResult* self = (physx::PxOverlapQueryResult*) address;
-    self->userData = (void*) value;
+JNIEXPORT void JNICALL Java_physx_physics_PxOverlapQueryResult__1setUserData(JNIEnv*, jclass, jlong _address, jlong value) {
+    physx::PxOverlapQueryResult* _self = (physx::PxOverlapQueryResult*) _address;
+    _self->userData = (void*) value;
 }
-JNIEXPORT jbyte JNICALL Java_physx_physics_PxOverlapQueryResult__1getQueryStatus(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxOverlapQueryResult* self = (physx::PxOverlapQueryResult*) address;
-    return (jbyte) self->queryStatus;
+JNIEXPORT jbyte JNICALL Java_physx_physics_PxOverlapQueryResult__1getQueryStatus(JNIEnv*, jclass, jlong _address) {
+    physx::PxOverlapQueryResult* _self = (physx::PxOverlapQueryResult*) _address;
+    return (jbyte) _self->queryStatus;
 }
-JNIEXPORT void JNICALL Java_physx_physics_PxOverlapQueryResult__1setQueryStatus(JNIEnv* env, jclass, jlong address, jbyte value) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxOverlapQueryResult* self = (physx::PxOverlapQueryResult*) address;
-    self->queryStatus = value;
+JNIEXPORT void JNICALL Java_physx_physics_PxOverlapQueryResult__1setQueryStatus(JNIEnv*, jclass, jlong _address, jbyte value) {
+    physx::PxOverlapQueryResult* _self = (physx::PxOverlapQueryResult*) _address;
+    _self->queryStatus = value;
 }
-JNIEXPORT jboolean JNICALL Java_physx_physics_PxOverlapQueryResult__1getHasBlock(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxOverlapQueryResult* self = (physx::PxOverlapQueryResult*) address;
-    return (jboolean) self->hasBlock;
+JNIEXPORT jboolean JNICALL Java_physx_physics_PxOverlapQueryResult__1getHasBlock(JNIEnv*, jclass, jlong _address) {
+    physx::PxOverlapQueryResult* _self = (physx::PxOverlapQueryResult*) _address;
+    return (jboolean) _self->hasBlock;
 }
-JNIEXPORT void JNICALL Java_physx_physics_PxOverlapQueryResult__1setHasBlock(JNIEnv* env, jclass, jlong address, jboolean value) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxOverlapQueryResult* self = (physx::PxOverlapQueryResult*) address;
-    self->hasBlock = value;
+JNIEXPORT void JNICALL Java_physx_physics_PxOverlapQueryResult__1setHasBlock(JNIEnv*, jclass, jlong _address, jboolean value) {
+    physx::PxOverlapQueryResult* _self = (physx::PxOverlapQueryResult*) _address;
+    _self->hasBlock = value;
 }
 
 // PxMaterial
 
+// PxPairFlags
+JNIEXPORT jlong JNICALL Java_physx_physics_PxPairFlags__1PxPairFlags(JNIEnv*, jclass, jshort flags) {
+    return (jlong) new physx::PxPairFlags(flags);
+}
+JNIEXPORT jboolean JNICALL Java_physx_physics_PxPairFlags__1isSet(JNIEnv*, jclass, jlong _address, jint flag) {
+    physx::PxPairFlags* self = (physx::PxPairFlags*) _address;
+    return (jboolean) self->isSet((PxPairFlagEnum) flag);
+}
+JNIEXPORT void JNICALL Java_physx_physics_PxPairFlags__1set(JNIEnv*, jclass, jlong _address, jint flag) {
+    physx::PxPairFlags* self = (physx::PxPairFlags*) _address;
+    self->set((PxPairFlagEnum) flag);
+}
+JNIEXPORT void JNICALL Java_physx_physics_PxPairFlags__1clear(JNIEnv*, jclass, jlong _address, jint flag) {
+    physx::PxPairFlags* self = (physx::PxPairFlags*) _address;
+    self->clear((PxPairFlagEnum) flag);
+}
+JNIEXPORT void JNICALL Java_physx_physics_PxPairFlags__1delete_1native_1instance(JNIEnv*, jclass, jlong _address) {
+    delete (physx::PxPairFlags*) _address;
+}
+
 // PxPhysics
-JNIEXPORT void JNICALL Java_physx_physics_PxPhysics__1release(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxPhysics* self = (physx::PxPhysics*) address;
+JNIEXPORT void JNICALL Java_physx_physics_PxPhysics__1release(JNIEnv*, jclass, jlong _address) {
+    physx::PxPhysics* self = (physx::PxPhysics*) _address;
     self->release();
 }
-JNIEXPORT jlong JNICALL Java_physx_physics_PxPhysics__1getFoundation(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxPhysics* self = (physx::PxPhysics*) address;
+JNIEXPORT jlong JNICALL Java_physx_physics_PxPhysics__1getFoundation(JNIEnv*, jclass, jlong _address) {
+    physx::PxPhysics* self = (physx::PxPhysics*) _address;
     return (jlong) &self->getFoundation();
 }
-JNIEXPORT jlong JNICALL Java_physx_physics_PxPhysics__1getTolerancesScale(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxPhysics* self = (physx::PxPhysics*) address;
+JNIEXPORT jlong JNICALL Java_physx_physics_PxPhysics__1getTolerancesScale(JNIEnv*, jclass, jlong _address) {
+    physx::PxPhysics* self = (physx::PxPhysics*) _address;
     return (jlong) &self->getTolerancesScale();
 }
-JNIEXPORT jlong JNICALL Java_physx_physics_PxPhysics__1createScene(JNIEnv* env, jclass, jlong address, jlong sceneDesc) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxPhysics* self = (physx::PxPhysics*) address;
+JNIEXPORT jlong JNICALL Java_physx_physics_PxPhysics__1createScene(JNIEnv*, jclass, jlong _address, jlong sceneDesc) {
+    physx::PxPhysics* self = (physx::PxPhysics*) _address;
     return (jlong) self->createScene(*((physx::PxSceneDesc*) sceneDesc));
 }
-JNIEXPORT jlong JNICALL Java_physx_physics_PxPhysics__1createRigidStatic(JNIEnv* env, jclass, jlong address, jlong pose) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxPhysics* self = (physx::PxPhysics*) address;
+JNIEXPORT jlong JNICALL Java_physx_physics_PxPhysics__1createRigidStatic(JNIEnv*, jclass, jlong _address, jlong pose) {
+    physx::PxPhysics* self = (physx::PxPhysics*) _address;
     return (jlong) self->createRigidStatic(*((physx::PxTransform*) pose));
 }
-JNIEXPORT jlong JNICALL Java_physx_physics_PxPhysics__1createRigidDynamic(JNIEnv* env, jclass, jlong address, jlong pose) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxPhysics* self = (physx::PxPhysics*) address;
+JNIEXPORT jlong JNICALL Java_physx_physics_PxPhysics__1createRigidDynamic(JNIEnv*, jclass, jlong _address, jlong pose) {
+    physx::PxPhysics* self = (physx::PxPhysics*) _address;
     return (jlong) self->createRigidDynamic(*((physx::PxTransform*) pose));
 }
-JNIEXPORT jlong JNICALL Java_physx_physics_PxPhysics__1createShape__JJJ(JNIEnv* env, jclass, jlong address, jlong geometry, jlong material) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxPhysics* self = (physx::PxPhysics*) address;
+JNIEXPORT jlong JNICALL Java_physx_physics_PxPhysics__1createShape__JJJ(JNIEnv*, jclass, jlong _address, jlong geometry, jlong material) {
+    physx::PxPhysics* self = (physx::PxPhysics*) _address;
     return (jlong) self->createShape(*((physx::PxGeometry*) geometry), *((physx::PxMaterial*) material));
 }
-JNIEXPORT jlong JNICALL Java_physx_physics_PxPhysics__1createShape__JJJZ(JNIEnv* env, jclass, jlong address, jlong geometry, jlong material, jboolean isExclusive) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxPhysics* self = (physx::PxPhysics*) address;
+JNIEXPORT jlong JNICALL Java_physx_physics_PxPhysics__1createShape__JJJZ(JNIEnv*, jclass, jlong _address, jlong geometry, jlong material, jboolean isExclusive) {
+    physx::PxPhysics* self = (physx::PxPhysics*) _address;
     return (jlong) self->createShape(*((physx::PxGeometry*) geometry), *((physx::PxMaterial*) material), isExclusive);
 }
-JNIEXPORT jlong JNICALL Java_physx_physics_PxPhysics__1createShape__JJJZJ(JNIEnv* env, jclass, jlong address, jlong geometry, jlong material, jboolean isExclusive, jlong shapeFlags) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxPhysics* self = (physx::PxPhysics*) address;
+JNIEXPORT jlong JNICALL Java_physx_physics_PxPhysics__1createShape__JJJZJ(JNIEnv*, jclass, jlong _address, jlong geometry, jlong material, jboolean isExclusive, jlong shapeFlags) {
+    physx::PxPhysics* self = (physx::PxPhysics*) _address;
     return (jlong) self->createShape(*((physx::PxGeometry*) geometry), *((physx::PxMaterial*) material), isExclusive, *((physx::PxShapeFlags*) shapeFlags));
 }
-JNIEXPORT jint JNICALL Java_physx_physics_PxPhysics__1getNbShapes(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxPhysics* self = (physx::PxPhysics*) address;
+JNIEXPORT jint JNICALL Java_physx_physics_PxPhysics__1getNbShapes(JNIEnv*, jclass, jlong _address) {
+    physx::PxPhysics* self = (physx::PxPhysics*) _address;
     return (jint) self->getNbShapes();
 }
-JNIEXPORT jlong JNICALL Java_physx_physics_PxPhysics__1createMaterial(JNIEnv* env, jclass, jlong address, jfloat staticFriction, jfloat dynamicFriction, jfloat restitution) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxPhysics* self = (physx::PxPhysics*) address;
+JNIEXPORT jlong JNICALL Java_physx_physics_PxPhysics__1createMaterial(JNIEnv*, jclass, jlong _address, jfloat staticFriction, jfloat dynamicFriction, jfloat restitution) {
+    physx::PxPhysics* self = (physx::PxPhysics*) _address;
     return (jlong) self->createMaterial(staticFriction, dynamicFriction, restitution);
 }
-JNIEXPORT jlong JNICALL Java_physx_physics_PxPhysics__1getPhysicsInsertionCallback(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxPhysics* self = (physx::PxPhysics*) address;
+JNIEXPORT jlong JNICALL Java_physx_physics_PxPhysics__1getPhysicsInsertionCallback(JNIEnv*, jclass, jlong _address) {
+    physx::PxPhysics* self = (physx::PxPhysics*) _address;
     return (jlong) &self->getPhysicsInsertionCallback();
 }
-JNIEXPORT void JNICALL Java_physx_physics_PxPhysics__1delete_1native_1instance(JNIEnv*, jclass, jlong address) {
-    delete (physx::PxPhysics*) address;
+JNIEXPORT void JNICALL Java_physx_physics_PxPhysics__1delete_1native_1instance(JNIEnv*, jclass, jlong _address) {
+    delete (physx::PxPhysics*) _address;
 }
 
 // PxQueryHit
-JNIEXPORT void JNICALL Java_physx_physics_PxQueryHit__1delete_1native_1instance(JNIEnv*, jclass, jlong address) {
-    delete (physx::PxQueryHit*) address;
+JNIEXPORT void JNICALL Java_physx_physics_PxQueryHit__1delete_1native_1instance(JNIEnv*, jclass, jlong _address) {
+    delete (physx::PxQueryHit*) _address;
 }
-JNIEXPORT jint JNICALL Java_physx_physics_PxQueryHit__1getFaceIndex(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxQueryHit* self = (physx::PxQueryHit*) address;
-    return (jint) self->faceIndex;
+JNIEXPORT jint JNICALL Java_physx_physics_PxQueryHit__1getFaceIndex(JNIEnv*, jclass, jlong _address) {
+    physx::PxQueryHit* _self = (physx::PxQueryHit*) _address;
+    return (jint) _self->faceIndex;
 }
-JNIEXPORT void JNICALL Java_physx_physics_PxQueryHit__1setFaceIndex(JNIEnv* env, jclass, jlong address, jint value) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxQueryHit* self = (physx::PxQueryHit*) address;
-    self->faceIndex = value;
+JNIEXPORT void JNICALL Java_physx_physics_PxQueryHit__1setFaceIndex(JNIEnv*, jclass, jlong _address, jint value) {
+    physx::PxQueryHit* _self = (physx::PxQueryHit*) _address;
+    _self->faceIndex = value;
 }
 
 // PxRaycastHit
-JNIEXPORT jlong JNICALL Java_physx_physics_PxRaycastHit__1PxRaycastHit(JNIEnv* env, jclass) {
-    (void) env;    // avoid unused parameter warning / error
+JNIEXPORT jlong JNICALL Java_physx_physics_PxRaycastHit__1PxRaycastHit(JNIEnv*, jclass) {
     return (jlong) new physx::PxRaycastHit();
 }
-JNIEXPORT void JNICALL Java_physx_physics_PxRaycastHit__1delete_1native_1instance(JNIEnv*, jclass, jlong address) {
-    delete (physx::PxRaycastHit*) address;
+JNIEXPORT void JNICALL Java_physx_physics_PxRaycastHit__1delete_1native_1instance(JNIEnv*, jclass, jlong _address) {
+    delete (physx::PxRaycastHit*) _address;
 }
-JNIEXPORT jfloat JNICALL Java_physx_physics_PxRaycastHit__1getU(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxRaycastHit* self = (physx::PxRaycastHit*) address;
-    return (jfloat) self->u;
+JNIEXPORT jfloat JNICALL Java_physx_physics_PxRaycastHit__1getU(JNIEnv*, jclass, jlong _address) {
+    physx::PxRaycastHit* _self = (physx::PxRaycastHit*) _address;
+    return (jfloat) _self->u;
 }
-JNIEXPORT void JNICALL Java_physx_physics_PxRaycastHit__1setU(JNIEnv* env, jclass, jlong address, jfloat value) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxRaycastHit* self = (physx::PxRaycastHit*) address;
-    self->u = value;
+JNIEXPORT void JNICALL Java_physx_physics_PxRaycastHit__1setU(JNIEnv*, jclass, jlong _address, jfloat value) {
+    physx::PxRaycastHit* _self = (physx::PxRaycastHit*) _address;
+    _self->u = value;
 }
-JNIEXPORT jfloat JNICALL Java_physx_physics_PxRaycastHit__1getV(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxRaycastHit* self = (physx::PxRaycastHit*) address;
-    return (jfloat) self->v;
+JNIEXPORT jfloat JNICALL Java_physx_physics_PxRaycastHit__1getV(JNIEnv*, jclass, jlong _address) {
+    physx::PxRaycastHit* _self = (physx::PxRaycastHit*) _address;
+    return (jfloat) _self->v;
 }
-JNIEXPORT void JNICALL Java_physx_physics_PxRaycastHit__1setV(JNIEnv* env, jclass, jlong address, jfloat value) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxRaycastHit* self = (physx::PxRaycastHit*) address;
-    self->v = value;
+JNIEXPORT void JNICALL Java_physx_physics_PxRaycastHit__1setV(JNIEnv*, jclass, jlong _address, jfloat value) {
+    physx::PxRaycastHit* _self = (physx::PxRaycastHit*) _address;
+    _self->v = value;
 }
 
 // PxRaycastQueryResult
-JNIEXPORT jint JNICALL Java_physx_physics_PxRaycastQueryResult__1getNbAnyHits(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxRaycastQueryResult* self = (physx::PxRaycastQueryResult*) address;
+JNIEXPORT jint JNICALL Java_physx_physics_PxRaycastQueryResult__1getNbAnyHits(JNIEnv*, jclass, jlong _address) {
+    physx::PxRaycastQueryResult* self = (physx::PxRaycastQueryResult*) _address;
     return (jint) self->getNbAnyHits();
 }
-JNIEXPORT jlong JNICALL Java_physx_physics_PxRaycastQueryResult__1getAnyHit(JNIEnv* env, jclass, jlong address, jint index) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxRaycastQueryResult* self = (physx::PxRaycastQueryResult*) address;
+JNIEXPORT jlong JNICALL Java_physx_physics_PxRaycastQueryResult__1getAnyHit(JNIEnv*, jclass, jlong _address, jint index) {
+    physx::PxRaycastQueryResult* self = (physx::PxRaycastQueryResult*) _address;
     return (jlong) &self->getAnyHit(index);
 }
-JNIEXPORT void JNICALL Java_physx_physics_PxRaycastQueryResult__1delete_1native_1instance(JNIEnv*, jclass, jlong address) {
-    delete (physx::PxRaycastQueryResult*) address;
+JNIEXPORT void JNICALL Java_physx_physics_PxRaycastQueryResult__1delete_1native_1instance(JNIEnv*, jclass, jlong _address) {
+    delete (physx::PxRaycastQueryResult*) _address;
 }
-JNIEXPORT jlong JNICALL Java_physx_physics_PxRaycastQueryResult__1getBlock(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxRaycastQueryResult* self = (physx::PxRaycastQueryResult*) address;
-    return (jlong) &self->block;
+JNIEXPORT jlong JNICALL Java_physx_physics_PxRaycastQueryResult__1getBlock(JNIEnv*, jclass, jlong _address) {
+    physx::PxRaycastQueryResult* _self = (physx::PxRaycastQueryResult*) _address;
+    return (jlong) &_self->block;
 }
-JNIEXPORT void JNICALL Java_physx_physics_PxRaycastQueryResult__1setBlock(JNIEnv* env, jclass, jlong address, jlong value) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxRaycastQueryResult* self = (physx::PxRaycastQueryResult*) address;
-    self->block = *((physx::PxRaycastHit*) value);
+JNIEXPORT void JNICALL Java_physx_physics_PxRaycastQueryResult__1setBlock(JNIEnv*, jclass, jlong _address, jlong value) {
+    physx::PxRaycastQueryResult* _self = (physx::PxRaycastQueryResult*) _address;
+    _self->block = *((physx::PxRaycastHit*) value);
 }
-JNIEXPORT jlong JNICALL Java_physx_physics_PxRaycastQueryResult__1getTouches(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxRaycastQueryResult* self = (physx::PxRaycastQueryResult*) address;
-    return (jlong) self->touches;
+JNIEXPORT jlong JNICALL Java_physx_physics_PxRaycastQueryResult__1getTouches(JNIEnv*, jclass, jlong _address) {
+    physx::PxRaycastQueryResult* _self = (physx::PxRaycastQueryResult*) _address;
+    return (jlong) _self->touches;
 }
-JNIEXPORT void JNICALL Java_physx_physics_PxRaycastQueryResult__1setTouches(JNIEnv* env, jclass, jlong address, jlong value) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxRaycastQueryResult* self = (physx::PxRaycastQueryResult*) address;
-    self->touches = (physx::PxRaycastHit*) value;
+JNIEXPORT void JNICALL Java_physx_physics_PxRaycastQueryResult__1setTouches(JNIEnv*, jclass, jlong _address, jlong value) {
+    physx::PxRaycastQueryResult* _self = (physx::PxRaycastQueryResult*) _address;
+    _self->touches = (physx::PxRaycastHit*) value;
 }
-JNIEXPORT jint JNICALL Java_physx_physics_PxRaycastQueryResult__1getNbTouches(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxRaycastQueryResult* self = (physx::PxRaycastQueryResult*) address;
-    return (jint) self->nbTouches;
+JNIEXPORT jint JNICALL Java_physx_physics_PxRaycastQueryResult__1getNbTouches(JNIEnv*, jclass, jlong _address) {
+    physx::PxRaycastQueryResult* _self = (physx::PxRaycastQueryResult*) _address;
+    return (jint) _self->nbTouches;
 }
-JNIEXPORT void JNICALL Java_physx_physics_PxRaycastQueryResult__1setNbTouches(JNIEnv* env, jclass, jlong address, jint value) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxRaycastQueryResult* self = (physx::PxRaycastQueryResult*) address;
-    self->nbTouches = value;
+JNIEXPORT void JNICALL Java_physx_physics_PxRaycastQueryResult__1setNbTouches(JNIEnv*, jclass, jlong _address, jint value) {
+    physx::PxRaycastQueryResult* _self = (physx::PxRaycastQueryResult*) _address;
+    _self->nbTouches = value;
 }
-JNIEXPORT jlong JNICALL Java_physx_physics_PxRaycastQueryResult__1getUserData(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxRaycastQueryResult* self = (physx::PxRaycastQueryResult*) address;
-    return (jlong) self->userData;
+JNIEXPORT jlong JNICALL Java_physx_physics_PxRaycastQueryResult__1getUserData(JNIEnv*, jclass, jlong _address) {
+    physx::PxRaycastQueryResult* _self = (physx::PxRaycastQueryResult*) _address;
+    return (jlong) _self->userData;
 }
-JNIEXPORT void JNICALL Java_physx_physics_PxRaycastQueryResult__1setUserData(JNIEnv* env, jclass, jlong address, jlong value) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxRaycastQueryResult* self = (physx::PxRaycastQueryResult*) address;
-    self->userData = (void*) value;
+JNIEXPORT void JNICALL Java_physx_physics_PxRaycastQueryResult__1setUserData(JNIEnv*, jclass, jlong _address, jlong value) {
+    physx::PxRaycastQueryResult* _self = (physx::PxRaycastQueryResult*) _address;
+    _self->userData = (void*) value;
 }
-JNIEXPORT jbyte JNICALL Java_physx_physics_PxRaycastQueryResult__1getQueryStatus(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxRaycastQueryResult* self = (physx::PxRaycastQueryResult*) address;
-    return (jbyte) self->queryStatus;
+JNIEXPORT jbyte JNICALL Java_physx_physics_PxRaycastQueryResult__1getQueryStatus(JNIEnv*, jclass, jlong _address) {
+    physx::PxRaycastQueryResult* _self = (physx::PxRaycastQueryResult*) _address;
+    return (jbyte) _self->queryStatus;
 }
-JNIEXPORT void JNICALL Java_physx_physics_PxRaycastQueryResult__1setQueryStatus(JNIEnv* env, jclass, jlong address, jbyte value) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxRaycastQueryResult* self = (physx::PxRaycastQueryResult*) address;
-    self->queryStatus = value;
+JNIEXPORT void JNICALL Java_physx_physics_PxRaycastQueryResult__1setQueryStatus(JNIEnv*, jclass, jlong _address, jbyte value) {
+    physx::PxRaycastQueryResult* _self = (physx::PxRaycastQueryResult*) _address;
+    _self->queryStatus = value;
 }
-JNIEXPORT jboolean JNICALL Java_physx_physics_PxRaycastQueryResult__1getHasBlock(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxRaycastQueryResult* self = (physx::PxRaycastQueryResult*) address;
-    return (jboolean) self->hasBlock;
+JNIEXPORT jboolean JNICALL Java_physx_physics_PxRaycastQueryResult__1getHasBlock(JNIEnv*, jclass, jlong _address) {
+    physx::PxRaycastQueryResult* _self = (physx::PxRaycastQueryResult*) _address;
+    return (jboolean) _self->hasBlock;
 }
-JNIEXPORT void JNICALL Java_physx_physics_PxRaycastQueryResult__1setHasBlock(JNIEnv* env, jclass, jlong address, jboolean value) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxRaycastQueryResult* self = (physx::PxRaycastQueryResult*) address;
-    self->hasBlock = value;
+JNIEXPORT void JNICALL Java_physx_physics_PxRaycastQueryResult__1setHasBlock(JNIEnv*, jclass, jlong _address, jboolean value) {
+    physx::PxRaycastQueryResult* _self = (physx::PxRaycastQueryResult*) _address;
+    _self->hasBlock = value;
 }
 
 // PxRigidActor
-JNIEXPORT jlong JNICALL Java_physx_physics_PxRigidActor__1getGlobalPose(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    static physx::PxTransform cache;
-    physx::PxRigidActor* self = (physx::PxRigidActor*) address;
-    cache = self->getGlobalPose();
-    return (jlong) &cache;
+JNIEXPORT jlong JNICALL Java_physx_physics_PxRigidActor__1getGlobalPose(JNIEnv*, jclass, jlong _address) {
+    static thread_local physx::PxTransform _cache;
+    physx::PxRigidActor* self = (physx::PxRigidActor*) _address;
+    _cache = self->getGlobalPose();
+    return (jlong) &_cache;
 }
-JNIEXPORT void JNICALL Java_physx_physics_PxRigidActor__1setGlobalPose__JJ(JNIEnv* env, jclass, jlong address, jlong pose) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxRigidActor* self = (physx::PxRigidActor*) address;
+JNIEXPORT void JNICALL Java_physx_physics_PxRigidActor__1setGlobalPose__JJ(JNIEnv*, jclass, jlong _address, jlong pose) {
+    physx::PxRigidActor* self = (physx::PxRigidActor*) _address;
     self->setGlobalPose(*((physx::PxTransform*) pose));
 }
-JNIEXPORT void JNICALL Java_physx_physics_PxRigidActor__1setGlobalPose__JJZ(JNIEnv* env, jclass, jlong address, jlong pose, jboolean autowake) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxRigidActor* self = (physx::PxRigidActor*) address;
+JNIEXPORT void JNICALL Java_physx_physics_PxRigidActor__1setGlobalPose__JJZ(JNIEnv*, jclass, jlong _address, jlong pose, jboolean autowake) {
+    physx::PxRigidActor* self = (physx::PxRigidActor*) _address;
     self->setGlobalPose(*((physx::PxTransform*) pose), autowake);
 }
-JNIEXPORT jboolean JNICALL Java_physx_physics_PxRigidActor__1attachShape(JNIEnv* env, jclass, jlong address, jlong shape) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxRigidActor* self = (physx::PxRigidActor*) address;
+JNIEXPORT jboolean JNICALL Java_physx_physics_PxRigidActor__1attachShape(JNIEnv*, jclass, jlong _address, jlong shape) {
+    physx::PxRigidActor* self = (physx::PxRigidActor*) _address;
     return (jboolean) self->attachShape(*((physx::PxShape*) shape));
 }
-JNIEXPORT void JNICALL Java_physx_physics_PxRigidActor__1detachShape__JJ(JNIEnv* env, jclass, jlong address, jlong shape) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxRigidActor* self = (physx::PxRigidActor*) address;
+JNIEXPORT void JNICALL Java_physx_physics_PxRigidActor__1detachShape__JJ(JNIEnv*, jclass, jlong _address, jlong shape) {
+    physx::PxRigidActor* self = (physx::PxRigidActor*) _address;
     self->detachShape(*((physx::PxShape*) shape));
 }
-JNIEXPORT void JNICALL Java_physx_physics_PxRigidActor__1detachShape__JJZ(JNIEnv* env, jclass, jlong address, jlong shape, jboolean wakeOnLostTouch) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxRigidActor* self = (physx::PxRigidActor*) address;
+JNIEXPORT void JNICALL Java_physx_physics_PxRigidActor__1detachShape__JJZ(JNIEnv*, jclass, jlong _address, jlong shape, jboolean wakeOnLostTouch) {
+    physx::PxRigidActor* self = (physx::PxRigidActor*) _address;
     self->detachShape(*((physx::PxShape*) shape), wakeOnLostTouch);
 }
-JNIEXPORT jint JNICALL Java_physx_physics_PxRigidActor__1getNbShapes(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxRigidActor* self = (physx::PxRigidActor*) address;
+JNIEXPORT jint JNICALL Java_physx_physics_PxRigidActor__1getNbShapes(JNIEnv*, jclass, jlong _address) {
+    physx::PxRigidActor* self = (physx::PxRigidActor*) _address;
     return (jint) self->getNbShapes();
 }
 
 // PxRigidBody
-JNIEXPORT void JNICALL Java_physx_physics_PxRigidBody__1setCMassLocalPose(JNIEnv* env, jclass, jlong address, jlong pose) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxRigidBody* self = (physx::PxRigidBody*) address;
+JNIEXPORT void JNICALL Java_physx_physics_PxRigidBody__1setCMassLocalPose(JNIEnv*, jclass, jlong _address, jlong pose) {
+    physx::PxRigidBody* self = (physx::PxRigidBody*) _address;
     self->setCMassLocalPose(*((physx::PxTransform*) pose));
 }
-JNIEXPORT jlong JNICALL Java_physx_physics_PxRigidBody__1getCMassLocalPose(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    static physx::PxTransform cache;
-    physx::PxRigidBody* self = (physx::PxRigidBody*) address;
-    cache = self->getCMassLocalPose();
-    return (jlong) &cache;
+JNIEXPORT jlong JNICALL Java_physx_physics_PxRigidBody__1getCMassLocalPose(JNIEnv*, jclass, jlong _address) {
+    static thread_local physx::PxTransform _cache;
+    physx::PxRigidBody* self = (physx::PxRigidBody*) _address;
+    _cache = self->getCMassLocalPose();
+    return (jlong) &_cache;
 }
-JNIEXPORT void JNICALL Java_physx_physics_PxRigidBody__1setMass(JNIEnv* env, jclass, jlong address, jfloat mass) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxRigidBody* self = (physx::PxRigidBody*) address;
+JNIEXPORT void JNICALL Java_physx_physics_PxRigidBody__1setMass(JNIEnv*, jclass, jlong _address, jfloat mass) {
+    physx::PxRigidBody* self = (physx::PxRigidBody*) _address;
     self->setMass(mass);
 }
-JNIEXPORT jfloat JNICALL Java_physx_physics_PxRigidBody__1getMass(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxRigidBody* self = (physx::PxRigidBody*) address;
+JNIEXPORT jfloat JNICALL Java_physx_physics_PxRigidBody__1getMass(JNIEnv*, jclass, jlong _address) {
+    physx::PxRigidBody* self = (physx::PxRigidBody*) _address;
     return (jfloat) self->getMass();
 }
-JNIEXPORT jfloat JNICALL Java_physx_physics_PxRigidBody__1getInvMass(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxRigidBody* self = (physx::PxRigidBody*) address;
+JNIEXPORT jfloat JNICALL Java_physx_physics_PxRigidBody__1getInvMass(JNIEnv*, jclass, jlong _address) {
+    physx::PxRigidBody* self = (physx::PxRigidBody*) _address;
     return (jfloat) self->getInvMass();
 }
-JNIEXPORT void JNICALL Java_physx_physics_PxRigidBody__1setMassSpaceInertiaTensor(JNIEnv* env, jclass, jlong address, jlong m) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxRigidBody* self = (physx::PxRigidBody*) address;
+JNIEXPORT void JNICALL Java_physx_physics_PxRigidBody__1setMassSpaceInertiaTensor(JNIEnv*, jclass, jlong _address, jlong m) {
+    physx::PxRigidBody* self = (physx::PxRigidBody*) _address;
     self->setMassSpaceInertiaTensor(*((physx::PxVec3*) m));
 }
-JNIEXPORT jlong JNICALL Java_physx_physics_PxRigidBody__1getMassSpaceInertiaTensor(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    static physx::PxVec3 cache;
-    physx::PxRigidBody* self = (physx::PxRigidBody*) address;
-    cache = self->getMassSpaceInertiaTensor();
-    return (jlong) &cache;
+JNIEXPORT jlong JNICALL Java_physx_physics_PxRigidBody__1getMassSpaceInertiaTensor(JNIEnv*, jclass, jlong _address) {
+    static thread_local physx::PxVec3 _cache;
+    physx::PxRigidBody* self = (physx::PxRigidBody*) _address;
+    _cache = self->getMassSpaceInertiaTensor();
+    return (jlong) &_cache;
 }
-JNIEXPORT jlong JNICALL Java_physx_physics_PxRigidBody__1getMassSpaceInvInertiaTensor(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    static physx::PxVec3 cache;
-    physx::PxRigidBody* self = (physx::PxRigidBody*) address;
-    cache = self->getMassSpaceInvInertiaTensor();
-    return (jlong) &cache;
+JNIEXPORT jlong JNICALL Java_physx_physics_PxRigidBody__1getMassSpaceInvInertiaTensor(JNIEnv*, jclass, jlong _address) {
+    static thread_local physx::PxVec3 _cache;
+    physx::PxRigidBody* self = (physx::PxRigidBody*) _address;
+    _cache = self->getMassSpaceInvInertiaTensor();
+    return (jlong) &_cache;
 }
-JNIEXPORT void JNICALL Java_physx_physics_PxRigidBody__1setLinearDamping(JNIEnv* env, jclass, jlong address, jfloat linDamp) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxRigidBody* self = (physx::PxRigidBody*) address;
+JNIEXPORT void JNICALL Java_physx_physics_PxRigidBody__1setLinearDamping(JNIEnv*, jclass, jlong _address, jfloat linDamp) {
+    physx::PxRigidBody* self = (physx::PxRigidBody*) _address;
     self->setLinearDamping(linDamp);
 }
-JNIEXPORT jfloat JNICALL Java_physx_physics_PxRigidBody__1getLinearDamping(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxRigidBody* self = (physx::PxRigidBody*) address;
+JNIEXPORT jfloat JNICALL Java_physx_physics_PxRigidBody__1getLinearDamping(JNIEnv*, jclass, jlong _address) {
+    physx::PxRigidBody* self = (physx::PxRigidBody*) _address;
     return (jfloat) self->getLinearDamping();
 }
-JNIEXPORT void JNICALL Java_physx_physics_PxRigidBody__1setAngularDamping(JNIEnv* env, jclass, jlong address, jfloat angDamp) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxRigidBody* self = (physx::PxRigidBody*) address;
+JNIEXPORT void JNICALL Java_physx_physics_PxRigidBody__1setAngularDamping(JNIEnv*, jclass, jlong _address, jfloat angDamp) {
+    physx::PxRigidBody* self = (physx::PxRigidBody*) _address;
     self->setAngularDamping(angDamp);
 }
-JNIEXPORT jfloat JNICALL Java_physx_physics_PxRigidBody__1getAngularDamping(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxRigidBody* self = (physx::PxRigidBody*) address;
+JNIEXPORT jfloat JNICALL Java_physx_physics_PxRigidBody__1getAngularDamping(JNIEnv*, jclass, jlong _address) {
+    physx::PxRigidBody* self = (physx::PxRigidBody*) _address;
     return (jfloat) self->getAngularDamping();
 }
-JNIEXPORT jlong JNICALL Java_physx_physics_PxRigidBody__1getLinearVelocity(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    static physx::PxVec3 cache;
-    physx::PxRigidBody* self = (physx::PxRigidBody*) address;
-    cache = self->getLinearVelocity();
-    return (jlong) &cache;
+JNIEXPORT jlong JNICALL Java_physx_physics_PxRigidBody__1getLinearVelocity(JNIEnv*, jclass, jlong _address) {
+    static thread_local physx::PxVec3 _cache;
+    physx::PxRigidBody* self = (physx::PxRigidBody*) _address;
+    _cache = self->getLinearVelocity();
+    return (jlong) &_cache;
 }
-JNIEXPORT void JNICALL Java_physx_physics_PxRigidBody__1setLinearVelocity__JJ(JNIEnv* env, jclass, jlong address, jlong linVel) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxRigidBody* self = (physx::PxRigidBody*) address;
+JNIEXPORT void JNICALL Java_physx_physics_PxRigidBody__1setLinearVelocity__JJ(JNIEnv*, jclass, jlong _address, jlong linVel) {
+    physx::PxRigidBody* self = (physx::PxRigidBody*) _address;
     self->setLinearVelocity(*((physx::PxVec3*) linVel));
 }
-JNIEXPORT void JNICALL Java_physx_physics_PxRigidBody__1setLinearVelocity__JJZ(JNIEnv* env, jclass, jlong address, jlong linVel, jboolean autowake) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxRigidBody* self = (physx::PxRigidBody*) address;
+JNIEXPORT void JNICALL Java_physx_physics_PxRigidBody__1setLinearVelocity__JJZ(JNIEnv*, jclass, jlong _address, jlong linVel, jboolean autowake) {
+    physx::PxRigidBody* self = (physx::PxRigidBody*) _address;
     self->setLinearVelocity(*((physx::PxVec3*) linVel), autowake);
 }
-JNIEXPORT jlong JNICALL Java_physx_physics_PxRigidBody__1getAngularVelocity(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    static physx::PxVec3 cache;
-    physx::PxRigidBody* self = (physx::PxRigidBody*) address;
-    cache = self->getAngularVelocity();
-    return (jlong) &cache;
+JNIEXPORT jlong JNICALL Java_physx_physics_PxRigidBody__1getAngularVelocity(JNIEnv*, jclass, jlong _address) {
+    static thread_local physx::PxVec3 _cache;
+    physx::PxRigidBody* self = (physx::PxRigidBody*) _address;
+    _cache = self->getAngularVelocity();
+    return (jlong) &_cache;
 }
-JNIEXPORT void JNICALL Java_physx_physics_PxRigidBody__1setAngularVelocity__JJ(JNIEnv* env, jclass, jlong address, jlong angVel) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxRigidBody* self = (physx::PxRigidBody*) address;
+JNIEXPORT void JNICALL Java_physx_physics_PxRigidBody__1setAngularVelocity__JJ(JNIEnv*, jclass, jlong _address, jlong angVel) {
+    physx::PxRigidBody* self = (physx::PxRigidBody*) _address;
     self->setAngularVelocity(*((physx::PxVec3*) angVel));
 }
-JNIEXPORT void JNICALL Java_physx_physics_PxRigidBody__1setAngularVelocity__JJZ(JNIEnv* env, jclass, jlong address, jlong angVel, jboolean autowake) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxRigidBody* self = (physx::PxRigidBody*) address;
+JNIEXPORT void JNICALL Java_physx_physics_PxRigidBody__1setAngularVelocity__JJZ(JNIEnv*, jclass, jlong _address, jlong angVel, jboolean autowake) {
+    physx::PxRigidBody* self = (physx::PxRigidBody*) _address;
     self->setAngularVelocity(*((physx::PxVec3*) angVel), autowake);
 }
-JNIEXPORT jfloat JNICALL Java_physx_physics_PxRigidBody__1getMaxLinearVelocity(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxRigidBody* self = (physx::PxRigidBody*) address;
+JNIEXPORT jfloat JNICALL Java_physx_physics_PxRigidBody__1getMaxLinearVelocity(JNIEnv*, jclass, jlong _address) {
+    physx::PxRigidBody* self = (physx::PxRigidBody*) _address;
     return (jfloat) self->getMaxLinearVelocity();
 }
-JNIEXPORT void JNICALL Java_physx_physics_PxRigidBody__1setMaxLinearVelocity(JNIEnv* env, jclass, jlong address, jfloat maxLinVel) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxRigidBody* self = (physx::PxRigidBody*) address;
+JNIEXPORT void JNICALL Java_physx_physics_PxRigidBody__1setMaxLinearVelocity(JNIEnv*, jclass, jlong _address, jfloat maxLinVel) {
+    physx::PxRigidBody* self = (physx::PxRigidBody*) _address;
     self->setMaxLinearVelocity(maxLinVel);
 }
-JNIEXPORT jfloat JNICALL Java_physx_physics_PxRigidBody__1getMaxAngularVelocity(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxRigidBody* self = (physx::PxRigidBody*) address;
+JNIEXPORT jfloat JNICALL Java_physx_physics_PxRigidBody__1getMaxAngularVelocity(JNIEnv*, jclass, jlong _address) {
+    physx::PxRigidBody* self = (physx::PxRigidBody*) _address;
     return (jfloat) self->getMaxAngularVelocity();
 }
-JNIEXPORT void JNICALL Java_physx_physics_PxRigidBody__1setMaxAngularVelocity(JNIEnv* env, jclass, jlong address, jfloat maxAngVel) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxRigidBody* self = (physx::PxRigidBody*) address;
+JNIEXPORT void JNICALL Java_physx_physics_PxRigidBody__1setMaxAngularVelocity(JNIEnv*, jclass, jlong _address, jfloat maxAngVel) {
+    physx::PxRigidBody* self = (physx::PxRigidBody*) _address;
     self->setMaxAngularVelocity(maxAngVel);
 }
-JNIEXPORT void JNICALL Java_physx_physics_PxRigidBody__1addForce__JJ(JNIEnv* env, jclass, jlong address, jlong force) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxRigidBody* self = (physx::PxRigidBody*) address;
+JNIEXPORT void JNICALL Java_physx_physics_PxRigidBody__1addForce__JJ(JNIEnv*, jclass, jlong _address, jlong force) {
+    physx::PxRigidBody* self = (physx::PxRigidBody*) _address;
     self->addForce(*((physx::PxVec3*) force));
 }
-JNIEXPORT void JNICALL Java_physx_physics_PxRigidBody__1addForce__JJI(JNIEnv* env, jclass, jlong address, jlong force, jint mode) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxRigidBody* self = (physx::PxRigidBody*) address;
+JNIEXPORT void JNICALL Java_physx_physics_PxRigidBody__1addForce__JJI(JNIEnv*, jclass, jlong _address, jlong force, jint mode) {
+    physx::PxRigidBody* self = (physx::PxRigidBody*) _address;
     self->addForce(*((physx::PxVec3*) force), (PxForceModeEnum) mode);
 }
-JNIEXPORT void JNICALL Java_physx_physics_PxRigidBody__1addForce__JJIZ(JNIEnv* env, jclass, jlong address, jlong force, jint mode, jboolean autowake) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxRigidBody* self = (physx::PxRigidBody*) address;
+JNIEXPORT void JNICALL Java_physx_physics_PxRigidBody__1addForce__JJIZ(JNIEnv*, jclass, jlong _address, jlong force, jint mode, jboolean autowake) {
+    physx::PxRigidBody* self = (physx::PxRigidBody*) _address;
     self->addForce(*((physx::PxVec3*) force), (PxForceModeEnum) mode, autowake);
 }
-JNIEXPORT void JNICALL Java_physx_physics_PxRigidBody__1addTorque__JJ(JNIEnv* env, jclass, jlong address, jlong torque) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxRigidBody* self = (physx::PxRigidBody*) address;
+JNIEXPORT void JNICALL Java_physx_physics_PxRigidBody__1addTorque__JJ(JNIEnv*, jclass, jlong _address, jlong torque) {
+    physx::PxRigidBody* self = (physx::PxRigidBody*) _address;
     self->addTorque(*((physx::PxVec3*) torque));
 }
-JNIEXPORT void JNICALL Java_physx_physics_PxRigidBody__1addTorque__JJI(JNIEnv* env, jclass, jlong address, jlong torque, jint mode) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxRigidBody* self = (physx::PxRigidBody*) address;
+JNIEXPORT void JNICALL Java_physx_physics_PxRigidBody__1addTorque__JJI(JNIEnv*, jclass, jlong _address, jlong torque, jint mode) {
+    physx::PxRigidBody* self = (physx::PxRigidBody*) _address;
     self->addTorque(*((physx::PxVec3*) torque), (PxForceModeEnum) mode);
 }
-JNIEXPORT void JNICALL Java_physx_physics_PxRigidBody__1addTorque__JJIZ(JNIEnv* env, jclass, jlong address, jlong torque, jint mode, jboolean autowake) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxRigidBody* self = (physx::PxRigidBody*) address;
+JNIEXPORT void JNICALL Java_physx_physics_PxRigidBody__1addTorque__JJIZ(JNIEnv*, jclass, jlong _address, jlong torque, jint mode, jboolean autowake) {
+    physx::PxRigidBody* self = (physx::PxRigidBody*) _address;
     self->addTorque(*((physx::PxVec3*) torque), (PxForceModeEnum) mode, autowake);
 }
-JNIEXPORT void JNICALL Java_physx_physics_PxRigidBody__1clearForce(JNIEnv* env, jclass, jlong address, jint mode) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxRigidBody* self = (physx::PxRigidBody*) address;
+JNIEXPORT void JNICALL Java_physx_physics_PxRigidBody__1clearForce(JNIEnv*, jclass, jlong _address, jint mode) {
+    physx::PxRigidBody* self = (physx::PxRigidBody*) _address;
     self->clearForce((PxForceModeEnum) mode);
 }
-JNIEXPORT void JNICALL Java_physx_physics_PxRigidBody__1clearTorque(JNIEnv* env, jclass, jlong address, jint mode) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxRigidBody* self = (physx::PxRigidBody*) address;
+JNIEXPORT void JNICALL Java_physx_physics_PxRigidBody__1clearTorque(JNIEnv*, jclass, jlong _address, jint mode) {
+    physx::PxRigidBody* self = (physx::PxRigidBody*) _address;
     self->clearTorque((PxForceModeEnum) mode);
 }
-JNIEXPORT void JNICALL Java_physx_physics_PxRigidBody__1setForceAndTorque__JJJ(JNIEnv* env, jclass, jlong address, jlong force, jlong torque) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxRigidBody* self = (physx::PxRigidBody*) address;
+JNIEXPORT void JNICALL Java_physx_physics_PxRigidBody__1setForceAndTorque__JJJ(JNIEnv*, jclass, jlong _address, jlong force, jlong torque) {
+    physx::PxRigidBody* self = (physx::PxRigidBody*) _address;
     self->setForceAndTorque(*((physx::PxVec3*) force), *((physx::PxVec3*) torque));
 }
-JNIEXPORT void JNICALL Java_physx_physics_PxRigidBody__1setForceAndTorque__JJJI(JNIEnv* env, jclass, jlong address, jlong force, jlong torque, jint mode) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxRigidBody* self = (physx::PxRigidBody*) address;
+JNIEXPORT void JNICALL Java_physx_physics_PxRigidBody__1setForceAndTorque__JJJI(JNIEnv*, jclass, jlong _address, jlong force, jlong torque, jint mode) {
+    physx::PxRigidBody* self = (physx::PxRigidBody*) _address;
     self->setForceAndTorque(*((physx::PxVec3*) force), *((physx::PxVec3*) torque), (PxForceModeEnum) mode);
 }
-JNIEXPORT void JNICALL Java_physx_physics_PxRigidBody__1setRigidBodyFlag(JNIEnv* env, jclass, jlong address, jint flag, jboolean value) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxRigidBody* self = (physx::PxRigidBody*) address;
+JNIEXPORT void JNICALL Java_physx_physics_PxRigidBody__1setRigidBodyFlag(JNIEnv*, jclass, jlong _address, jint flag, jboolean value) {
+    physx::PxRigidBody* self = (physx::PxRigidBody*) _address;
     self->setRigidBodyFlag((PxRigidBodyFlagEnum) flag, value);
 }
-JNIEXPORT void JNICALL Java_physx_physics_PxRigidBody__1setRigidBodyFlags(JNIEnv* env, jclass, jlong address, jlong inFlags) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxRigidBody* self = (physx::PxRigidBody*) address;
+JNIEXPORT void JNICALL Java_physx_physics_PxRigidBody__1setRigidBodyFlags(JNIEnv*, jclass, jlong _address, jlong inFlags) {
+    physx::PxRigidBody* self = (physx::PxRigidBody*) _address;
     self->setRigidBodyFlags(*((physx::PxRigidBodyFlags*) inFlags));
 }
-JNIEXPORT jlong JNICALL Java_physx_physics_PxRigidBody__1getRigidBodyFlags(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    static physx::PxRigidBodyFlags cache;
-    physx::PxRigidBody* self = (physx::PxRigidBody*) address;
-    cache = self->getRigidBodyFlags();
-    return (jlong) &cache;
+JNIEXPORT jlong JNICALL Java_physx_physics_PxRigidBody__1getRigidBodyFlags(JNIEnv*, jclass, jlong _address) {
+    static thread_local physx::PxRigidBodyFlags _cache;
+    physx::PxRigidBody* self = (physx::PxRigidBody*) _address;
+    _cache = self->getRigidBodyFlags();
+    return (jlong) &_cache;
 }
-JNIEXPORT void JNICALL Java_physx_physics_PxRigidBody__1setMinCCDAdvanceCoefficient(JNIEnv* env, jclass, jlong address, jfloat advanceCoefficient) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxRigidBody* self = (physx::PxRigidBody*) address;
+JNIEXPORT void JNICALL Java_physx_physics_PxRigidBody__1setMinCCDAdvanceCoefficient(JNIEnv*, jclass, jlong _address, jfloat advanceCoefficient) {
+    physx::PxRigidBody* self = (physx::PxRigidBody*) _address;
     self->setMinCCDAdvanceCoefficient(advanceCoefficient);
 }
-JNIEXPORT jfloat JNICALL Java_physx_physics_PxRigidBody__1getMinCCDAdvanceCoefficient(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxRigidBody* self = (physx::PxRigidBody*) address;
+JNIEXPORT jfloat JNICALL Java_physx_physics_PxRigidBody__1getMinCCDAdvanceCoefficient(JNIEnv*, jclass, jlong _address) {
+    physx::PxRigidBody* self = (physx::PxRigidBody*) _address;
     return (jfloat) self->getMinCCDAdvanceCoefficient();
 }
-JNIEXPORT void JNICALL Java_physx_physics_PxRigidBody__1setMaxDepenetrationVelocity(JNIEnv* env, jclass, jlong address, jfloat biasClamp) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxRigidBody* self = (physx::PxRigidBody*) address;
+JNIEXPORT void JNICALL Java_physx_physics_PxRigidBody__1setMaxDepenetrationVelocity(JNIEnv*, jclass, jlong _address, jfloat biasClamp) {
+    physx::PxRigidBody* self = (physx::PxRigidBody*) _address;
     self->setMaxDepenetrationVelocity(biasClamp);
 }
-JNIEXPORT jfloat JNICALL Java_physx_physics_PxRigidBody__1getMaxDepenetrationVelocity(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxRigidBody* self = (physx::PxRigidBody*) address;
+JNIEXPORT jfloat JNICALL Java_physx_physics_PxRigidBody__1getMaxDepenetrationVelocity(JNIEnv*, jclass, jlong _address) {
+    physx::PxRigidBody* self = (physx::PxRigidBody*) _address;
     return (jfloat) self->getMaxDepenetrationVelocity();
 }
-JNIEXPORT void JNICALL Java_physx_physics_PxRigidBody__1setMaxContactImpulse(JNIEnv* env, jclass, jlong address, jfloat maxImpulse) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxRigidBody* self = (physx::PxRigidBody*) address;
+JNIEXPORT void JNICALL Java_physx_physics_PxRigidBody__1setMaxContactImpulse(JNIEnv*, jclass, jlong _address, jfloat maxImpulse) {
+    physx::PxRigidBody* self = (physx::PxRigidBody*) _address;
     self->setMaxContactImpulse(maxImpulse);
 }
-JNIEXPORT jfloat JNICALL Java_physx_physics_PxRigidBody__1getMaxContactImpulse(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxRigidBody* self = (physx::PxRigidBody*) address;
+JNIEXPORT jfloat JNICALL Java_physx_physics_PxRigidBody__1getMaxContactImpulse(JNIEnv*, jclass, jlong _address) {
+    physx::PxRigidBody* self = (physx::PxRigidBody*) _address;
     return (jfloat) self->getMaxContactImpulse();
 }
-JNIEXPORT jint JNICALL Java_physx_physics_PxRigidBody__1getInternalIslandNodeIndex(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxRigidBody* self = (physx::PxRigidBody*) address;
+JNIEXPORT jint JNICALL Java_physx_physics_PxRigidBody__1getInternalIslandNodeIndex(JNIEnv*, jclass, jlong _address) {
+    physx::PxRigidBody* self = (physx::PxRigidBody*) _address;
     return (jint) self->getInternalIslandNodeIndex();
 }
 
@@ -2632,114 +2614,93 @@ JNIEXPORT jint JNICALL Java_physx_physics_PxRigidBody__1getInternalIslandNodeInd
 JNIEXPORT jint JNICALL Java_physx_physics_PxRigidBodyFlags__1_1sizeOf(JNIEnv*, jclass) {
     return sizeof(physx::PxRigidBodyFlags);
 }
-JNIEXPORT void JNICALL Java_physx_physics_PxRigidBodyFlags__1_1placement_1new_1PxRigidBodyFlags(JNIEnv* env, jclass, jlong __placement_address, jbyte flags) {
-    (void) env;    // avoid unused parameter warning / error
-    new((void*)__placement_address) physx::PxRigidBodyFlags(flags);
+JNIEXPORT jlong JNICALL Java_physx_physics_PxRigidBodyFlags__1_1placement_1new_1PxRigidBodyFlags(JNIEnv*, jclass, jlong _placement_address, jbyte flags) {
+    return (jlong) new((void*)_placement_address) physx::PxRigidBodyFlags(flags);
 }
-JNIEXPORT jlong JNICALL Java_physx_physics_PxRigidBodyFlags__1PxRigidBodyFlags(JNIEnv* env, jclass, jbyte flags) {
-    (void) env;    // avoid unused parameter warning / error
+JNIEXPORT jlong JNICALL Java_physx_physics_PxRigidBodyFlags__1PxRigidBodyFlags(JNIEnv*, jclass, jbyte flags) {
     return (jlong) new physx::PxRigidBodyFlags(flags);
 }
-JNIEXPORT jboolean JNICALL Java_physx_physics_PxRigidBodyFlags__1isSet(JNIEnv* env, jclass, jlong address, jint flag) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxRigidBodyFlags* self = (physx::PxRigidBodyFlags*) address;
+JNIEXPORT jboolean JNICALL Java_physx_physics_PxRigidBodyFlags__1isSet(JNIEnv*, jclass, jlong _address, jint flag) {
+    physx::PxRigidBodyFlags* self = (physx::PxRigidBodyFlags*) _address;
     return (jboolean) self->isSet((PxRigidBodyFlagEnum) flag);
 }
-JNIEXPORT void JNICALL Java_physx_physics_PxRigidBodyFlags__1set(JNIEnv* env, jclass, jlong address, jint flag) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxRigidBodyFlags* self = (physx::PxRigidBodyFlags*) address;
+JNIEXPORT void JNICALL Java_physx_physics_PxRigidBodyFlags__1set(JNIEnv*, jclass, jlong _address, jint flag) {
+    physx::PxRigidBodyFlags* self = (physx::PxRigidBodyFlags*) _address;
     self->set((PxRigidBodyFlagEnum) flag);
 }
-JNIEXPORT void JNICALL Java_physx_physics_PxRigidBodyFlags__1clear(JNIEnv* env, jclass, jlong address, jint flag) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxRigidBodyFlags* self = (physx::PxRigidBodyFlags*) address;
+JNIEXPORT void JNICALL Java_physx_physics_PxRigidBodyFlags__1clear(JNIEnv*, jclass, jlong _address, jint flag) {
+    physx::PxRigidBodyFlags* self = (physx::PxRigidBodyFlags*) _address;
     self->clear((PxRigidBodyFlagEnum) flag);
 }
-JNIEXPORT void JNICALL Java_physx_physics_PxRigidBodyFlags__1delete_1native_1instance(JNIEnv*, jclass, jlong address) {
-    delete (physx::PxRigidBodyFlags*) address;
+JNIEXPORT void JNICALL Java_physx_physics_PxRigidBodyFlags__1delete_1native_1instance(JNIEnv*, jclass, jlong _address) {
+    delete (physx::PxRigidBodyFlags*) _address;
 }
 
 // PxRigidDynamic
-JNIEXPORT jboolean JNICALL Java_physx_physics_PxRigidDynamic__1isSleeping(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxRigidDynamic* self = (physx::PxRigidDynamic*) address;
+JNIEXPORT jboolean JNICALL Java_physx_physics_PxRigidDynamic__1isSleeping(JNIEnv*, jclass, jlong _address) {
+    physx::PxRigidDynamic* self = (physx::PxRigidDynamic*) _address;
     return (jboolean) self->isSleeping();
 }
-JNIEXPORT void JNICALL Java_physx_physics_PxRigidDynamic__1setSleepThreshold(JNIEnv* env, jclass, jlong address, jfloat threshold) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxRigidDynamic* self = (physx::PxRigidDynamic*) address;
+JNIEXPORT void JNICALL Java_physx_physics_PxRigidDynamic__1setSleepThreshold(JNIEnv*, jclass, jlong _address, jfloat threshold) {
+    physx::PxRigidDynamic* self = (physx::PxRigidDynamic*) _address;
     self->setSleepThreshold(threshold);
 }
-JNIEXPORT jfloat JNICALL Java_physx_physics_PxRigidDynamic__1getSleepThreshold(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxRigidDynamic* self = (physx::PxRigidDynamic*) address;
+JNIEXPORT jfloat JNICALL Java_physx_physics_PxRigidDynamic__1getSleepThreshold(JNIEnv*, jclass, jlong _address) {
+    physx::PxRigidDynamic* self = (physx::PxRigidDynamic*) _address;
     return (jfloat) self->getSleepThreshold();
 }
-JNIEXPORT void JNICALL Java_physx_physics_PxRigidDynamic__1setStabilizationThreshold(JNIEnv* env, jclass, jlong address, jfloat threshold) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxRigidDynamic* self = (physx::PxRigidDynamic*) address;
+JNIEXPORT void JNICALL Java_physx_physics_PxRigidDynamic__1setStabilizationThreshold(JNIEnv*, jclass, jlong _address, jfloat threshold) {
+    physx::PxRigidDynamic* self = (physx::PxRigidDynamic*) _address;
     self->setStabilizationThreshold(threshold);
 }
-JNIEXPORT jfloat JNICALL Java_physx_physics_PxRigidDynamic__1getStabilizationThreshold(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxRigidDynamic* self = (physx::PxRigidDynamic*) address;
+JNIEXPORT jfloat JNICALL Java_physx_physics_PxRigidDynamic__1getStabilizationThreshold(JNIEnv*, jclass, jlong _address) {
+    physx::PxRigidDynamic* self = (physx::PxRigidDynamic*) _address;
     return (jfloat) self->getStabilizationThreshold();
 }
-JNIEXPORT jlong JNICALL Java_physx_physics_PxRigidDynamic__1getRigidDynamicLockFlags(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    static physx::PxRigidDynamicLockFlags cache;
-    physx::PxRigidDynamic* self = (physx::PxRigidDynamic*) address;
-    cache = self->getRigidDynamicLockFlags();
-    return (jlong) &cache;
+JNIEXPORT jlong JNICALL Java_physx_physics_PxRigidDynamic__1getRigidDynamicLockFlags(JNIEnv*, jclass, jlong _address) {
+    static thread_local physx::PxRigidDynamicLockFlags _cache;
+    physx::PxRigidDynamic* self = (physx::PxRigidDynamic*) _address;
+    _cache = self->getRigidDynamicLockFlags();
+    return (jlong) &_cache;
 }
-JNIEXPORT void JNICALL Java_physx_physics_PxRigidDynamic__1setRigidDynamicLockFlag(JNIEnv* env, jclass, jlong address, jint flag, jboolean value) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxRigidDynamic* self = (physx::PxRigidDynamic*) address;
+JNIEXPORT void JNICALL Java_physx_physics_PxRigidDynamic__1setRigidDynamicLockFlag(JNIEnv*, jclass, jlong _address, jint flag, jboolean value) {
+    physx::PxRigidDynamic* self = (physx::PxRigidDynamic*) _address;
     self->setRigidDynamicLockFlag((PxRigidDynamicLockFlagEnum) flag, value);
 }
-JNIEXPORT void JNICALL Java_physx_physics_PxRigidDynamic__1setRigidDynamicLockFlags(JNIEnv* env, jclass, jlong address, jlong flags) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxRigidDynamic* self = (physx::PxRigidDynamic*) address;
+JNIEXPORT void JNICALL Java_physx_physics_PxRigidDynamic__1setRigidDynamicLockFlags(JNIEnv*, jclass, jlong _address, jlong flags) {
+    physx::PxRigidDynamic* self = (physx::PxRigidDynamic*) _address;
     self->setRigidDynamicLockFlags(*((physx::PxRigidDynamicLockFlags*) flags));
 }
-JNIEXPORT void JNICALL Java_physx_physics_PxRigidDynamic__1setWakeCounter(JNIEnv* env, jclass, jlong address, jfloat wakeCounterValue) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxRigidDynamic* self = (physx::PxRigidDynamic*) address;
+JNIEXPORT void JNICALL Java_physx_physics_PxRigidDynamic__1setWakeCounter(JNIEnv*, jclass, jlong _address, jfloat wakeCounterValue) {
+    physx::PxRigidDynamic* self = (physx::PxRigidDynamic*) _address;
     self->setWakeCounter(wakeCounterValue);
 }
-JNIEXPORT jfloat JNICALL Java_physx_physics_PxRigidDynamic__1getWakeCounter(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxRigidDynamic* self = (physx::PxRigidDynamic*) address;
+JNIEXPORT jfloat JNICALL Java_physx_physics_PxRigidDynamic__1getWakeCounter(JNIEnv*, jclass, jlong _address) {
+    physx::PxRigidDynamic* self = (physx::PxRigidDynamic*) _address;
     return (jfloat) self->getWakeCounter();
 }
-JNIEXPORT void JNICALL Java_physx_physics_PxRigidDynamic__1wakeUp(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxRigidDynamic* self = (physx::PxRigidDynamic*) address;
+JNIEXPORT void JNICALL Java_physx_physics_PxRigidDynamic__1wakeUp(JNIEnv*, jclass, jlong _address) {
+    physx::PxRigidDynamic* self = (physx::PxRigidDynamic*) _address;
     self->wakeUp();
 }
-JNIEXPORT void JNICALL Java_physx_physics_PxRigidDynamic__1putToSleep(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxRigidDynamic* self = (physx::PxRigidDynamic*) address;
+JNIEXPORT void JNICALL Java_physx_physics_PxRigidDynamic__1putToSleep(JNIEnv*, jclass, jlong _address) {
+    physx::PxRigidDynamic* self = (physx::PxRigidDynamic*) _address;
     self->putToSleep();
 }
-JNIEXPORT void JNICALL Java_physx_physics_PxRigidDynamic__1setSolverIterationCounts__JI(JNIEnv* env, jclass, jlong address, jint minPositionIters) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxRigidDynamic* self = (physx::PxRigidDynamic*) address;
+JNIEXPORT void JNICALL Java_physx_physics_PxRigidDynamic__1setSolverIterationCounts__JI(JNIEnv*, jclass, jlong _address, jint minPositionIters) {
+    physx::PxRigidDynamic* self = (physx::PxRigidDynamic*) _address;
     self->setSolverIterationCounts(minPositionIters);
 }
-JNIEXPORT void JNICALL Java_physx_physics_PxRigidDynamic__1setSolverIterationCounts__JII(JNIEnv* env, jclass, jlong address, jint minPositionIters, jint minVelocityIters) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxRigidDynamic* self = (physx::PxRigidDynamic*) address;
+JNIEXPORT void JNICALL Java_physx_physics_PxRigidDynamic__1setSolverIterationCounts__JII(JNIEnv*, jclass, jlong _address, jint minPositionIters, jint minVelocityIters) {
+    physx::PxRigidDynamic* self = (physx::PxRigidDynamic*) _address;
     self->setSolverIterationCounts(minPositionIters, minVelocityIters);
 }
-JNIEXPORT jfloat JNICALL Java_physx_physics_PxRigidDynamic__1getContactReportThreshold(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxRigidDynamic* self = (physx::PxRigidDynamic*) address;
+JNIEXPORT jfloat JNICALL Java_physx_physics_PxRigidDynamic__1getContactReportThreshold(JNIEnv*, jclass, jlong _address) {
+    physx::PxRigidDynamic* self = (physx::PxRigidDynamic*) _address;
     return (jfloat) self->getContactReportThreshold();
 }
-JNIEXPORT void JNICALL Java_physx_physics_PxRigidDynamic__1setContactReportThreshold(JNIEnv* env, jclass, jlong address, jfloat threshold) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxRigidDynamic* self = (physx::PxRigidDynamic*) address;
+JNIEXPORT void JNICALL Java_physx_physics_PxRigidDynamic__1setContactReportThreshold(JNIEnv*, jclass, jlong _address, jfloat threshold) {
+    physx::PxRigidDynamic* self = (physx::PxRigidDynamic*) _address;
     self->setContactReportThreshold(threshold);
 }
 
@@ -2747,393 +2708,430 @@ JNIEXPORT void JNICALL Java_physx_physics_PxRigidDynamic__1setContactReportThres
 JNIEXPORT jint JNICALL Java_physx_physics_PxRigidDynamicLockFlags__1_1sizeOf(JNIEnv*, jclass) {
     return sizeof(physx::PxRigidDynamicLockFlags);
 }
-JNIEXPORT void JNICALL Java_physx_physics_PxRigidDynamicLockFlags__1_1placement_1new_1PxRigidDynamicLockFlags(JNIEnv* env, jclass, jlong __placement_address, jbyte flags) {
-    (void) env;    // avoid unused parameter warning / error
-    new((void*)__placement_address) physx::PxRigidDynamicLockFlags(flags);
+JNIEXPORT jlong JNICALL Java_physx_physics_PxRigidDynamicLockFlags__1_1placement_1new_1PxRigidDynamicLockFlags(JNIEnv*, jclass, jlong _placement_address, jbyte flags) {
+    return (jlong) new((void*)_placement_address) physx::PxRigidDynamicLockFlags(flags);
 }
-JNIEXPORT jlong JNICALL Java_physx_physics_PxRigidDynamicLockFlags__1PxRigidDynamicLockFlags(JNIEnv* env, jclass, jbyte flags) {
-    (void) env;    // avoid unused parameter warning / error
+JNIEXPORT jlong JNICALL Java_physx_physics_PxRigidDynamicLockFlags__1PxRigidDynamicLockFlags(JNIEnv*, jclass, jbyte flags) {
     return (jlong) new physx::PxRigidDynamicLockFlags(flags);
 }
-JNIEXPORT jboolean JNICALL Java_physx_physics_PxRigidDynamicLockFlags__1isSet(JNIEnv* env, jclass, jlong address, jint flag) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxRigidDynamicLockFlags* self = (physx::PxRigidDynamicLockFlags*) address;
+JNIEXPORT jboolean JNICALL Java_physx_physics_PxRigidDynamicLockFlags__1isSet(JNIEnv*, jclass, jlong _address, jint flag) {
+    physx::PxRigidDynamicLockFlags* self = (physx::PxRigidDynamicLockFlags*) _address;
     return (jboolean) self->isSet((PxRigidDynamicLockFlagEnum) flag);
 }
-JNIEXPORT void JNICALL Java_physx_physics_PxRigidDynamicLockFlags__1set(JNIEnv* env, jclass, jlong address, jint flag) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxRigidDynamicLockFlags* self = (physx::PxRigidDynamicLockFlags*) address;
+JNIEXPORT void JNICALL Java_physx_physics_PxRigidDynamicLockFlags__1set(JNIEnv*, jclass, jlong _address, jint flag) {
+    physx::PxRigidDynamicLockFlags* self = (physx::PxRigidDynamicLockFlags*) _address;
     self->set((PxRigidDynamicLockFlagEnum) flag);
 }
-JNIEXPORT void JNICALL Java_physx_physics_PxRigidDynamicLockFlags__1clear(JNIEnv* env, jclass, jlong address, jint flag) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxRigidDynamicLockFlags* self = (physx::PxRigidDynamicLockFlags*) address;
+JNIEXPORT void JNICALL Java_physx_physics_PxRigidDynamicLockFlags__1clear(JNIEnv*, jclass, jlong _address, jint flag) {
+    physx::PxRigidDynamicLockFlags* self = (physx::PxRigidDynamicLockFlags*) _address;
     self->clear((PxRigidDynamicLockFlagEnum) flag);
 }
-JNIEXPORT void JNICALL Java_physx_physics_PxRigidDynamicLockFlags__1delete_1native_1instance(JNIEnv*, jclass, jlong address) {
-    delete (physx::PxRigidDynamicLockFlags*) address;
+JNIEXPORT void JNICALL Java_physx_physics_PxRigidDynamicLockFlags__1delete_1native_1instance(JNIEnv*, jclass, jlong _address) {
+    delete (physx::PxRigidDynamicLockFlags*) _address;
 }
 
 // PxRigidStatic
 
 // PxScene
-JNIEXPORT void JNICALL Java_physx_physics_PxScene__1addActor__JJ(JNIEnv* env, jclass, jlong address, jlong actor) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxScene* self = (physx::PxScene*) address;
+JNIEXPORT void JNICALL Java_physx_physics_PxScene__1addActor__JJ(JNIEnv*, jclass, jlong _address, jlong actor) {
+    physx::PxScene* self = (physx::PxScene*) _address;
     self->addActor(*((physx::PxActor*) actor));
 }
-JNIEXPORT void JNICALL Java_physx_physics_PxScene__1addActor__JJJ(JNIEnv* env, jclass, jlong address, jlong actor, jlong bvhStructure) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxScene* self = (physx::PxScene*) address;
+JNIEXPORT void JNICALL Java_physx_physics_PxScene__1addActor__JJJ(JNIEnv*, jclass, jlong _address, jlong actor, jlong bvhStructure) {
+    physx::PxScene* self = (physx::PxScene*) _address;
     self->addActor(*((physx::PxActor*) actor), (physx::PxBVHStructure*) bvhStructure);
 }
-JNIEXPORT void JNICALL Java_physx_physics_PxScene__1removeActor__JJ(JNIEnv* env, jclass, jlong address, jlong actor) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxScene* self = (physx::PxScene*) address;
+JNIEXPORT void JNICALL Java_physx_physics_PxScene__1removeActor__JJ(JNIEnv*, jclass, jlong _address, jlong actor) {
+    physx::PxScene* self = (physx::PxScene*) _address;
     self->removeActor(*((physx::PxActor*) actor));
 }
-JNIEXPORT void JNICALL Java_physx_physics_PxScene__1removeActor__JJZ(JNIEnv* env, jclass, jlong address, jlong actor, jboolean wakeOnLostTouch) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxScene* self = (physx::PxScene*) address;
+JNIEXPORT void JNICALL Java_physx_physics_PxScene__1removeActor__JJZ(JNIEnv*, jclass, jlong _address, jlong actor, jboolean wakeOnLostTouch) {
+    physx::PxScene* self = (physx::PxScene*) _address;
     self->removeActor(*((physx::PxActor*) actor), wakeOnLostTouch);
 }
-JNIEXPORT void JNICALL Java_physx_physics_PxScene__1simulate__JF(JNIEnv* env, jclass, jlong address, jfloat elapsedTime) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxScene* self = (physx::PxScene*) address;
+JNIEXPORT void JNICALL Java_physx_physics_PxScene__1simulate__JF(JNIEnv*, jclass, jlong _address, jfloat elapsedTime) {
+    physx::PxScene* self = (physx::PxScene*) _address;
     self->simulate(elapsedTime);
 }
-JNIEXPORT void JNICALL Java_physx_physics_PxScene__1simulate__JFJ(JNIEnv* env, jclass, jlong address, jfloat elapsedTime, jlong completionTask) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxScene* self = (physx::PxScene*) address;
+JNIEXPORT void JNICALL Java_physx_physics_PxScene__1simulate__JFJ(JNIEnv*, jclass, jlong _address, jfloat elapsedTime, jlong completionTask) {
+    physx::PxScene* self = (physx::PxScene*) _address;
     self->simulate(elapsedTime, (physx::PxBaseTask*) completionTask);
 }
-JNIEXPORT void JNICALL Java_physx_physics_PxScene__1simulate__JFJJ(JNIEnv* env, jclass, jlong address, jfloat elapsedTime, jlong completionTask, jlong scratchMemBlock) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxScene* self = (physx::PxScene*) address;
+JNIEXPORT void JNICALL Java_physx_physics_PxScene__1simulate__JFJJ(JNIEnv*, jclass, jlong _address, jfloat elapsedTime, jlong completionTask, jlong scratchMemBlock) {
+    physx::PxScene* self = (physx::PxScene*) _address;
     self->simulate(elapsedTime, (physx::PxBaseTask*) completionTask, (void*) scratchMemBlock);
 }
-JNIEXPORT void JNICALL Java_physx_physics_PxScene__1simulate__JFJJI(JNIEnv* env, jclass, jlong address, jfloat elapsedTime, jlong completionTask, jlong scratchMemBlock, jint scratchMemBlockSize) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxScene* self = (physx::PxScene*) address;
+JNIEXPORT void JNICALL Java_physx_physics_PxScene__1simulate__JFJJI(JNIEnv*, jclass, jlong _address, jfloat elapsedTime, jlong completionTask, jlong scratchMemBlock, jint scratchMemBlockSize) {
+    physx::PxScene* self = (physx::PxScene*) _address;
     self->simulate(elapsedTime, (physx::PxBaseTask*) completionTask, (void*) scratchMemBlock, scratchMemBlockSize);
 }
-JNIEXPORT void JNICALL Java_physx_physics_PxScene__1simulate__JFJJIZ(JNIEnv* env, jclass, jlong address, jfloat elapsedTime, jlong completionTask, jlong scratchMemBlock, jint scratchMemBlockSize, jboolean controlSimulation) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxScene* self = (physx::PxScene*) address;
+JNIEXPORT void JNICALL Java_physx_physics_PxScene__1simulate__JFJJIZ(JNIEnv*, jclass, jlong _address, jfloat elapsedTime, jlong completionTask, jlong scratchMemBlock, jint scratchMemBlockSize, jboolean controlSimulation) {
+    physx::PxScene* self = (physx::PxScene*) _address;
     self->simulate(elapsedTime, (physx::PxBaseTask*) completionTask, (void*) scratchMemBlock, scratchMemBlockSize, controlSimulation);
 }
-JNIEXPORT jboolean JNICALL Java_physx_physics_PxScene__1fetchResults__J(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxScene* self = (physx::PxScene*) address;
+JNIEXPORT jboolean JNICALL Java_physx_physics_PxScene__1fetchResults__J(JNIEnv*, jclass, jlong _address) {
+    physx::PxScene* self = (physx::PxScene*) _address;
     return (jboolean) self->fetchResults();
 }
-JNIEXPORT jboolean JNICALL Java_physx_physics_PxScene__1fetchResults__JZ(JNIEnv* env, jclass, jlong address, jboolean block) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxScene* self = (physx::PxScene*) address;
+JNIEXPORT jboolean JNICALL Java_physx_physics_PxScene__1fetchResults__JZ(JNIEnv*, jclass, jlong _address, jboolean block) {
+    physx::PxScene* self = (physx::PxScene*) _address;
     return (jboolean) self->fetchResults(block);
 }
-JNIEXPORT void JNICALL Java_physx_physics_PxScene__1setGravity(JNIEnv* env, jclass, jlong address, jlong vec) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxScene* self = (physx::PxScene*) address;
+JNIEXPORT void JNICALL Java_physx_physics_PxScene__1setGravity(JNIEnv*, jclass, jlong _address, jlong vec) {
+    physx::PxScene* self = (physx::PxScene*) _address;
     self->setGravity(*((physx::PxVec3*) vec));
 }
-JNIEXPORT jlong JNICALL Java_physx_physics_PxScene__1getGravity(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    static physx::PxVec3 cache;
-    physx::PxScene* self = (physx::PxScene*) address;
-    cache = self->getGravity();
-    return (jlong) &cache;
+JNIEXPORT jlong JNICALL Java_physx_physics_PxScene__1getGravity(JNIEnv*, jclass, jlong _address) {
+    static thread_local physx::PxVec3 _cache;
+    physx::PxScene* self = (physx::PxScene*) _address;
+    _cache = self->getGravity();
+    return (jlong) &_cache;
 }
-JNIEXPORT jlong JNICALL Java_physx_physics_PxScene__1createBatchQuery(JNIEnv* env, jclass, jlong address, jlong desc) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxScene* self = (physx::PxScene*) address;
+JNIEXPORT jlong JNICALL Java_physx_physics_PxScene__1createBatchQuery(JNIEnv*, jclass, jlong _address, jlong desc) {
+    physx::PxScene* self = (physx::PxScene*) _address;
     return (jlong) self->createBatchQuery(*((physx::PxBatchQueryDesc*) desc));
 }
-JNIEXPORT void JNICALL Java_physx_physics_PxScene__1release(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxScene* self = (physx::PxScene*) address;
+JNIEXPORT void JNICALL Java_physx_physics_PxScene__1release(JNIEnv*, jclass, jlong _address) {
+    physx::PxScene* self = (physx::PxScene*) _address;
     self->release();
 }
-JNIEXPORT void JNICALL Java_physx_physics_PxScene__1setFlag(JNIEnv* env, jclass, jlong address, jint flag, jboolean value) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxScene* self = (physx::PxScene*) address;
+JNIEXPORT void JNICALL Java_physx_physics_PxScene__1setFlag(JNIEnv*, jclass, jlong _address, jint flag, jboolean value) {
+    physx::PxScene* self = (physx::PxScene*) _address;
     self->setFlag((PxSceneFlagEnum) flag, value);
 }
-JNIEXPORT jlong JNICALL Java_physx_physics_PxScene__1getFlags(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    static physx::PxSceneFlags cache;
-    physx::PxScene* self = (physx::PxScene*) address;
-    cache = self->getFlags();
-    return (jlong) &cache;
+JNIEXPORT jlong JNICALL Java_physx_physics_PxScene__1getFlags(JNIEnv*, jclass, jlong _address) {
+    static thread_local physx::PxSceneFlags _cache;
+    physx::PxScene* self = (physx::PxScene*) _address;
+    _cache = self->getFlags();
+    return (jlong) &_cache;
 }
-JNIEXPORT jlong JNICALL Java_physx_physics_PxScene__1getPhysics(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxScene* self = (physx::PxScene*) address;
+JNIEXPORT jlong JNICALL Java_physx_physics_PxScene__1getPhysics(JNIEnv*, jclass, jlong _address) {
+    physx::PxScene* self = (physx::PxScene*) _address;
     return (jlong) &self->getPhysics();
 }
-JNIEXPORT jint JNICALL Java_physx_physics_PxScene__1getTimestamp(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxScene* self = (physx::PxScene*) address;
+JNIEXPORT jint JNICALL Java_physx_physics_PxScene__1getTimestamp(JNIEnv*, jclass, jlong _address) {
+    physx::PxScene* self = (physx::PxScene*) _address;
     return (jint) self->getTimestamp();
 }
 
 // PxSceneDesc
-JNIEXPORT jlong JNICALL Java_physx_physics_PxSceneDesc__1PxSceneDesc(JNIEnv* env, jclass, jlong scale) {
-    (void) env;    // avoid unused parameter warning / error
+JNIEXPORT jint JNICALL Java_physx_physics_PxSceneDesc__1_1sizeOf(JNIEnv*, jclass) {
+    return sizeof(physx::PxSceneDesc);
+}
+JNIEXPORT jlong JNICALL Java_physx_physics_PxSceneDesc__1_1placement_1new_1PxSceneDesc(JNIEnv*, jclass, jlong _placement_address, jlong scale) {
+    return (jlong) new((void*)_placement_address) physx::PxSceneDesc(*((physx::PxTolerancesScale*) scale));
+}
+JNIEXPORT jlong JNICALL Java_physx_physics_PxSceneDesc__1PxSceneDesc(JNIEnv*, jclass, jlong scale) {
     return (jlong) new physx::PxSceneDesc(*((physx::PxTolerancesScale*) scale));
 }
-JNIEXPORT void JNICALL Java_physx_physics_PxSceneDesc__1delete_1native_1instance(JNIEnv*, jclass, jlong address) {
-    delete (physx::PxSceneDesc*) address;
+JNIEXPORT void JNICALL Java_physx_physics_PxSceneDesc__1delete_1native_1instance(JNIEnv*, jclass, jlong _address) {
+    delete (physx::PxSceneDesc*) _address;
 }
-JNIEXPORT jlong JNICALL Java_physx_physics_PxSceneDesc__1getGravity(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxSceneDesc* self = (physx::PxSceneDesc*) address;
-    return (jlong) &self->gravity;
+JNIEXPORT jlong JNICALL Java_physx_physics_PxSceneDesc__1getGravity(JNIEnv*, jclass, jlong _address) {
+    physx::PxSceneDesc* _self = (physx::PxSceneDesc*) _address;
+    return (jlong) &_self->gravity;
 }
-JNIEXPORT void JNICALL Java_physx_physics_PxSceneDesc__1setGravity(JNIEnv* env, jclass, jlong address, jlong value) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxSceneDesc* self = (physx::PxSceneDesc*) address;
-    self->gravity = *((physx::PxVec3*) value);
+JNIEXPORT void JNICALL Java_physx_physics_PxSceneDesc__1setGravity(JNIEnv*, jclass, jlong _address, jlong value) {
+    physx::PxSceneDesc* _self = (physx::PxSceneDesc*) _address;
+    _self->gravity = *((physx::PxVec3*) value);
 }
-JNIEXPORT jlong JNICALL Java_physx_physics_PxSceneDesc__1getSimulationEventCallback(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxSceneDesc* self = (physx::PxSceneDesc*) address;
-    return (jlong) self->simulationEventCallback;
+JNIEXPORT jlong JNICALL Java_physx_physics_PxSceneDesc__1getSimulationEventCallback(JNIEnv*, jclass, jlong _address) {
+    physx::PxSceneDesc* _self = (physx::PxSceneDesc*) _address;
+    return (jlong) _self->simulationEventCallback;
 }
-JNIEXPORT void JNICALL Java_physx_physics_PxSceneDesc__1setSimulationEventCallback(JNIEnv* env, jclass, jlong address, jlong value) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxSceneDesc* self = (physx::PxSceneDesc*) address;
-    self->simulationEventCallback = (physx::PxSimulationEventCallback*) value;
+JNIEXPORT void JNICALL Java_physx_physics_PxSceneDesc__1setSimulationEventCallback(JNIEnv*, jclass, jlong _address, jlong value) {
+    physx::PxSceneDesc* _self = (physx::PxSceneDesc*) _address;
+    _self->simulationEventCallback = (physx::PxSimulationEventCallback*) value;
 }
-JNIEXPORT jlong JNICALL Java_physx_physics_PxSceneDesc__1getFilterShader(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxSceneDesc* self = (physx::PxSceneDesc*) address;
-    return (jlong) &self->filterShader;
+JNIEXPORT jlong JNICALL Java_physx_physics_PxSceneDesc__1getFilterShader(JNIEnv*, jclass, jlong _address) {
+    physx::PxSceneDesc* _self = (physx::PxSceneDesc*) _address;
+    return (jlong) &_self->filterShader;
 }
-JNIEXPORT void JNICALL Java_physx_physics_PxSceneDesc__1setFilterShader(JNIEnv* env, jclass, jlong address, jlong value) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxSceneDesc* self = (physx::PxSceneDesc*) address;
-    self->filterShader = *((physx::PxSimulationFilterShader*) value);
+JNIEXPORT void JNICALL Java_physx_physics_PxSceneDesc__1setFilterShader(JNIEnv*, jclass, jlong _address, jlong value) {
+    physx::PxSceneDesc* _self = (physx::PxSceneDesc*) _address;
+    _self->filterShader = *((physx::PxSimulationFilterShader*) value);
 }
-JNIEXPORT jlong JNICALL Java_physx_physics_PxSceneDesc__1getCpuDispatcher(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxSceneDesc* self = (physx::PxSceneDesc*) address;
-    return (jlong) self->cpuDispatcher;
+JNIEXPORT jlong JNICALL Java_physx_physics_PxSceneDesc__1getCpuDispatcher(JNIEnv*, jclass, jlong _address) {
+    physx::PxSceneDesc* _self = (physx::PxSceneDesc*) _address;
+    return (jlong) _self->cpuDispatcher;
 }
-JNIEXPORT void JNICALL Java_physx_physics_PxSceneDesc__1setCpuDispatcher(JNIEnv* env, jclass, jlong address, jlong value) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxSceneDesc* self = (physx::PxSceneDesc*) address;
-    self->cpuDispatcher = (physx::PxCpuDispatcher*) value;
+JNIEXPORT void JNICALL Java_physx_physics_PxSceneDesc__1setCpuDispatcher(JNIEnv*, jclass, jlong _address, jlong value) {
+    physx::PxSceneDesc* _self = (physx::PxSceneDesc*) _address;
+    _self->cpuDispatcher = (physx::PxCpuDispatcher*) value;
 }
-JNIEXPORT jlong JNICALL Java_physx_physics_PxSceneDesc__1getFlags(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxSceneDesc* self = (physx::PxSceneDesc*) address;
-    return (jlong) &self->flags;
+JNIEXPORT jlong JNICALL Java_physx_physics_PxSceneDesc__1getFlags(JNIEnv*, jclass, jlong _address) {
+    physx::PxSceneDesc* _self = (physx::PxSceneDesc*) _address;
+    return (jlong) &_self->flags;
 }
-JNIEXPORT void JNICALL Java_physx_physics_PxSceneDesc__1setFlags(JNIEnv* env, jclass, jlong address, jlong value) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxSceneDesc* self = (physx::PxSceneDesc*) address;
-    self->flags = *((physx::PxSceneFlags*) value);
+JNIEXPORT void JNICALL Java_physx_physics_PxSceneDesc__1setFlags(JNIEnv*, jclass, jlong _address, jlong value) {
+    physx::PxSceneDesc* _self = (physx::PxSceneDesc*) _address;
+    _self->flags = *((physx::PxSceneFlags*) value);
 }
 
 // PxSceneFlags
 JNIEXPORT jint JNICALL Java_physx_physics_PxSceneFlags__1_1sizeOf(JNIEnv*, jclass) {
     return sizeof(physx::PxSceneFlags);
 }
-JNIEXPORT void JNICALL Java_physx_physics_PxSceneFlags__1_1placement_1new_1PxSceneFlags(JNIEnv* env, jclass, jlong __placement_address, jint flags) {
-    (void) env;    // avoid unused parameter warning / error
-    new((void*)__placement_address) physx::PxSceneFlags(flags);
+JNIEXPORT jlong JNICALL Java_physx_physics_PxSceneFlags__1_1placement_1new_1PxSceneFlags(JNIEnv*, jclass, jlong _placement_address, jint flags) {
+    return (jlong) new((void*)_placement_address) physx::PxSceneFlags(flags);
 }
-JNIEXPORT jlong JNICALL Java_physx_physics_PxSceneFlags__1PxSceneFlags(JNIEnv* env, jclass, jint flags) {
-    (void) env;    // avoid unused parameter warning / error
+JNIEXPORT jlong JNICALL Java_physx_physics_PxSceneFlags__1PxSceneFlags(JNIEnv*, jclass, jint flags) {
     return (jlong) new physx::PxSceneFlags(flags);
 }
-JNIEXPORT jboolean JNICALL Java_physx_physics_PxSceneFlags__1isSet(JNIEnv* env, jclass, jlong address, jint flag) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxSceneFlags* self = (physx::PxSceneFlags*) address;
+JNIEXPORT jboolean JNICALL Java_physx_physics_PxSceneFlags__1isSet(JNIEnv*, jclass, jlong _address, jint flag) {
+    physx::PxSceneFlags* self = (physx::PxSceneFlags*) _address;
     return (jboolean) self->isSet((PxSceneFlagEnum) flag);
 }
-JNIEXPORT void JNICALL Java_physx_physics_PxSceneFlags__1set(JNIEnv* env, jclass, jlong address, jint flag) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxSceneFlags* self = (physx::PxSceneFlags*) address;
+JNIEXPORT void JNICALL Java_physx_physics_PxSceneFlags__1set(JNIEnv*, jclass, jlong _address, jint flag) {
+    physx::PxSceneFlags* self = (physx::PxSceneFlags*) _address;
     self->set((PxSceneFlagEnum) flag);
 }
-JNIEXPORT void JNICALL Java_physx_physics_PxSceneFlags__1clear(JNIEnv* env, jclass, jlong address, jint flag) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxSceneFlags* self = (physx::PxSceneFlags*) address;
+JNIEXPORT void JNICALL Java_physx_physics_PxSceneFlags__1clear(JNIEnv*, jclass, jlong _address, jint flag) {
+    physx::PxSceneFlags* self = (physx::PxSceneFlags*) _address;
     self->clear((PxSceneFlagEnum) flag);
 }
-JNIEXPORT void JNICALL Java_physx_physics_PxSceneFlags__1delete_1native_1instance(JNIEnv*, jclass, jlong address) {
-    delete (physx::PxSceneFlags*) address;
+JNIEXPORT void JNICALL Java_physx_physics_PxSceneFlags__1delete_1native_1instance(JNIEnv*, jclass, jlong _address) {
+    delete (physx::PxSceneFlags*) _address;
 }
 
 // PxShape
-JNIEXPORT void JNICALL Java_physx_physics_PxShape__1setLocalPose(JNIEnv* env, jclass, jlong address, jlong pose) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxShape* self = (physx::PxShape*) address;
+JNIEXPORT void JNICALL Java_physx_physics_PxShape__1setLocalPose(JNIEnv*, jclass, jlong _address, jlong pose) {
+    physx::PxShape* self = (physx::PxShape*) _address;
     self->setLocalPose(*((physx::PxTransform*) pose));
 }
-JNIEXPORT jlong JNICALL Java_physx_physics_PxShape__1getLocalPose(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    static physx::PxTransform cache;
-    physx::PxShape* self = (physx::PxShape*) address;
-    cache = self->getLocalPose();
-    return (jlong) &cache;
+JNIEXPORT jlong JNICALL Java_physx_physics_PxShape__1getLocalPose(JNIEnv*, jclass, jlong _address) {
+    static thread_local physx::PxTransform _cache;
+    physx::PxShape* self = (physx::PxShape*) _address;
+    _cache = self->getLocalPose();
+    return (jlong) &_cache;
 }
-JNIEXPORT void JNICALL Java_physx_physics_PxShape__1setSimulationFilterData(JNIEnv* env, jclass, jlong address, jlong data) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxShape* self = (physx::PxShape*) address;
+JNIEXPORT void JNICALL Java_physx_physics_PxShape__1setSimulationFilterData(JNIEnv*, jclass, jlong _address, jlong data) {
+    physx::PxShape* self = (physx::PxShape*) _address;
     self->setSimulationFilterData(*((physx::PxFilterData*) data));
 }
-JNIEXPORT jlong JNICALL Java_physx_physics_PxShape__1getSimulationFilterData(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    static physx::PxFilterData cache;
-    physx::PxShape* self = (physx::PxShape*) address;
-    cache = self->getSimulationFilterData();
-    return (jlong) &cache;
+JNIEXPORT jlong JNICALL Java_physx_physics_PxShape__1getSimulationFilterData(JNIEnv*, jclass, jlong _address) {
+    static thread_local physx::PxFilterData _cache;
+    physx::PxShape* self = (physx::PxShape*) _address;
+    _cache = self->getSimulationFilterData();
+    return (jlong) &_cache;
 }
-JNIEXPORT void JNICALL Java_physx_physics_PxShape__1setQueryFilterData(JNIEnv* env, jclass, jlong address, jlong data) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxShape* self = (physx::PxShape*) address;
+JNIEXPORT void JNICALL Java_physx_physics_PxShape__1setQueryFilterData(JNIEnv*, jclass, jlong _address, jlong data) {
+    physx::PxShape* self = (physx::PxShape*) _address;
     self->setQueryFilterData(*((physx::PxFilterData*) data));
 }
-JNIEXPORT jlong JNICALL Java_physx_physics_PxShape__1getQueryFilterData(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    static physx::PxFilterData cache;
-    physx::PxShape* self = (physx::PxShape*) address;
-    cache = self->getQueryFilterData();
-    return (jlong) &cache;
+JNIEXPORT jlong JNICALL Java_physx_physics_PxShape__1getQueryFilterData(JNIEnv*, jclass, jlong _address) {
+    static thread_local physx::PxFilterData _cache;
+    physx::PxShape* self = (physx::PxShape*) _address;
+    _cache = self->getQueryFilterData();
+    return (jlong) &_cache;
 }
 
 // PxShapeFlags
 JNIEXPORT jint JNICALL Java_physx_physics_PxShapeFlags__1_1sizeOf(JNIEnv*, jclass) {
     return sizeof(physx::PxShapeFlags);
 }
-JNIEXPORT void JNICALL Java_physx_physics_PxShapeFlags__1_1placement_1new_1PxShapeFlags(JNIEnv* env, jclass, jlong __placement_address, jbyte flags) {
-    (void) env;    // avoid unused parameter warning / error
-    new((void*)__placement_address) physx::PxShapeFlags(flags);
+JNIEXPORT jlong JNICALL Java_physx_physics_PxShapeFlags__1_1placement_1new_1PxShapeFlags(JNIEnv*, jclass, jlong _placement_address, jbyte flags) {
+    return (jlong) new((void*)_placement_address) physx::PxShapeFlags(flags);
 }
-JNIEXPORT jlong JNICALL Java_physx_physics_PxShapeFlags__1PxShapeFlags(JNIEnv* env, jclass, jbyte flags) {
-    (void) env;    // avoid unused parameter warning / error
+JNIEXPORT jlong JNICALL Java_physx_physics_PxShapeFlags__1PxShapeFlags(JNIEnv*, jclass, jbyte flags) {
     return (jlong) new physx::PxShapeFlags(flags);
 }
-JNIEXPORT jboolean JNICALL Java_physx_physics_PxShapeFlags__1isSet(JNIEnv* env, jclass, jlong address, jint flag) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxShapeFlags* self = (physx::PxShapeFlags*) address;
+JNIEXPORT jboolean JNICALL Java_physx_physics_PxShapeFlags__1isSet(JNIEnv*, jclass, jlong _address, jint flag) {
+    physx::PxShapeFlags* self = (physx::PxShapeFlags*) _address;
     return (jboolean) self->isSet((PxShapeFlagEnum) flag);
 }
-JNIEXPORT void JNICALL Java_physx_physics_PxShapeFlags__1set(JNIEnv* env, jclass, jlong address, jint flag) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxShapeFlags* self = (physx::PxShapeFlags*) address;
+JNIEXPORT void JNICALL Java_physx_physics_PxShapeFlags__1set(JNIEnv*, jclass, jlong _address, jint flag) {
+    physx::PxShapeFlags* self = (physx::PxShapeFlags*) _address;
     self->set((PxShapeFlagEnum) flag);
 }
-JNIEXPORT void JNICALL Java_physx_physics_PxShapeFlags__1clear(JNIEnv* env, jclass, jlong address, jint flag) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxShapeFlags* self = (physx::PxShapeFlags*) address;
+JNIEXPORT void JNICALL Java_physx_physics_PxShapeFlags__1clear(JNIEnv*, jclass, jlong _address, jint flag) {
+    physx::PxShapeFlags* self = (physx::PxShapeFlags*) _address;
     self->clear((PxShapeFlagEnum) flag);
 }
-JNIEXPORT void JNICALL Java_physx_physics_PxShapeFlags__1delete_1native_1instance(JNIEnv*, jclass, jlong address) {
-    delete (physx::PxShapeFlags*) address;
+JNIEXPORT void JNICALL Java_physx_physics_PxShapeFlags__1delete_1native_1instance(JNIEnv*, jclass, jlong _address) {
+    delete (physx::PxShapeFlags*) _address;
 }
 
 // PxSimulationEventCallback
-JNIEXPORT void JNICALL Java_physx_physics_PxSimulationEventCallback__1delete_1native_1instance(JNIEnv*, jclass, jlong address) {
-    delete (physx::PxSimulationEventCallback*) address;
+JNIEXPORT void JNICALL Java_physx_physics_PxSimulationEventCallback__1delete_1native_1instance(JNIEnv*, jclass, jlong _address) {
+    delete (physx::PxSimulationEventCallback*) _address;
 }
 
-// SimplePxSimulationEventCallback
-JNIEXPORT void JNICALL Java_physx_physics_SimplePxSimulationEventCallback__1cbFun(JNIEnv* env, jclass, jlong address, jint count) {
-    (void) env;    // avoid unused parameter warning / error
-    SimplePxSimulationEventCallback* self = (SimplePxSimulationEventCallback*) address;
-    self->cbFun(count);
+// SimpleSimulationEventCallback
+JNIEXPORT void JNICALL Java_physx_physics_SimpleSimulationEventCallback__1onConstraintBreak(JNIEnv*, jclass, jlong _address, jlong constraints, jint count) {
+    SimpleSimulationEventCallback* self = (SimpleSimulationEventCallback*) _address;
+    self->onConstraintBreak((physx::PxConstraintInfo*) constraints, count);
 }
-JNIEXPORT void JNICALL Java_physx_physics_SimplePxSimulationEventCallback__1delete_1native_1instance(JNIEnv*, jclass, jlong address) {
-    delete (SimplePxSimulationEventCallback*) address;
+JNIEXPORT void JNICALL Java_physx_physics_SimpleSimulationEventCallback__1onWake(JNIEnv*, jclass, jlong _address, jlong actors, jint count) {
+    SimpleSimulationEventCallback* self = (SimpleSimulationEventCallback*) _address;
+    self->onWake((PxActorPtr*) actors, count);
+}
+JNIEXPORT void JNICALL Java_physx_physics_SimpleSimulationEventCallback__1onSleep(JNIEnv*, jclass, jlong _address, jlong actors, jint count) {
+    SimpleSimulationEventCallback* self = (SimpleSimulationEventCallback*) _address;
+    self->onSleep((PxActorPtr*) actors, count);
+}
+JNIEXPORT void JNICALL Java_physx_physics_SimpleSimulationEventCallback__1onContact(JNIEnv*, jclass, jlong _address, jlong pairHeader, jlong pairs, jint nbPairs) {
+    SimpleSimulationEventCallback* self = (SimpleSimulationEventCallback*) _address;
+    self->onContact(*((physx::PxContactPairHeader*) pairHeader), (physx::PxContactPair*) pairs, nbPairs);
+}
+JNIEXPORT void JNICALL Java_physx_physics_SimpleSimulationEventCallback__1onTrigger(JNIEnv*, jclass, jlong _address, jlong pairs, jint count) {
+    SimpleSimulationEventCallback* self = (SimpleSimulationEventCallback*) _address;
+    self->onTrigger((physx::PxTriggerPair*) pairs, count);
+}
+JNIEXPORT void JNICALL Java_physx_physics_SimpleSimulationEventCallback__1delete_1native_1instance(JNIEnv*, jclass, jlong _address) {
+    delete (SimpleSimulationEventCallback*) _address;
+}
+
+// JavaSimulationEventCallback
+JNIEXPORT jlong JNICALL Java_physx_physics_JavaSimulationEventCallback__1JavaSimulationEventCallback(JNIEnv* env, jobject obj) {
+    return (jlong) new JavaSimulationEventCallback(env, obj);
+}
+JNIEXPORT void JNICALL Java_physx_physics_JavaSimulationEventCallback__1delete_1native_1instance(JNIEnv*, jclass, jlong address) {
+    delete (JavaSimulationEventCallback*) address;
 }
 
 // PxSimulationFilterShader
-JNIEXPORT void JNICALL Java_physx_physics_PxSimulationFilterShader__1delete_1native_1instance(JNIEnv*, jclass, jlong address) {
-    delete (physx::PxSimulationFilterShader*) address;
+JNIEXPORT void JNICALL Java_physx_physics_PxSimulationFilterShader__1delete_1native_1instance(JNIEnv*, jclass, jlong _address) {
+    delete (physx::PxSimulationFilterShader*) _address;
 }
 
 // PxSweepHit
-JNIEXPORT void JNICALL Java_physx_physics_PxSweepHit__1delete_1native_1instance(JNIEnv*, jclass, jlong address) {
-    delete (physx::PxSweepHit*) address;
+JNIEXPORT void JNICALL Java_physx_physics_PxSweepHit__1delete_1native_1instance(JNIEnv*, jclass, jlong _address) {
+    delete (physx::PxSweepHit*) _address;
 }
 
 // PxSweepQueryResult
-JNIEXPORT jint JNICALL Java_physx_physics_PxSweepQueryResult__1getNbAnyHits(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxSweepQueryResult* self = (physx::PxSweepQueryResult*) address;
+JNIEXPORT jint JNICALL Java_physx_physics_PxSweepQueryResult__1getNbAnyHits(JNIEnv*, jclass, jlong _address) {
+    physx::PxSweepQueryResult* self = (physx::PxSweepQueryResult*) _address;
     return (jint) self->getNbAnyHits();
 }
-JNIEXPORT jlong JNICALL Java_physx_physics_PxSweepQueryResult__1getAnyHit(JNIEnv* env, jclass, jlong address, jint index) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxSweepQueryResult* self = (physx::PxSweepQueryResult*) address;
+JNIEXPORT jlong JNICALL Java_physx_physics_PxSweepQueryResult__1getAnyHit(JNIEnv*, jclass, jlong _address, jint index) {
+    physx::PxSweepQueryResult* self = (physx::PxSweepQueryResult*) _address;
     return (jlong) &self->getAnyHit(index);
 }
-JNIEXPORT void JNICALL Java_physx_physics_PxSweepQueryResult__1delete_1native_1instance(JNIEnv*, jclass, jlong address) {
-    delete (physx::PxSweepQueryResult*) address;
+JNIEXPORT void JNICALL Java_physx_physics_PxSweepQueryResult__1delete_1native_1instance(JNIEnv*, jclass, jlong _address) {
+    delete (physx::PxSweepQueryResult*) _address;
 }
-JNIEXPORT jlong JNICALL Java_physx_physics_PxSweepQueryResult__1getBlock(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxSweepQueryResult* self = (physx::PxSweepQueryResult*) address;
-    return (jlong) &self->block;
+JNIEXPORT jlong JNICALL Java_physx_physics_PxSweepQueryResult__1getBlock(JNIEnv*, jclass, jlong _address) {
+    physx::PxSweepQueryResult* _self = (physx::PxSweepQueryResult*) _address;
+    return (jlong) &_self->block;
 }
-JNIEXPORT void JNICALL Java_physx_physics_PxSweepQueryResult__1setBlock(JNIEnv* env, jclass, jlong address, jlong value) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxSweepQueryResult* self = (physx::PxSweepQueryResult*) address;
-    self->block = *((physx::PxSweepHit*) value);
+JNIEXPORT void JNICALL Java_physx_physics_PxSweepQueryResult__1setBlock(JNIEnv*, jclass, jlong _address, jlong value) {
+    physx::PxSweepQueryResult* _self = (physx::PxSweepQueryResult*) _address;
+    _self->block = *((physx::PxSweepHit*) value);
 }
-JNIEXPORT jlong JNICALL Java_physx_physics_PxSweepQueryResult__1getTouches(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxSweepQueryResult* self = (physx::PxSweepQueryResult*) address;
-    return (jlong) self->touches;
+JNIEXPORT jlong JNICALL Java_physx_physics_PxSweepQueryResult__1getTouches(JNIEnv*, jclass, jlong _address) {
+    physx::PxSweepQueryResult* _self = (physx::PxSweepQueryResult*) _address;
+    return (jlong) _self->touches;
 }
-JNIEXPORT void JNICALL Java_physx_physics_PxSweepQueryResult__1setTouches(JNIEnv* env, jclass, jlong address, jlong value) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxSweepQueryResult* self = (physx::PxSweepQueryResult*) address;
-    self->touches = (physx::PxSweepHit*) value;
+JNIEXPORT void JNICALL Java_physx_physics_PxSweepQueryResult__1setTouches(JNIEnv*, jclass, jlong _address, jlong value) {
+    physx::PxSweepQueryResult* _self = (physx::PxSweepQueryResult*) _address;
+    _self->touches = (physx::PxSweepHit*) value;
 }
-JNIEXPORT jint JNICALL Java_physx_physics_PxSweepQueryResult__1getNbTouches(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxSweepQueryResult* self = (physx::PxSweepQueryResult*) address;
-    return (jint) self->nbTouches;
+JNIEXPORT jint JNICALL Java_physx_physics_PxSweepQueryResult__1getNbTouches(JNIEnv*, jclass, jlong _address) {
+    physx::PxSweepQueryResult* _self = (physx::PxSweepQueryResult*) _address;
+    return (jint) _self->nbTouches;
 }
-JNIEXPORT void JNICALL Java_physx_physics_PxSweepQueryResult__1setNbTouches(JNIEnv* env, jclass, jlong address, jint value) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxSweepQueryResult* self = (physx::PxSweepQueryResult*) address;
-    self->nbTouches = value;
+JNIEXPORT void JNICALL Java_physx_physics_PxSweepQueryResult__1setNbTouches(JNIEnv*, jclass, jlong _address, jint value) {
+    physx::PxSweepQueryResult* _self = (physx::PxSweepQueryResult*) _address;
+    _self->nbTouches = value;
 }
-JNIEXPORT jlong JNICALL Java_physx_physics_PxSweepQueryResult__1getUserData(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxSweepQueryResult* self = (physx::PxSweepQueryResult*) address;
-    return (jlong) self->userData;
+JNIEXPORT jlong JNICALL Java_physx_physics_PxSweepQueryResult__1getUserData(JNIEnv*, jclass, jlong _address) {
+    physx::PxSweepQueryResult* _self = (physx::PxSweepQueryResult*) _address;
+    return (jlong) _self->userData;
 }
-JNIEXPORT void JNICALL Java_physx_physics_PxSweepQueryResult__1setUserData(JNIEnv* env, jclass, jlong address, jlong value) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxSweepQueryResult* self = (physx::PxSweepQueryResult*) address;
-    self->userData = (void*) value;
+JNIEXPORT void JNICALL Java_physx_physics_PxSweepQueryResult__1setUserData(JNIEnv*, jclass, jlong _address, jlong value) {
+    physx::PxSweepQueryResult* _self = (physx::PxSweepQueryResult*) _address;
+    _self->userData = (void*) value;
 }
-JNIEXPORT jbyte JNICALL Java_physx_physics_PxSweepQueryResult__1getQueryStatus(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxSweepQueryResult* self = (physx::PxSweepQueryResult*) address;
-    return (jbyte) self->queryStatus;
+JNIEXPORT jbyte JNICALL Java_physx_physics_PxSweepQueryResult__1getQueryStatus(JNIEnv*, jclass, jlong _address) {
+    physx::PxSweepQueryResult* _self = (physx::PxSweepQueryResult*) _address;
+    return (jbyte) _self->queryStatus;
 }
-JNIEXPORT void JNICALL Java_physx_physics_PxSweepQueryResult__1setQueryStatus(JNIEnv* env, jclass, jlong address, jbyte value) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxSweepQueryResult* self = (physx::PxSweepQueryResult*) address;
-    self->queryStatus = value;
+JNIEXPORT void JNICALL Java_physx_physics_PxSweepQueryResult__1setQueryStatus(JNIEnv*, jclass, jlong _address, jbyte value) {
+    physx::PxSweepQueryResult* _self = (physx::PxSweepQueryResult*) _address;
+    _self->queryStatus = value;
 }
-JNIEXPORT jboolean JNICALL Java_physx_physics_PxSweepQueryResult__1getHasBlock(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxSweepQueryResult* self = (physx::PxSweepQueryResult*) address;
-    return (jboolean) self->hasBlock;
+JNIEXPORT jboolean JNICALL Java_physx_physics_PxSweepQueryResult__1getHasBlock(JNIEnv*, jclass, jlong _address) {
+    physx::PxSweepQueryResult* _self = (physx::PxSweepQueryResult*) _address;
+    return (jboolean) _self->hasBlock;
 }
-JNIEXPORT void JNICALL Java_physx_physics_PxSweepQueryResult__1setHasBlock(JNIEnv* env, jclass, jlong address, jboolean value) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxSweepQueryResult* self = (physx::PxSweepQueryResult*) address;
-    self->hasBlock = value;
+JNIEXPORT void JNICALL Java_physx_physics_PxSweepQueryResult__1setHasBlock(JNIEnv*, jclass, jlong _address, jboolean value) {
+    physx::PxSweepQueryResult* _self = (physx::PxSweepQueryResult*) _address;
+    _self->hasBlock = value;
+}
+
+// PxTriggerPair
+JNIEXPORT void JNICALL Java_physx_physics_PxTriggerPair__1delete_1native_1instance(JNIEnv*, jclass, jlong _address) {
+    delete (physx::PxTriggerPair*) _address;
+}
+JNIEXPORT jlong JNICALL Java_physx_physics_PxTriggerPair__1getTriggerShape(JNIEnv*, jclass, jlong _address) {
+    physx::PxTriggerPair* _self = (physx::PxTriggerPair*) _address;
+    return (jlong) _self->triggerShape;
+}
+JNIEXPORT void JNICALL Java_physx_physics_PxTriggerPair__1setTriggerShape(JNIEnv*, jclass, jlong _address, jlong value) {
+    physx::PxTriggerPair* _self = (physx::PxTriggerPair*) _address;
+    _self->triggerShape = (physx::PxShape*) value;
+}
+JNIEXPORT jlong JNICALL Java_physx_physics_PxTriggerPair__1getTriggerActor(JNIEnv*, jclass, jlong _address) {
+    physx::PxTriggerPair* _self = (physx::PxTriggerPair*) _address;
+    return (jlong) _self->triggerActor;
+}
+JNIEXPORT void JNICALL Java_physx_physics_PxTriggerPair__1setTriggerActor(JNIEnv*, jclass, jlong _address, jlong value) {
+    physx::PxTriggerPair* _self = (physx::PxTriggerPair*) _address;
+    _self->triggerActor = (physx::PxRigidActor*) value;
+}
+JNIEXPORT jlong JNICALL Java_physx_physics_PxTriggerPair__1getOtherShape(JNIEnv*, jclass, jlong _address) {
+    physx::PxTriggerPair* _self = (physx::PxTriggerPair*) _address;
+    return (jlong) _self->otherShape;
+}
+JNIEXPORT void JNICALL Java_physx_physics_PxTriggerPair__1setOtherShape(JNIEnv*, jclass, jlong _address, jlong value) {
+    physx::PxTriggerPair* _self = (physx::PxTriggerPair*) _address;
+    _self->otherShape = (physx::PxShape*) value;
+}
+JNIEXPORT jlong JNICALL Java_physx_physics_PxTriggerPair__1getOtherActor(JNIEnv*, jclass, jlong _address) {
+    physx::PxTriggerPair* _self = (physx::PxTriggerPair*) _address;
+    return (jlong) _self->otherActor;
+}
+JNIEXPORT void JNICALL Java_physx_physics_PxTriggerPair__1setOtherActor(JNIEnv*, jclass, jlong _address, jlong value) {
+    physx::PxTriggerPair* _self = (physx::PxTriggerPair*) _address;
+    _self->otherActor = (physx::PxRigidActor*) value;
+}
+JNIEXPORT jint JNICALL Java_physx_physics_PxTriggerPair__1getStatus(JNIEnv*, jclass, jlong _address) {
+    physx::PxTriggerPair* _self = (physx::PxTriggerPair*) _address;
+    return (jint) _self->status;
+}
+JNIEXPORT void JNICALL Java_physx_physics_PxTriggerPair__1setStatus(JNIEnv*, jclass, jlong _address, jint value) {
+    physx::PxTriggerPair* _self = (physx::PxTriggerPair*) _address;
+    _self->status = (PxPairFlagEnum) value;
+}
+JNIEXPORT jlong JNICALL Java_physx_physics_PxTriggerPair__1getFlags(JNIEnv*, jclass, jlong _address) {
+    physx::PxTriggerPair* _self = (physx::PxTriggerPair*) _address;
+    return (jlong) &_self->flags;
+}
+JNIEXPORT void JNICALL Java_physx_physics_PxTriggerPair__1setFlags(JNIEnv*, jclass, jlong _address, jlong value) {
+    physx::PxTriggerPair* _self = (physx::PxTriggerPair*) _address;
+    _self->flags = *((physx::PxTriggerPairFlags*) value);
+}
+
+// PxTriggerPairFlags
+JNIEXPORT jlong JNICALL Java_physx_physics_PxTriggerPairFlags__1PxTriggerPairFlags(JNIEnv*, jclass, jbyte flags) {
+    return (jlong) new physx::PxTriggerPairFlags(flags);
+}
+JNIEXPORT jboolean JNICALL Java_physx_physics_PxTriggerPairFlags__1isSet(JNIEnv*, jclass, jlong _address, jint flag) {
+    physx::PxTriggerPairFlags* self = (physx::PxTriggerPairFlags*) _address;
+    return (jboolean) self->isSet((PxTriggerPairFlagEnum) flag);
+}
+JNIEXPORT void JNICALL Java_physx_physics_PxTriggerPairFlags__1set(JNIEnv*, jclass, jlong _address, jint flag) {
+    physx::PxTriggerPairFlags* self = (physx::PxTriggerPairFlags*) _address;
+    self->set((PxTriggerPairFlagEnum) flag);
+}
+JNIEXPORT void JNICALL Java_physx_physics_PxTriggerPairFlags__1clear(JNIEnv*, jclass, jlong _address, jint flag) {
+    physx::PxTriggerPairFlags* self = (physx::PxTriggerPairFlags*) _address;
+    self->clear((PxTriggerPairFlagEnum) flag);
+}
+JNIEXPORT void JNICALL Java_physx_physics_PxTriggerPairFlags__1delete_1native_1instance(JNIEnv*, jclass, jlong _address) {
+    delete (physx::PxTriggerPairFlags*) _address;
 }
 
 // PxActorFlagEnum
@@ -3165,6 +3163,69 @@ JNIEXPORT jint JNICALL Java_physx_physics_PxActorTypeEnum__1geteACTOR_1COUNT(JNI
 }
 JNIEXPORT jint JNICALL Java_physx_physics_PxActorTypeEnum__1geteACTOR_1FORCE_1DWORD(JNIEnv*, jclass) {
     return PxActorTypeEnum::eACTOR_FORCE_DWORD;
+}
+
+// PxConstraintFlagEnum
+JNIEXPORT jint JNICALL Java_physx_physics_PxConstraintFlagEnum__1geteBROKEN(JNIEnv*, jclass) {
+    return PxConstraintFlagEnum::eBROKEN;
+}
+JNIEXPORT jint JNICALL Java_physx_physics_PxConstraintFlagEnum__1getePROJECT_1TO_1ACTOR0(JNIEnv*, jclass) {
+    return PxConstraintFlagEnum::ePROJECT_TO_ACTOR0;
+}
+JNIEXPORT jint JNICALL Java_physx_physics_PxConstraintFlagEnum__1getePROJECT_1TO_1ACTOR1(JNIEnv*, jclass) {
+    return PxConstraintFlagEnum::ePROJECT_TO_ACTOR1;
+}
+JNIEXPORT jint JNICALL Java_physx_physics_PxConstraintFlagEnum__1getePROJECTION(JNIEnv*, jclass) {
+    return PxConstraintFlagEnum::ePROJECTION;
+}
+JNIEXPORT jint JNICALL Java_physx_physics_PxConstraintFlagEnum__1geteCOLLISION_1ENABLED(JNIEnv*, jclass) {
+    return PxConstraintFlagEnum::eCOLLISION_ENABLED;
+}
+JNIEXPORT jint JNICALL Java_physx_physics_PxConstraintFlagEnum__1geteVISUALIZATION(JNIEnv*, jclass) {
+    return PxConstraintFlagEnum::eVISUALIZATION;
+}
+JNIEXPORT jint JNICALL Java_physx_physics_PxConstraintFlagEnum__1geteDRIVE_1LIMITS_1ARE_1FORCES(JNIEnv*, jclass) {
+    return PxConstraintFlagEnum::eDRIVE_LIMITS_ARE_FORCES;
+}
+JNIEXPORT jint JNICALL Java_physx_physics_PxConstraintFlagEnum__1geteIMPROVED_1SLERP(JNIEnv*, jclass) {
+    return PxConstraintFlagEnum::eIMPROVED_SLERP;
+}
+JNIEXPORT jint JNICALL Java_physx_physics_PxConstraintFlagEnum__1geteDISABLE_1PREPROCESSING(JNIEnv*, jclass) {
+    return PxConstraintFlagEnum::eDISABLE_PREPROCESSING;
+}
+JNIEXPORT jint JNICALL Java_physx_physics_PxConstraintFlagEnum__1geteENABLE_1EXTENDED_1LIMITS(JNIEnv*, jclass) {
+    return PxConstraintFlagEnum::eENABLE_EXTENDED_LIMITS;
+}
+JNIEXPORT jint JNICALL Java_physx_physics_PxConstraintFlagEnum__1geteGPU_1COMPATIBLE(JNIEnv*, jclass) {
+    return PxConstraintFlagEnum::eGPU_COMPATIBLE;
+}
+
+// PxContactPairHeaderFlagEnum
+JNIEXPORT jint JNICALL Java_physx_physics_PxContactPairHeaderFlagEnum__1geteREMOVED_1ACTOR_10(JNIEnv*, jclass) {
+    return PxContactPairHeaderFlagEnum::eREMOVED_ACTOR_0;
+}
+JNIEXPORT jint JNICALL Java_physx_physics_PxContactPairHeaderFlagEnum__1geteREMOVED_1ACTOR_11(JNIEnv*, jclass) {
+    return PxContactPairHeaderFlagEnum::eREMOVED_ACTOR_1;
+}
+
+// PxContactPairFlagEnum
+JNIEXPORT jint JNICALL Java_physx_physics_PxContactPairFlagEnum__1geteREMOVED_1SHAPE_10(JNIEnv*, jclass) {
+    return PxContactPairFlagEnum::eREMOVED_SHAPE_0;
+}
+JNIEXPORT jint JNICALL Java_physx_physics_PxContactPairFlagEnum__1geteREMOVED_1SHAPE_11(JNIEnv*, jclass) {
+    return PxContactPairFlagEnum::eREMOVED_SHAPE_1;
+}
+JNIEXPORT jint JNICALL Java_physx_physics_PxContactPairFlagEnum__1geteACTOR_1PAIR_1HAS_1FIRST_1TOUCH(JNIEnv*, jclass) {
+    return PxContactPairFlagEnum::eACTOR_PAIR_HAS_FIRST_TOUCH;
+}
+JNIEXPORT jint JNICALL Java_physx_physics_PxContactPairFlagEnum__1geteACTOR_1PAIR_1LOST_1TOUCH(JNIEnv*, jclass) {
+    return PxContactPairFlagEnum::eACTOR_PAIR_LOST_TOUCH;
+}
+JNIEXPORT jint JNICALL Java_physx_physics_PxContactPairFlagEnum__1geteINTERNAL_1HAS_1IMPULSES(JNIEnv*, jclass) {
+    return PxContactPairFlagEnum::eINTERNAL_HAS_IMPULSES;
+}
+JNIEXPORT jint JNICALL Java_physx_physics_PxContactPairFlagEnum__1geteINTERNAL_1CONTACTS_1ARE_1FLIPPED(JNIEnv*, jclass) {
+    return PxContactPairFlagEnum::eINTERNAL_CONTACTS_ARE_FLIPPED;
 }
 
 // PxForceModeEnum
@@ -3217,6 +3278,59 @@ JNIEXPORT jint JNICALL Java_physx_physics_PxHitFlagEnum__1geteDEFAULT(JNIEnv*, j
 }
 JNIEXPORT jint JNICALL Java_physx_physics_PxHitFlagEnum__1geteMODIFIABLE_1FLAGS(JNIEnv*, jclass) {
     return PxHitFlagEnum::eMODIFIABLE_FLAGS;
+}
+
+// PxPairFlagEnum
+JNIEXPORT jint JNICALL Java_physx_physics_PxPairFlagEnum__1geteSOLVE_1CONTACT(JNIEnv*, jclass) {
+    return PxPairFlagEnum::eSOLVE_CONTACT;
+}
+JNIEXPORT jint JNICALL Java_physx_physics_PxPairFlagEnum__1geteMODIFY_1CONTACTS(JNIEnv*, jclass) {
+    return PxPairFlagEnum::eMODIFY_CONTACTS;
+}
+JNIEXPORT jint JNICALL Java_physx_physics_PxPairFlagEnum__1geteNOTIFY_1TOUCH_1FOUND(JNIEnv*, jclass) {
+    return PxPairFlagEnum::eNOTIFY_TOUCH_FOUND;
+}
+JNIEXPORT jint JNICALL Java_physx_physics_PxPairFlagEnum__1geteNOTIFY_1TOUCH_1PERSISTS(JNIEnv*, jclass) {
+    return PxPairFlagEnum::eNOTIFY_TOUCH_PERSISTS;
+}
+JNIEXPORT jint JNICALL Java_physx_physics_PxPairFlagEnum__1geteNOTIFY_1TOUCH_1LOST(JNIEnv*, jclass) {
+    return PxPairFlagEnum::eNOTIFY_TOUCH_LOST;
+}
+JNIEXPORT jint JNICALL Java_physx_physics_PxPairFlagEnum__1geteNOTIFY_1TOUCH_1CCD(JNIEnv*, jclass) {
+    return PxPairFlagEnum::eNOTIFY_TOUCH_CCD;
+}
+JNIEXPORT jint JNICALL Java_physx_physics_PxPairFlagEnum__1geteNOTIFY_1THRESHOLD_1FORCE_1FOUND(JNIEnv*, jclass) {
+    return PxPairFlagEnum::eNOTIFY_THRESHOLD_FORCE_FOUND;
+}
+JNIEXPORT jint JNICALL Java_physx_physics_PxPairFlagEnum__1geteNOTIFY_1THRESHOLD_1FORCE_1PERSISTS(JNIEnv*, jclass) {
+    return PxPairFlagEnum::eNOTIFY_THRESHOLD_FORCE_PERSISTS;
+}
+JNIEXPORT jint JNICALL Java_physx_physics_PxPairFlagEnum__1geteNOTIFY_1THRESHOLD_1FORCE_1LOST(JNIEnv*, jclass) {
+    return PxPairFlagEnum::eNOTIFY_THRESHOLD_FORCE_LOST;
+}
+JNIEXPORT jint JNICALL Java_physx_physics_PxPairFlagEnum__1geteNOTIFY_1CONTACT_1POINTS(JNIEnv*, jclass) {
+    return PxPairFlagEnum::eNOTIFY_CONTACT_POINTS;
+}
+JNIEXPORT jint JNICALL Java_physx_physics_PxPairFlagEnum__1geteDETECT_1DISCRETE_1CONTACT(JNIEnv*, jclass) {
+    return PxPairFlagEnum::eDETECT_DISCRETE_CONTACT;
+}
+JNIEXPORT jint JNICALL Java_physx_physics_PxPairFlagEnum__1geteDETECT_1CCD_1CONTACT(JNIEnv*, jclass) {
+    return PxPairFlagEnum::eDETECT_CCD_CONTACT;
+}
+JNIEXPORT jint JNICALL Java_physx_physics_PxPairFlagEnum__1getePRE_1SOLVER_1VELOCITY(JNIEnv*, jclass) {
+    return PxPairFlagEnum::ePRE_SOLVER_VELOCITY;
+}
+JNIEXPORT jint JNICALL Java_physx_physics_PxPairFlagEnum__1getePOST_1SOLVER_1VELOCITY(JNIEnv*, jclass) {
+    return PxPairFlagEnum::ePOST_SOLVER_VELOCITY;
+}
+JNIEXPORT jint JNICALL Java_physx_physics_PxPairFlagEnum__1geteCONTACT_1EVENT_1POSE(JNIEnv*, jclass) {
+    return PxPairFlagEnum::eCONTACT_EVENT_POSE;
+}
+JNIEXPORT jint JNICALL Java_physx_physics_PxPairFlagEnum__1geteNEXT_1FREE(JNIEnv*, jclass) {
+    return PxPairFlagEnum::eNEXT_FREE;
+}
+JNIEXPORT jint JNICALL Java_physx_physics_PxPairFlagEnum__1geteCONTACT_1DEFAULT(JNIEnv*, jclass) {
+    return PxPairFlagEnum::eCONTACT_DEFAULT;
 }
 
 // PxRigidBodyFlagEnum
@@ -3326,2314 +3440,1900 @@ JNIEXPORT jint JNICALL Java_physx_physics_PxShapeFlagEnum__1geteVISUALIZATION(JN
     return PxShapeFlagEnum::eVISUALIZATION;
 }
 
+// PxTriggerPairFlagEnum
+JNIEXPORT jint JNICALL Java_physx_physics_PxTriggerPairFlagEnum__1geteREMOVED_1SHAPE_1TRIGGER(JNIEnv*, jclass) {
+    return PxTriggerPairFlagEnum::eREMOVED_SHAPE_TRIGGER;
+}
+JNIEXPORT jint JNICALL Java_physx_physics_PxTriggerPairFlagEnum__1geteREMOVED_1SHAPE_1OTHER(JNIEnv*, jclass) {
+    return PxTriggerPairFlagEnum::eREMOVED_SHAPE_OTHER;
+}
+JNIEXPORT jint JNICALL Java_physx_physics_PxTriggerPairFlagEnum__1geteNEXT_1FREE(JNIEnv*, jclass) {
+    return PxTriggerPairFlagEnum::eNEXT_FREE;
+}
+
+// PxActorPtr
+JNIEXPORT void JNICALL Java_physx_support_PxActorPtr__1delete_1native_1instance(JNIEnv*, jclass, jlong _address) {
+    delete (PxActorPtr*) _address;
+}
+
 // PxMaterialPtr
-JNIEXPORT void JNICALL Java_physx_support_PxMaterialPtr__1delete_1native_1instance(JNIEnv*, jclass, jlong address) {
-    delete (PxMaterialPtr*) address;
+JNIEXPORT void JNICALL Java_physx_support_PxMaterialPtr__1delete_1native_1instance(JNIEnv*, jclass, jlong _address) {
+    delete (PxMaterialPtr*) _address;
 }
 
 // PxRealPtr
-JNIEXPORT void JNICALL Java_physx_support_PxRealPtr__1delete_1native_1instance(JNIEnv*, jclass, jlong address) {
-    delete (PxRealPtr*) address;
+JNIEXPORT void JNICALL Java_physx_support_PxRealPtr__1delete_1native_1instance(JNIEnv*, jclass, jlong _address) {
+    delete (PxRealPtr*) _address;
 }
 
 // PxU8Ptr
-JNIEXPORT void JNICALL Java_physx_support_PxU8Ptr__1delete_1native_1instance(JNIEnv*, jclass, jlong address) {
-    delete (PxU8Ptr*) address;
+JNIEXPORT void JNICALL Java_physx_support_PxU8Ptr__1delete_1native_1instance(JNIEnv*, jclass, jlong _address) {
+    delete (PxU8Ptr*) _address;
 }
 
 // PxU16Ptr
-JNIEXPORT void JNICALL Java_physx_support_PxU16Ptr__1delete_1native_1instance(JNIEnv*, jclass, jlong address) {
-    delete (PxU16Ptr*) address;
+JNIEXPORT void JNICALL Java_physx_support_PxU16Ptr__1delete_1native_1instance(JNIEnv*, jclass, jlong _address) {
+    delete (PxU16Ptr*) _address;
 }
 
 // PxU32Ptr
-JNIEXPORT void JNICALL Java_physx_support_PxU32Ptr__1delete_1native_1instance(JNIEnv*, jclass, jlong address) {
-    delete (PxU32Ptr*) address;
+JNIEXPORT void JNICALL Java_physx_support_PxU32Ptr__1delete_1native_1instance(JNIEnv*, jclass, jlong _address) {
+    delete (PxU32Ptr*) _address;
 }
 
 // Vector_PxMaterial
-JNIEXPORT jlong JNICALL Java_physx_support_Vector_1PxMaterial__1Vector_1PxMaterial__(JNIEnv* env, jclass) {
-    (void) env;    // avoid unused parameter warning / error
+JNIEXPORT jlong JNICALL Java_physx_support_Vector_1PxMaterial__1Vector_1PxMaterial__(JNIEnv*, jclass) {
     return (jlong) new Vector_PxMaterial();
 }
-JNIEXPORT jlong JNICALL Java_physx_support_Vector_1PxMaterial__1Vector_1PxMaterial__I(JNIEnv* env, jclass, jint size) {
-    (void) env;    // avoid unused parameter warning / error
+JNIEXPORT jlong JNICALL Java_physx_support_Vector_1PxMaterial__1Vector_1PxMaterial__I(JNIEnv*, jclass, jint size) {
     return (jlong) new Vector_PxMaterial(size);
 }
-JNIEXPORT jlong JNICALL Java_physx_support_Vector_1PxMaterial__1at(JNIEnv* env, jclass, jlong address, jint index) {
-    (void) env;    // avoid unused parameter warning / error
-    Vector_PxMaterial* self = (Vector_PxMaterial*) address;
+JNIEXPORT jlong JNICALL Java_physx_support_Vector_1PxMaterial__1at(JNIEnv*, jclass, jlong _address, jint index) {
+    Vector_PxMaterial* self = (Vector_PxMaterial*) _address;
     return (jlong) self->at(index);
 }
-JNIEXPORT jlong JNICALL Java_physx_support_Vector_1PxMaterial__1data(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    Vector_PxMaterial* self = (Vector_PxMaterial*) address;
+JNIEXPORT jlong JNICALL Java_physx_support_Vector_1PxMaterial__1data(JNIEnv*, jclass, jlong _address) {
+    Vector_PxMaterial* self = (Vector_PxMaterial*) _address;
     return (jlong) self->data();
 }
-JNIEXPORT jint JNICALL Java_physx_support_Vector_1PxMaterial__1size(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    Vector_PxMaterial* self = (Vector_PxMaterial*) address;
+JNIEXPORT jint JNICALL Java_physx_support_Vector_1PxMaterial__1size(JNIEnv*, jclass, jlong _address) {
+    Vector_PxMaterial* self = (Vector_PxMaterial*) _address;
     return (jint) self->size();
 }
-JNIEXPORT void JNICALL Java_physx_support_Vector_1PxMaterial__1push_1back(JNIEnv* env, jclass, jlong address, jlong value) {
-    (void) env;    // avoid unused parameter warning / error
-    Vector_PxMaterial* self = (Vector_PxMaterial*) address;
+JNIEXPORT void JNICALL Java_physx_support_Vector_1PxMaterial__1push_1back(JNIEnv*, jclass, jlong _address, jlong value) {
+    Vector_PxMaterial* self = (Vector_PxMaterial*) _address;
     self->push_back((physx::PxMaterial*) value);
 }
-JNIEXPORT void JNICALL Java_physx_support_Vector_1PxMaterial__1delete_1native_1instance(JNIEnv*, jclass, jlong address) {
-    delete (Vector_PxMaterial*) address;
+JNIEXPORT void JNICALL Java_physx_support_Vector_1PxMaterial__1delete_1native_1instance(JNIEnv*, jclass, jlong _address) {
+    delete (Vector_PxMaterial*) _address;
 }
 
 // Vector_PxReal
-JNIEXPORT jlong JNICALL Java_physx_support_Vector_1PxReal__1Vector_1PxReal__(JNIEnv* env, jclass) {
-    (void) env;    // avoid unused parameter warning / error
+JNIEXPORT jlong JNICALL Java_physx_support_Vector_1PxReal__1Vector_1PxReal__(JNIEnv*, jclass) {
     return (jlong) new Vector_PxReal();
 }
-JNIEXPORT jlong JNICALL Java_physx_support_Vector_1PxReal__1Vector_1PxReal__I(JNIEnv* env, jclass, jint size) {
-    (void) env;    // avoid unused parameter warning / error
+JNIEXPORT jlong JNICALL Java_physx_support_Vector_1PxReal__1Vector_1PxReal__I(JNIEnv*, jclass, jint size) {
     return (jlong) new Vector_PxReal(size);
 }
-JNIEXPORT jfloat JNICALL Java_physx_support_Vector_1PxReal__1at(JNIEnv* env, jclass, jlong address, jint index) {
-    (void) env;    // avoid unused parameter warning / error
-    Vector_PxReal* self = (Vector_PxReal*) address;
+JNIEXPORT jfloat JNICALL Java_physx_support_Vector_1PxReal__1at(JNIEnv*, jclass, jlong _address, jint index) {
+    Vector_PxReal* self = (Vector_PxReal*) _address;
     return (jfloat) self->at(index);
 }
-JNIEXPORT jlong JNICALL Java_physx_support_Vector_1PxReal__1data(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    Vector_PxReal* self = (Vector_PxReal*) address;
+JNIEXPORT jlong JNICALL Java_physx_support_Vector_1PxReal__1data(JNIEnv*, jclass, jlong _address) {
+    Vector_PxReal* self = (Vector_PxReal*) _address;
     return (jlong) self->data();
 }
-JNIEXPORT jint JNICALL Java_physx_support_Vector_1PxReal__1size(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    Vector_PxReal* self = (Vector_PxReal*) address;
+JNIEXPORT jint JNICALL Java_physx_support_Vector_1PxReal__1size(JNIEnv*, jclass, jlong _address) {
+    Vector_PxReal* self = (Vector_PxReal*) _address;
     return (jint) self->size();
 }
-JNIEXPORT void JNICALL Java_physx_support_Vector_1PxReal__1push_1back(JNIEnv* env, jclass, jlong address, jfloat value) {
-    (void) env;    // avoid unused parameter warning / error
-    Vector_PxReal* self = (Vector_PxReal*) address;
+JNIEXPORT void JNICALL Java_physx_support_Vector_1PxReal__1push_1back(JNIEnv*, jclass, jlong _address, jfloat value) {
+    Vector_PxReal* self = (Vector_PxReal*) _address;
     self->push_back(value);
 }
-JNIEXPORT void JNICALL Java_physx_support_Vector_1PxReal__1delete_1native_1instance(JNIEnv*, jclass, jlong address) {
-    delete (Vector_PxReal*) address;
+JNIEXPORT void JNICALL Java_physx_support_Vector_1PxReal__1delete_1native_1instance(JNIEnv*, jclass, jlong _address) {
+    delete (Vector_PxReal*) _address;
 }
 
 // Vector_PxU16
-JNIEXPORT jlong JNICALL Java_physx_support_Vector_1PxU16__1Vector_1PxU16__(JNIEnv* env, jclass) {
-    (void) env;    // avoid unused parameter warning / error
+JNIEXPORT jlong JNICALL Java_physx_support_Vector_1PxU16__1Vector_1PxU16__(JNIEnv*, jclass) {
     return (jlong) new Vector_PxU16();
 }
-JNIEXPORT jlong JNICALL Java_physx_support_Vector_1PxU16__1Vector_1PxU16__I(JNIEnv* env, jclass, jint size) {
-    (void) env;    // avoid unused parameter warning / error
+JNIEXPORT jlong JNICALL Java_physx_support_Vector_1PxU16__1Vector_1PxU16__I(JNIEnv*, jclass, jint size) {
     return (jlong) new Vector_PxU16(size);
 }
-JNIEXPORT jshort JNICALL Java_physx_support_Vector_1PxU16__1at(JNIEnv* env, jclass, jlong address, jint index) {
-    (void) env;    // avoid unused parameter warning / error
-    Vector_PxU16* self = (Vector_PxU16*) address;
+JNIEXPORT jshort JNICALL Java_physx_support_Vector_1PxU16__1at(JNIEnv*, jclass, jlong _address, jint index) {
+    Vector_PxU16* self = (Vector_PxU16*) _address;
     return (jshort) self->at(index);
 }
-JNIEXPORT jlong JNICALL Java_physx_support_Vector_1PxU16__1data(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    Vector_PxU16* self = (Vector_PxU16*) address;
+JNIEXPORT jlong JNICALL Java_physx_support_Vector_1PxU16__1data(JNIEnv*, jclass, jlong _address) {
+    Vector_PxU16* self = (Vector_PxU16*) _address;
     return (jlong) self->data();
 }
-JNIEXPORT jint JNICALL Java_physx_support_Vector_1PxU16__1size(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    Vector_PxU16* self = (Vector_PxU16*) address;
+JNIEXPORT jint JNICALL Java_physx_support_Vector_1PxU16__1size(JNIEnv*, jclass, jlong _address) {
+    Vector_PxU16* self = (Vector_PxU16*) _address;
     return (jint) self->size();
 }
-JNIEXPORT void JNICALL Java_physx_support_Vector_1PxU16__1push_1back(JNIEnv* env, jclass, jlong address, jshort value) {
-    (void) env;    // avoid unused parameter warning / error
-    Vector_PxU16* self = (Vector_PxU16*) address;
+JNIEXPORT void JNICALL Java_physx_support_Vector_1PxU16__1push_1back(JNIEnv*, jclass, jlong _address, jshort value) {
+    Vector_PxU16* self = (Vector_PxU16*) _address;
     self->push_back(value);
 }
-JNIEXPORT void JNICALL Java_physx_support_Vector_1PxU16__1delete_1native_1instance(JNIEnv*, jclass, jlong address) {
-    delete (Vector_PxU16*) address;
+JNIEXPORT void JNICALL Java_physx_support_Vector_1PxU16__1delete_1native_1instance(JNIEnv*, jclass, jlong _address) {
+    delete (Vector_PxU16*) _address;
 }
 
 // Vector_PxU32
-JNIEXPORT jlong JNICALL Java_physx_support_Vector_1PxU32__1Vector_1PxU32__(JNIEnv* env, jclass) {
-    (void) env;    // avoid unused parameter warning / error
+JNIEXPORT jlong JNICALL Java_physx_support_Vector_1PxU32__1Vector_1PxU32__(JNIEnv*, jclass) {
     return (jlong) new Vector_PxU32();
 }
-JNIEXPORT jlong JNICALL Java_physx_support_Vector_1PxU32__1Vector_1PxU32__I(JNIEnv* env, jclass, jint size) {
-    (void) env;    // avoid unused parameter warning / error
+JNIEXPORT jlong JNICALL Java_physx_support_Vector_1PxU32__1Vector_1PxU32__I(JNIEnv*, jclass, jint size) {
     return (jlong) new Vector_PxU32(size);
 }
-JNIEXPORT jint JNICALL Java_physx_support_Vector_1PxU32__1at(JNIEnv* env, jclass, jlong address, jint index) {
-    (void) env;    // avoid unused parameter warning / error
-    Vector_PxU32* self = (Vector_PxU32*) address;
+JNIEXPORT jint JNICALL Java_physx_support_Vector_1PxU32__1at(JNIEnv*, jclass, jlong _address, jint index) {
+    Vector_PxU32* self = (Vector_PxU32*) _address;
     return (jint) self->at(index);
 }
-JNIEXPORT jlong JNICALL Java_physx_support_Vector_1PxU32__1data(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    Vector_PxU32* self = (Vector_PxU32*) address;
+JNIEXPORT jlong JNICALL Java_physx_support_Vector_1PxU32__1data(JNIEnv*, jclass, jlong _address) {
+    Vector_PxU32* self = (Vector_PxU32*) _address;
     return (jlong) self->data();
 }
-JNIEXPORT jint JNICALL Java_physx_support_Vector_1PxU32__1size(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    Vector_PxU32* self = (Vector_PxU32*) address;
+JNIEXPORT jint JNICALL Java_physx_support_Vector_1PxU32__1size(JNIEnv*, jclass, jlong _address) {
+    Vector_PxU32* self = (Vector_PxU32*) _address;
     return (jint) self->size();
 }
-JNIEXPORT void JNICALL Java_physx_support_Vector_1PxU32__1push_1back(JNIEnv* env, jclass, jlong address, jint value) {
-    (void) env;    // avoid unused parameter warning / error
-    Vector_PxU32* self = (Vector_PxU32*) address;
+JNIEXPORT void JNICALL Java_physx_support_Vector_1PxU32__1push_1back(JNIEnv*, jclass, jlong _address, jint value) {
+    Vector_PxU32* self = (Vector_PxU32*) _address;
     self->push_back(value);
 }
-JNIEXPORT void JNICALL Java_physx_support_Vector_1PxU32__1delete_1native_1instance(JNIEnv*, jclass, jlong address) {
-    delete (Vector_PxU32*) address;
+JNIEXPORT void JNICALL Java_physx_support_Vector_1PxU32__1delete_1native_1instance(JNIEnv*, jclass, jlong _address) {
+    delete (Vector_PxU32*) _address;
 }
 
 // Vector_PxVec3
-JNIEXPORT jlong JNICALL Java_physx_support_Vector_1PxVec3__1Vector_1PxVec3__(JNIEnv* env, jclass) {
-    (void) env;    // avoid unused parameter warning / error
+JNIEXPORT jlong JNICALL Java_physx_support_Vector_1PxVec3__1Vector_1PxVec3__(JNIEnv*, jclass) {
     return (jlong) new Vector_PxVec3();
 }
-JNIEXPORT jlong JNICALL Java_physx_support_Vector_1PxVec3__1Vector_1PxVec3__I(JNIEnv* env, jclass, jint size) {
-    (void) env;    // avoid unused parameter warning / error
+JNIEXPORT jlong JNICALL Java_physx_support_Vector_1PxVec3__1Vector_1PxVec3__I(JNIEnv*, jclass, jint size) {
     return (jlong) new Vector_PxVec3(size);
 }
-JNIEXPORT jlong JNICALL Java_physx_support_Vector_1PxVec3__1at(JNIEnv* env, jclass, jlong address, jint index) {
-    (void) env;    // avoid unused parameter warning / error
-    Vector_PxVec3* self = (Vector_PxVec3*) address;
+JNIEXPORT jlong JNICALL Java_physx_support_Vector_1PxVec3__1at(JNIEnv*, jclass, jlong _address, jint index) {
+    Vector_PxVec3* self = (Vector_PxVec3*) _address;
     return (jlong) &self->at(index);
 }
-JNIEXPORT jlong JNICALL Java_physx_support_Vector_1PxVec3__1data(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    Vector_PxVec3* self = (Vector_PxVec3*) address;
+JNIEXPORT jlong JNICALL Java_physx_support_Vector_1PxVec3__1data(JNIEnv*, jclass, jlong _address) {
+    Vector_PxVec3* self = (Vector_PxVec3*) _address;
     return (jlong) self->data();
 }
-JNIEXPORT jint JNICALL Java_physx_support_Vector_1PxVec3__1size(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    Vector_PxVec3* self = (Vector_PxVec3*) address;
+JNIEXPORT jint JNICALL Java_physx_support_Vector_1PxVec3__1size(JNIEnv*, jclass, jlong _address) {
+    Vector_PxVec3* self = (Vector_PxVec3*) _address;
     return (jint) self->size();
 }
-JNIEXPORT void JNICALL Java_physx_support_Vector_1PxVec3__1push_1back(JNIEnv* env, jclass, jlong address, jlong value) {
-    (void) env;    // avoid unused parameter warning / error
-    Vector_PxVec3* self = (Vector_PxVec3*) address;
+JNIEXPORT void JNICALL Java_physx_support_Vector_1PxVec3__1push_1back(JNIEnv*, jclass, jlong _address, jlong value) {
+    Vector_PxVec3* self = (Vector_PxVec3*) _address;
     self->push_back(*((physx::PxVec3*) value));
 }
-JNIEXPORT void JNICALL Java_physx_support_Vector_1PxVec3__1delete_1native_1instance(JNIEnv*, jclass, jlong address) {
-    delete (Vector_PxVec3*) address;
+JNIEXPORT void JNICALL Java_physx_support_Vector_1PxVec3__1delete_1native_1instance(JNIEnv*, jclass, jlong _address) {
+    delete (Vector_PxVec3*) _address;
 }
 
 // Vector_PxRaycastQueryResult
-JNIEXPORT jlong JNICALL Java_physx_support_Vector_1PxRaycastQueryResult__1Vector_1PxRaycastQueryResult__(JNIEnv* env, jclass) {
-    (void) env;    // avoid unused parameter warning / error
+JNIEXPORT jlong JNICALL Java_physx_support_Vector_1PxRaycastQueryResult__1Vector_1PxRaycastQueryResult__(JNIEnv*, jclass) {
     return (jlong) new Vector_PxRaycastQueryResult();
 }
-JNIEXPORT jlong JNICALL Java_physx_support_Vector_1PxRaycastQueryResult__1Vector_1PxRaycastQueryResult__I(JNIEnv* env, jclass, jint size) {
-    (void) env;    // avoid unused parameter warning / error
+JNIEXPORT jlong JNICALL Java_physx_support_Vector_1PxRaycastQueryResult__1Vector_1PxRaycastQueryResult__I(JNIEnv*, jclass, jint size) {
     return (jlong) new Vector_PxRaycastQueryResult(size);
 }
-JNIEXPORT jlong JNICALL Java_physx_support_Vector_1PxRaycastQueryResult__1at(JNIEnv* env, jclass, jlong address, jint index) {
-    (void) env;    // avoid unused parameter warning / error
-    Vector_PxRaycastQueryResult* self = (Vector_PxRaycastQueryResult*) address;
+JNIEXPORT jlong JNICALL Java_physx_support_Vector_1PxRaycastQueryResult__1at(JNIEnv*, jclass, jlong _address, jint index) {
+    Vector_PxRaycastQueryResult* self = (Vector_PxRaycastQueryResult*) _address;
     return (jlong) &self->at(index);
 }
-JNIEXPORT jlong JNICALL Java_physx_support_Vector_1PxRaycastQueryResult__1data(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    Vector_PxRaycastQueryResult* self = (Vector_PxRaycastQueryResult*) address;
+JNIEXPORT jlong JNICALL Java_physx_support_Vector_1PxRaycastQueryResult__1data(JNIEnv*, jclass, jlong _address) {
+    Vector_PxRaycastQueryResult* self = (Vector_PxRaycastQueryResult*) _address;
     return (jlong) self->data();
 }
-JNIEXPORT jint JNICALL Java_physx_support_Vector_1PxRaycastQueryResult__1size(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    Vector_PxRaycastQueryResult* self = (Vector_PxRaycastQueryResult*) address;
+JNIEXPORT jint JNICALL Java_physx_support_Vector_1PxRaycastQueryResult__1size(JNIEnv*, jclass, jlong _address) {
+    Vector_PxRaycastQueryResult* self = (Vector_PxRaycastQueryResult*) _address;
     return (jint) self->size();
 }
-JNIEXPORT void JNICALL Java_physx_support_Vector_1PxRaycastQueryResult__1push_1back(JNIEnv* env, jclass, jlong address, jlong value) {
-    (void) env;    // avoid unused parameter warning / error
-    Vector_PxRaycastQueryResult* self = (Vector_PxRaycastQueryResult*) address;
+JNIEXPORT void JNICALL Java_physx_support_Vector_1PxRaycastQueryResult__1push_1back(JNIEnv*, jclass, jlong _address, jlong value) {
+    Vector_PxRaycastQueryResult* self = (Vector_PxRaycastQueryResult*) _address;
     self->push_back(*((physx::PxRaycastQueryResult*) value));
 }
-JNIEXPORT void JNICALL Java_physx_support_Vector_1PxRaycastQueryResult__1delete_1native_1instance(JNIEnv*, jclass, jlong address) {
-    delete (Vector_PxRaycastQueryResult*) address;
+JNIEXPORT void JNICALL Java_physx_support_Vector_1PxRaycastQueryResult__1delete_1native_1instance(JNIEnv*, jclass, jlong _address) {
+    delete (Vector_PxRaycastQueryResult*) _address;
 }
 
 // Vector_PxSweepQueryResult
-JNIEXPORT jlong JNICALL Java_physx_support_Vector_1PxSweepQueryResult__1Vector_1PxSweepQueryResult__(JNIEnv* env, jclass) {
-    (void) env;    // avoid unused parameter warning / error
+JNIEXPORT jlong JNICALL Java_physx_support_Vector_1PxSweepQueryResult__1Vector_1PxSweepQueryResult__(JNIEnv*, jclass) {
     return (jlong) new Vector_PxSweepQueryResult();
 }
-JNIEXPORT jlong JNICALL Java_physx_support_Vector_1PxSweepQueryResult__1Vector_1PxSweepQueryResult__I(JNIEnv* env, jclass, jint size) {
-    (void) env;    // avoid unused parameter warning / error
+JNIEXPORT jlong JNICALL Java_physx_support_Vector_1PxSweepQueryResult__1Vector_1PxSweepQueryResult__I(JNIEnv*, jclass, jint size) {
     return (jlong) new Vector_PxSweepQueryResult(size);
 }
-JNIEXPORT jlong JNICALL Java_physx_support_Vector_1PxSweepQueryResult__1at(JNIEnv* env, jclass, jlong address, jint index) {
-    (void) env;    // avoid unused parameter warning / error
-    Vector_PxSweepQueryResult* self = (Vector_PxSweepQueryResult*) address;
+JNIEXPORT jlong JNICALL Java_physx_support_Vector_1PxSweepQueryResult__1at(JNIEnv*, jclass, jlong _address, jint index) {
+    Vector_PxSweepQueryResult* self = (Vector_PxSweepQueryResult*) _address;
     return (jlong) &self->at(index);
 }
-JNIEXPORT jlong JNICALL Java_physx_support_Vector_1PxSweepQueryResult__1data(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    Vector_PxSweepQueryResult* self = (Vector_PxSweepQueryResult*) address;
+JNIEXPORT jlong JNICALL Java_physx_support_Vector_1PxSweepQueryResult__1data(JNIEnv*, jclass, jlong _address) {
+    Vector_PxSweepQueryResult* self = (Vector_PxSweepQueryResult*) _address;
     return (jlong) self->data();
 }
-JNIEXPORT jint JNICALL Java_physx_support_Vector_1PxSweepQueryResult__1size(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    Vector_PxSweepQueryResult* self = (Vector_PxSweepQueryResult*) address;
+JNIEXPORT jint JNICALL Java_physx_support_Vector_1PxSweepQueryResult__1size(JNIEnv*, jclass, jlong _address) {
+    Vector_PxSweepQueryResult* self = (Vector_PxSweepQueryResult*) _address;
     return (jint) self->size();
 }
-JNIEXPORT void JNICALL Java_physx_support_Vector_1PxSweepQueryResult__1push_1back(JNIEnv* env, jclass, jlong address, jlong value) {
-    (void) env;    // avoid unused parameter warning / error
-    Vector_PxSweepQueryResult* self = (Vector_PxSweepQueryResult*) address;
+JNIEXPORT void JNICALL Java_physx_support_Vector_1PxSweepQueryResult__1push_1back(JNIEnv*, jclass, jlong _address, jlong value) {
+    Vector_PxSweepQueryResult* self = (Vector_PxSweepQueryResult*) _address;
     self->push_back(*((physx::PxSweepQueryResult*) value));
 }
-JNIEXPORT void JNICALL Java_physx_support_Vector_1PxSweepQueryResult__1delete_1native_1instance(JNIEnv*, jclass, jlong address) {
-    delete (Vector_PxSweepQueryResult*) address;
+JNIEXPORT void JNICALL Java_physx_support_Vector_1PxSweepQueryResult__1delete_1native_1instance(JNIEnv*, jclass, jlong _address) {
+    delete (Vector_PxSweepQueryResult*) _address;
 }
 
 // Vector_PxRaycastHit
-JNIEXPORT jlong JNICALL Java_physx_support_Vector_1PxRaycastHit__1Vector_1PxRaycastHit__(JNIEnv* env, jclass) {
-    (void) env;    // avoid unused parameter warning / error
+JNIEXPORT jlong JNICALL Java_physx_support_Vector_1PxRaycastHit__1Vector_1PxRaycastHit__(JNIEnv*, jclass) {
     return (jlong) new Vector_PxRaycastHit();
 }
-JNIEXPORT jlong JNICALL Java_physx_support_Vector_1PxRaycastHit__1Vector_1PxRaycastHit__I(JNIEnv* env, jclass, jint size) {
-    (void) env;    // avoid unused parameter warning / error
+JNIEXPORT jlong JNICALL Java_physx_support_Vector_1PxRaycastHit__1Vector_1PxRaycastHit__I(JNIEnv*, jclass, jint size) {
     return (jlong) new Vector_PxRaycastHit(size);
 }
-JNIEXPORT jlong JNICALL Java_physx_support_Vector_1PxRaycastHit__1at(JNIEnv* env, jclass, jlong address, jint index) {
-    (void) env;    // avoid unused parameter warning / error
-    Vector_PxRaycastHit* self = (Vector_PxRaycastHit*) address;
+JNIEXPORT jlong JNICALL Java_physx_support_Vector_1PxRaycastHit__1at(JNIEnv*, jclass, jlong _address, jint index) {
+    Vector_PxRaycastHit* self = (Vector_PxRaycastHit*) _address;
     return (jlong) &self->at(index);
 }
-JNIEXPORT jlong JNICALL Java_physx_support_Vector_1PxRaycastHit__1data(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    Vector_PxRaycastHit* self = (Vector_PxRaycastHit*) address;
+JNIEXPORT jlong JNICALL Java_physx_support_Vector_1PxRaycastHit__1data(JNIEnv*, jclass, jlong _address) {
+    Vector_PxRaycastHit* self = (Vector_PxRaycastHit*) _address;
     return (jlong) self->data();
 }
-JNIEXPORT jint JNICALL Java_physx_support_Vector_1PxRaycastHit__1size(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    Vector_PxRaycastHit* self = (Vector_PxRaycastHit*) address;
+JNIEXPORT jint JNICALL Java_physx_support_Vector_1PxRaycastHit__1size(JNIEnv*, jclass, jlong _address) {
+    Vector_PxRaycastHit* self = (Vector_PxRaycastHit*) _address;
     return (jint) self->size();
 }
-JNIEXPORT void JNICALL Java_physx_support_Vector_1PxRaycastHit__1push_1back(JNIEnv* env, jclass, jlong address, jlong value) {
-    (void) env;    // avoid unused parameter warning / error
-    Vector_PxRaycastHit* self = (Vector_PxRaycastHit*) address;
+JNIEXPORT void JNICALL Java_physx_support_Vector_1PxRaycastHit__1push_1back(JNIEnv*, jclass, jlong _address, jlong value) {
+    Vector_PxRaycastHit* self = (Vector_PxRaycastHit*) _address;
     self->push_back(*((physx::PxRaycastHit*) value));
 }
-JNIEXPORT void JNICALL Java_physx_support_Vector_1PxRaycastHit__1delete_1native_1instance(JNIEnv*, jclass, jlong address) {
-    delete (Vector_PxRaycastHit*) address;
+JNIEXPORT void JNICALL Java_physx_support_Vector_1PxRaycastHit__1delete_1native_1instance(JNIEnv*, jclass, jlong _address) {
+    delete (Vector_PxRaycastHit*) _address;
 }
 
 // Vector_PxSweepHit
-JNIEXPORT jlong JNICALL Java_physx_support_Vector_1PxSweepHit__1Vector_1PxSweepHit__(JNIEnv* env, jclass) {
-    (void) env;    // avoid unused parameter warning / error
+JNIEXPORT jlong JNICALL Java_physx_support_Vector_1PxSweepHit__1Vector_1PxSweepHit__(JNIEnv*, jclass) {
     return (jlong) new Vector_PxSweepHit();
 }
-JNIEXPORT jlong JNICALL Java_physx_support_Vector_1PxSweepHit__1Vector_1PxSweepHit__I(JNIEnv* env, jclass, jint size) {
-    (void) env;    // avoid unused parameter warning / error
+JNIEXPORT jlong JNICALL Java_physx_support_Vector_1PxSweepHit__1Vector_1PxSweepHit__I(JNIEnv*, jclass, jint size) {
     return (jlong) new Vector_PxSweepHit(size);
 }
-JNIEXPORT jlong JNICALL Java_physx_support_Vector_1PxSweepHit__1at(JNIEnv* env, jclass, jlong address, jint index) {
-    (void) env;    // avoid unused parameter warning / error
-    Vector_PxSweepHit* self = (Vector_PxSweepHit*) address;
+JNIEXPORT jlong JNICALL Java_physx_support_Vector_1PxSweepHit__1at(JNIEnv*, jclass, jlong _address, jint index) {
+    Vector_PxSweepHit* self = (Vector_PxSweepHit*) _address;
     return (jlong) &self->at(index);
 }
-JNIEXPORT jlong JNICALL Java_physx_support_Vector_1PxSweepHit__1data(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    Vector_PxSweepHit* self = (Vector_PxSweepHit*) address;
+JNIEXPORT jlong JNICALL Java_physx_support_Vector_1PxSweepHit__1data(JNIEnv*, jclass, jlong _address) {
+    Vector_PxSweepHit* self = (Vector_PxSweepHit*) _address;
     return (jlong) self->data();
 }
-JNIEXPORT jint JNICALL Java_physx_support_Vector_1PxSweepHit__1size(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    Vector_PxSweepHit* self = (Vector_PxSweepHit*) address;
+JNIEXPORT jint JNICALL Java_physx_support_Vector_1PxSweepHit__1size(JNIEnv*, jclass, jlong _address) {
+    Vector_PxSweepHit* self = (Vector_PxSweepHit*) _address;
     return (jint) self->size();
 }
-JNIEXPORT void JNICALL Java_physx_support_Vector_1PxSweepHit__1push_1back(JNIEnv* env, jclass, jlong address, jlong value) {
-    (void) env;    // avoid unused parameter warning / error
-    Vector_PxSweepHit* self = (Vector_PxSweepHit*) address;
+JNIEXPORT void JNICALL Java_physx_support_Vector_1PxSweepHit__1push_1back(JNIEnv*, jclass, jlong _address, jlong value) {
+    Vector_PxSweepHit* self = (Vector_PxSweepHit*) _address;
     self->push_back(*((physx::PxSweepHit*) value));
 }
-JNIEXPORT void JNICALL Java_physx_support_Vector_1PxSweepHit__1delete_1native_1instance(JNIEnv*, jclass, jlong address) {
-    delete (Vector_PxSweepHit*) address;
+JNIEXPORT void JNICALL Java_physx_support_Vector_1PxSweepHit__1delete_1native_1instance(JNIEnv*, jclass, jlong _address) {
+    delete (Vector_PxSweepHit*) _address;
 }
 
 // Vector_PxVehicleDrivableSurfaceType
-JNIEXPORT jlong JNICALL Java_physx_support_Vector_1PxVehicleDrivableSurfaceType__1Vector_1PxVehicleDrivableSurfaceType__(JNIEnv* env, jclass) {
-    (void) env;    // avoid unused parameter warning / error
+JNIEXPORT jlong JNICALL Java_physx_support_Vector_1PxVehicleDrivableSurfaceType__1Vector_1PxVehicleDrivableSurfaceType__(JNIEnv*, jclass) {
     return (jlong) new Vector_PxVehicleDrivableSurfaceType();
 }
-JNIEXPORT jlong JNICALL Java_physx_support_Vector_1PxVehicleDrivableSurfaceType__1Vector_1PxVehicleDrivableSurfaceType__I(JNIEnv* env, jclass, jint size) {
-    (void) env;    // avoid unused parameter warning / error
+JNIEXPORT jlong JNICALL Java_physx_support_Vector_1PxVehicleDrivableSurfaceType__1Vector_1PxVehicleDrivableSurfaceType__I(JNIEnv*, jclass, jint size) {
     return (jlong) new Vector_PxVehicleDrivableSurfaceType(size);
 }
-JNIEXPORT jlong JNICALL Java_physx_support_Vector_1PxVehicleDrivableSurfaceType__1at(JNIEnv* env, jclass, jlong address, jint index) {
-    (void) env;    // avoid unused parameter warning / error
-    Vector_PxVehicleDrivableSurfaceType* self = (Vector_PxVehicleDrivableSurfaceType*) address;
+JNIEXPORT jlong JNICALL Java_physx_support_Vector_1PxVehicleDrivableSurfaceType__1at(JNIEnv*, jclass, jlong _address, jint index) {
+    Vector_PxVehicleDrivableSurfaceType* self = (Vector_PxVehicleDrivableSurfaceType*) _address;
     return (jlong) &self->at(index);
 }
-JNIEXPORT jlong JNICALL Java_physx_support_Vector_1PxVehicleDrivableSurfaceType__1data(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    Vector_PxVehicleDrivableSurfaceType* self = (Vector_PxVehicleDrivableSurfaceType*) address;
+JNIEXPORT jlong JNICALL Java_physx_support_Vector_1PxVehicleDrivableSurfaceType__1data(JNIEnv*, jclass, jlong _address) {
+    Vector_PxVehicleDrivableSurfaceType* self = (Vector_PxVehicleDrivableSurfaceType*) _address;
     return (jlong) self->data();
 }
-JNIEXPORT jint JNICALL Java_physx_support_Vector_1PxVehicleDrivableSurfaceType__1size(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    Vector_PxVehicleDrivableSurfaceType* self = (Vector_PxVehicleDrivableSurfaceType*) address;
+JNIEXPORT jint JNICALL Java_physx_support_Vector_1PxVehicleDrivableSurfaceType__1size(JNIEnv*, jclass, jlong _address) {
+    Vector_PxVehicleDrivableSurfaceType* self = (Vector_PxVehicleDrivableSurfaceType*) _address;
     return (jint) self->size();
 }
-JNIEXPORT void JNICALL Java_physx_support_Vector_1PxVehicleDrivableSurfaceType__1push_1back(JNIEnv* env, jclass, jlong address, jlong value) {
-    (void) env;    // avoid unused parameter warning / error
-    Vector_PxVehicleDrivableSurfaceType* self = (Vector_PxVehicleDrivableSurfaceType*) address;
+JNIEXPORT void JNICALL Java_physx_support_Vector_1PxVehicleDrivableSurfaceType__1push_1back(JNIEnv*, jclass, jlong _address, jlong value) {
+    Vector_PxVehicleDrivableSurfaceType* self = (Vector_PxVehicleDrivableSurfaceType*) _address;
     self->push_back(*((physx::PxVehicleDrivableSurfaceType*) value));
 }
-JNIEXPORT void JNICALL Java_physx_support_Vector_1PxVehicleDrivableSurfaceType__1delete_1native_1instance(JNIEnv*, jclass, jlong address) {
-    delete (Vector_PxVehicleDrivableSurfaceType*) address;
+JNIEXPORT void JNICALL Java_physx_support_Vector_1PxVehicleDrivableSurfaceType__1delete_1native_1instance(JNIEnv*, jclass, jlong _address) {
+    delete (Vector_PxVehicleDrivableSurfaceType*) _address;
 }
 
 // Vector_PxWheelQueryResult
-JNIEXPORT jlong JNICALL Java_physx_support_Vector_1PxWheelQueryResult__1Vector_1PxWheelQueryResult__(JNIEnv* env, jclass) {
-    (void) env;    // avoid unused parameter warning / error
+JNIEXPORT jlong JNICALL Java_physx_support_Vector_1PxWheelQueryResult__1Vector_1PxWheelQueryResult__(JNIEnv*, jclass) {
     return (jlong) new Vector_PxWheelQueryResult();
 }
-JNIEXPORT jlong JNICALL Java_physx_support_Vector_1PxWheelQueryResult__1Vector_1PxWheelQueryResult__I(JNIEnv* env, jclass, jint size) {
-    (void) env;    // avoid unused parameter warning / error
+JNIEXPORT jlong JNICALL Java_physx_support_Vector_1PxWheelQueryResult__1Vector_1PxWheelQueryResult__I(JNIEnv*, jclass, jint size) {
     return (jlong) new Vector_PxWheelQueryResult(size);
 }
-JNIEXPORT jlong JNICALL Java_physx_support_Vector_1PxWheelQueryResult__1at(JNIEnv* env, jclass, jlong address, jint index) {
-    (void) env;    // avoid unused parameter warning / error
-    Vector_PxWheelQueryResult* self = (Vector_PxWheelQueryResult*) address;
+JNIEXPORT jlong JNICALL Java_physx_support_Vector_1PxWheelQueryResult__1at(JNIEnv*, jclass, jlong _address, jint index) {
+    Vector_PxWheelQueryResult* self = (Vector_PxWheelQueryResult*) _address;
     return (jlong) &self->at(index);
 }
-JNIEXPORT jlong JNICALL Java_physx_support_Vector_1PxWheelQueryResult__1data(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    Vector_PxWheelQueryResult* self = (Vector_PxWheelQueryResult*) address;
+JNIEXPORT jlong JNICALL Java_physx_support_Vector_1PxWheelQueryResult__1data(JNIEnv*, jclass, jlong _address) {
+    Vector_PxWheelQueryResult* self = (Vector_PxWheelQueryResult*) _address;
     return (jlong) self->data();
 }
-JNIEXPORT jint JNICALL Java_physx_support_Vector_1PxWheelQueryResult__1size(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    Vector_PxWheelQueryResult* self = (Vector_PxWheelQueryResult*) address;
+JNIEXPORT jint JNICALL Java_physx_support_Vector_1PxWheelQueryResult__1size(JNIEnv*, jclass, jlong _address) {
+    Vector_PxWheelQueryResult* self = (Vector_PxWheelQueryResult*) _address;
     return (jint) self->size();
 }
-JNIEXPORT void JNICALL Java_physx_support_Vector_1PxWheelQueryResult__1push_1back(JNIEnv* env, jclass, jlong address, jlong value) {
-    (void) env;    // avoid unused parameter warning / error
-    Vector_PxWheelQueryResult* self = (Vector_PxWheelQueryResult*) address;
+JNIEXPORT void JNICALL Java_physx_support_Vector_1PxWheelQueryResult__1push_1back(JNIEnv*, jclass, jlong _address, jlong value) {
+    Vector_PxWheelQueryResult* self = (Vector_PxWheelQueryResult*) _address;
     self->push_back(*((physx::PxWheelQueryResult*) value));
 }
-JNIEXPORT void JNICALL Java_physx_support_Vector_1PxWheelQueryResult__1delete_1native_1instance(JNIEnv*, jclass, jlong address) {
-    delete (Vector_PxWheelQueryResult*) address;
+JNIEXPORT void JNICALL Java_physx_support_Vector_1PxWheelQueryResult__1delete_1native_1instance(JNIEnv*, jclass, jlong _address) {
+    delete (Vector_PxWheelQueryResult*) _address;
 }
 
 // PxVehicleWheelsPtr
-JNIEXPORT void JNICALL Java_physx_support_PxVehicleWheelsPtr__1delete_1native_1instance(JNIEnv*, jclass, jlong address) {
-    delete (PxVehicleWheelsPtr*) address;
+JNIEXPORT void JNICALL Java_physx_support_PxVehicleWheelsPtr__1delete_1native_1instance(JNIEnv*, jclass, jlong _address) {
+    delete (PxVehicleWheelsPtr*) _address;
 }
 
 // Vector_PxVehicleWheels
-JNIEXPORT jlong JNICALL Java_physx_support_Vector_1PxVehicleWheels__1Vector_1PxVehicleWheels__(JNIEnv* env, jclass) {
-    (void) env;    // avoid unused parameter warning / error
+JNIEXPORT jlong JNICALL Java_physx_support_Vector_1PxVehicleWheels__1Vector_1PxVehicleWheels__(JNIEnv*, jclass) {
     return (jlong) new Vector_PxVehicleWheels();
 }
-JNIEXPORT jlong JNICALL Java_physx_support_Vector_1PxVehicleWheels__1Vector_1PxVehicleWheels__I(JNIEnv* env, jclass, jint size) {
-    (void) env;    // avoid unused parameter warning / error
+JNIEXPORT jlong JNICALL Java_physx_support_Vector_1PxVehicleWheels__1Vector_1PxVehicleWheels__I(JNIEnv*, jclass, jint size) {
     return (jlong) new Vector_PxVehicleWheels(size);
 }
-JNIEXPORT jlong JNICALL Java_physx_support_Vector_1PxVehicleWheels__1at(JNIEnv* env, jclass, jlong address, jint index) {
-    (void) env;    // avoid unused parameter warning / error
-    Vector_PxVehicleWheels* self = (Vector_PxVehicleWheels*) address;
+JNIEXPORT jlong JNICALL Java_physx_support_Vector_1PxVehicleWheels__1at(JNIEnv*, jclass, jlong _address, jint index) {
+    Vector_PxVehicleWheels* self = (Vector_PxVehicleWheels*) _address;
     return (jlong) self->at(index);
 }
-JNIEXPORT jlong JNICALL Java_physx_support_Vector_1PxVehicleWheels__1data(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    Vector_PxVehicleWheels* self = (Vector_PxVehicleWheels*) address;
+JNIEXPORT jlong JNICALL Java_physx_support_Vector_1PxVehicleWheels__1data(JNIEnv*, jclass, jlong _address) {
+    Vector_PxVehicleWheels* self = (Vector_PxVehicleWheels*) _address;
     return (jlong) self->data();
 }
-JNIEXPORT jint JNICALL Java_physx_support_Vector_1PxVehicleWheels__1size(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    Vector_PxVehicleWheels* self = (Vector_PxVehicleWheels*) address;
+JNIEXPORT jint JNICALL Java_physx_support_Vector_1PxVehicleWheels__1size(JNIEnv*, jclass, jlong _address) {
+    Vector_PxVehicleWheels* self = (Vector_PxVehicleWheels*) _address;
     return (jint) self->size();
 }
-JNIEXPORT void JNICALL Java_physx_support_Vector_1PxVehicleWheels__1push_1back(JNIEnv* env, jclass, jlong address, jlong value) {
-    (void) env;    // avoid unused parameter warning / error
-    Vector_PxVehicleWheels* self = (Vector_PxVehicleWheels*) address;
+JNIEXPORT void JNICALL Java_physx_support_Vector_1PxVehicleWheels__1push_1back(JNIEnv*, jclass, jlong _address, jlong value) {
+    Vector_PxVehicleWheels* self = (Vector_PxVehicleWheels*) _address;
     self->push_back((physx::PxVehicleWheels*) value);
 }
-JNIEXPORT void JNICALL Java_physx_support_Vector_1PxVehicleWheels__1delete_1native_1instance(JNIEnv*, jclass, jlong address) {
-    delete (Vector_PxVehicleWheels*) address;
+JNIEXPORT void JNICALL Java_physx_support_Vector_1PxVehicleWheels__1delete_1native_1instance(JNIEnv*, jclass, jlong _address) {
+    delete (Vector_PxVehicleWheels*) _address;
 }
 
 // PxVehicleTopLevelFunctions
-JNIEXPORT jboolean JNICALL Java_physx_vehicle_PxVehicleTopLevelFunctions__1InitVehicleSDK(JNIEnv* env, jclass, jlong physics) {
-    (void) env;    // avoid unused parameter warning / error
+JNIEXPORT jboolean JNICALL Java_physx_vehicle_PxVehicleTopLevelFunctions__1InitVehicleSDK(JNIEnv*, jclass, jlong physics) {
     return (jboolean) PxVehicleTopLevelFunctions::InitVehicleSDK(*((physx::PxPhysics*) physics));
 }
-JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleTopLevelFunctions__1PxVehicleComputeSprungMasses(JNIEnv* env, jclass, jint nbSprungMasses, jlong sprungMassCoordinates, jlong centreOfMass, jfloat totalMass, jint gravityDirection, jlong sprungMasses) {
-    (void) env;    // avoid unused parameter warning / error
+JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleTopLevelFunctions__1PxVehicleComputeSprungMasses(JNIEnv*, jclass, jint nbSprungMasses, jlong sprungMassCoordinates, jlong centreOfMass, jfloat totalMass, jint gravityDirection, jlong sprungMasses) {
     PxVehicleTopLevelFunctions::PxVehicleComputeSprungMasses(nbSprungMasses, (physx::PxVec3*) sprungMassCoordinates, *((physx::PxVec3*) centreOfMass), totalMass, gravityDirection, *((PxRealPtr*) sprungMasses));
 }
-JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleTopLevelFunctions__1PxVehicleSuspensionRaycasts(JNIEnv* env, jclass, jlong batchQuery, jlong vehicles, jint nbSceneQueryResults, jlong sceneQueryResults) {
-    (void) env;    // avoid unused parameter warning / error
+JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleTopLevelFunctions__1PxVehicleSuspensionRaycasts(JNIEnv*, jclass, jlong batchQuery, jlong vehicles, jint nbSceneQueryResults, jlong sceneQueryResults) {
     PxVehicleTopLevelFunctions::PxVehicleSuspensionRaycasts((physx::PxBatchQuery*) batchQuery, *((Vector_PxVehicleWheels*) vehicles), nbSceneQueryResults, (physx::PxRaycastQueryResult*) sceneQueryResults);
 }
-JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleTopLevelFunctions__1PxVehicleUpdates(JNIEnv* env, jclass, jfloat timestep, jlong gravity, jlong vehicleDrivableSurfaceToTireFrictionPairs, jlong vehicles, jlong vehicleWheelQueryResults) {
-    (void) env;    // avoid unused parameter warning / error
+JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleTopLevelFunctions__1PxVehicleUpdates(JNIEnv*, jclass, jfloat timestep, jlong gravity, jlong vehicleDrivableSurfaceToTireFrictionPairs, jlong vehicles, jlong vehicleWheelQueryResults) {
     PxVehicleTopLevelFunctions::PxVehicleUpdates(timestep, *((physx::PxVec3*) gravity), *((physx::PxVehicleDrivableSurfaceToTireFrictionPairs*) vehicleDrivableSurfaceToTireFrictionPairs), *((Vector_PxVehicleWheels*) vehicles), (physx::PxVehicleWheelQueryResult*) vehicleWheelQueryResults);
 }
-JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleTopLevelFunctions__1VehicleSetBasisVectors(JNIEnv* env, jclass, jlong up, jlong forward) {
-    (void) env;    // avoid unused parameter warning / error
+JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleTopLevelFunctions__1VehicleSetBasisVectors(JNIEnv*, jclass, jlong up, jlong forward) {
     PxVehicleTopLevelFunctions::VehicleSetBasisVectors(*((physx::PxVec3*) up), *((physx::PxVec3*) forward));
 }
-JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleTopLevelFunctions__1VehicleSetUpdateMode(JNIEnv* env, jclass, jint vehicleUpdateMode) {
-    (void) env;    // avoid unused parameter warning / error
+JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleTopLevelFunctions__1VehicleSetUpdateMode(JNIEnv*, jclass, jint vehicleUpdateMode) {
     PxVehicleTopLevelFunctions::VehicleSetUpdateMode((PxVehicleUpdateModeEnum) vehicleUpdateMode);
 }
-JNIEXPORT jfloat JNICALL Java_physx_vehicle_PxVehicleTopLevelFunctions__1PxVehicleTireData_1getFrictionVsSlipGraph(JNIEnv* env, jclass, jlong tireData, jint m, jint n) {
-    (void) env;    // avoid unused parameter warning / error
+JNIEXPORT jfloat JNICALL Java_physx_vehicle_PxVehicleTopLevelFunctions__1PxVehicleTireData_1getFrictionVsSlipGraph(JNIEnv*, jclass, jlong tireData, jint m, jint n) {
     return (jfloat) PxVehicleTopLevelFunctions::PxVehicleTireData_getFrictionVsSlipGraph((physx::PxVehicleTireData*) tireData, m, n);
 }
-JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleTopLevelFunctions__1PxVehicleTireData_1setFrictionVsSlipGraph(JNIEnv* env, jclass, jlong tireData, jint m, jint n, jfloat value) {
-    (void) env;    // avoid unused parameter warning / error
+JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleTopLevelFunctions__1PxVehicleTireData_1setFrictionVsSlipGraph(JNIEnv*, jclass, jlong tireData, jint m, jint n, jfloat value) {
     PxVehicleTopLevelFunctions::PxVehicleTireData_setFrictionVsSlipGraph((physx::PxVehicleTireData*) tireData, m, n, value);
 }
-JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleTopLevelFunctions__1delete_1native_1instance(JNIEnv*, jclass, jlong address) {
-    delete (PxVehicleTopLevelFunctions*) address;
+JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleTopLevelFunctions__1delete_1native_1instance(JNIEnv*, jclass, jlong _address) {
+    delete (PxVehicleTopLevelFunctions*) _address;
 }
 
 // PxVehicleAckermannGeometryData
-JNIEXPORT jlong JNICALL Java_physx_vehicle_PxVehicleAckermannGeometryData__1PxVehicleAckermannGeometryData(JNIEnv* env, jclass) {
-    (void) env;    // avoid unused parameter warning / error
+JNIEXPORT jlong JNICALL Java_physx_vehicle_PxVehicleAckermannGeometryData__1PxVehicleAckermannGeometryData(JNIEnv*, jclass) {
     return (jlong) new physx::PxVehicleAckermannGeometryData();
 }
-JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleAckermannGeometryData__1delete_1native_1instance(JNIEnv*, jclass, jlong address) {
-    delete (physx::PxVehicleAckermannGeometryData*) address;
+JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleAckermannGeometryData__1delete_1native_1instance(JNIEnv*, jclass, jlong _address) {
+    delete (physx::PxVehicleAckermannGeometryData*) _address;
 }
-JNIEXPORT jfloat JNICALL Java_physx_vehicle_PxVehicleAckermannGeometryData__1getMAccuracy(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleAckermannGeometryData* self = (physx::PxVehicleAckermannGeometryData*) address;
-    return (jfloat) self->mAccuracy;
+JNIEXPORT jfloat JNICALL Java_physx_vehicle_PxVehicleAckermannGeometryData__1getMAccuracy(JNIEnv*, jclass, jlong _address) {
+    physx::PxVehicleAckermannGeometryData* _self = (physx::PxVehicleAckermannGeometryData*) _address;
+    return (jfloat) _self->mAccuracy;
 }
-JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleAckermannGeometryData__1setMAccuracy(JNIEnv* env, jclass, jlong address, jfloat value) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleAckermannGeometryData* self = (physx::PxVehicleAckermannGeometryData*) address;
-    self->mAccuracy = value;
+JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleAckermannGeometryData__1setMAccuracy(JNIEnv*, jclass, jlong _address, jfloat value) {
+    physx::PxVehicleAckermannGeometryData* _self = (physx::PxVehicleAckermannGeometryData*) _address;
+    _self->mAccuracy = value;
 }
-JNIEXPORT jfloat JNICALL Java_physx_vehicle_PxVehicleAckermannGeometryData__1getMFrontWidth(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleAckermannGeometryData* self = (physx::PxVehicleAckermannGeometryData*) address;
-    return (jfloat) self->mFrontWidth;
+JNIEXPORT jfloat JNICALL Java_physx_vehicle_PxVehicleAckermannGeometryData__1getMFrontWidth(JNIEnv*, jclass, jlong _address) {
+    physx::PxVehicleAckermannGeometryData* _self = (physx::PxVehicleAckermannGeometryData*) _address;
+    return (jfloat) _self->mFrontWidth;
 }
-JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleAckermannGeometryData__1setMFrontWidth(JNIEnv* env, jclass, jlong address, jfloat value) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleAckermannGeometryData* self = (physx::PxVehicleAckermannGeometryData*) address;
-    self->mFrontWidth = value;
+JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleAckermannGeometryData__1setMFrontWidth(JNIEnv*, jclass, jlong _address, jfloat value) {
+    physx::PxVehicleAckermannGeometryData* _self = (physx::PxVehicleAckermannGeometryData*) _address;
+    _self->mFrontWidth = value;
 }
-JNIEXPORT jfloat JNICALL Java_physx_vehicle_PxVehicleAckermannGeometryData__1getMRearWidth(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleAckermannGeometryData* self = (physx::PxVehicleAckermannGeometryData*) address;
-    return (jfloat) self->mRearWidth;
+JNIEXPORT jfloat JNICALL Java_physx_vehicle_PxVehicleAckermannGeometryData__1getMRearWidth(JNIEnv*, jclass, jlong _address) {
+    physx::PxVehicleAckermannGeometryData* _self = (physx::PxVehicleAckermannGeometryData*) _address;
+    return (jfloat) _self->mRearWidth;
 }
-JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleAckermannGeometryData__1setMRearWidth(JNIEnv* env, jclass, jlong address, jfloat value) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleAckermannGeometryData* self = (physx::PxVehicleAckermannGeometryData*) address;
-    self->mRearWidth = value;
+JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleAckermannGeometryData__1setMRearWidth(JNIEnv*, jclass, jlong _address, jfloat value) {
+    physx::PxVehicleAckermannGeometryData* _self = (physx::PxVehicleAckermannGeometryData*) _address;
+    _self->mRearWidth = value;
 }
-JNIEXPORT jfloat JNICALL Java_physx_vehicle_PxVehicleAckermannGeometryData__1getMAxleSeparation(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleAckermannGeometryData* self = (physx::PxVehicleAckermannGeometryData*) address;
-    return (jfloat) self->mAxleSeparation;
+JNIEXPORT jfloat JNICALL Java_physx_vehicle_PxVehicleAckermannGeometryData__1getMAxleSeparation(JNIEnv*, jclass, jlong _address) {
+    physx::PxVehicleAckermannGeometryData* _self = (physx::PxVehicleAckermannGeometryData*) _address;
+    return (jfloat) _self->mAxleSeparation;
 }
-JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleAckermannGeometryData__1setMAxleSeparation(JNIEnv* env, jclass, jlong address, jfloat value) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleAckermannGeometryData* self = (physx::PxVehicleAckermannGeometryData*) address;
-    self->mAxleSeparation = value;
+JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleAckermannGeometryData__1setMAxleSeparation(JNIEnv*, jclass, jlong _address, jfloat value) {
+    physx::PxVehicleAckermannGeometryData* _self = (physx::PxVehicleAckermannGeometryData*) _address;
+    _self->mAxleSeparation = value;
 }
 
 // PxVehicleAntiRollBarData
-JNIEXPORT jlong JNICALL Java_physx_vehicle_PxVehicleAntiRollBarData__1PxVehicleAntiRollBarData(JNIEnv* env, jclass) {
-    (void) env;    // avoid unused parameter warning / error
+JNIEXPORT jlong JNICALL Java_physx_vehicle_PxVehicleAntiRollBarData__1PxVehicleAntiRollBarData(JNIEnv*, jclass) {
     return (jlong) new physx::PxVehicleAntiRollBarData();
 }
-JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleAntiRollBarData__1delete_1native_1instance(JNIEnv*, jclass, jlong address) {
-    delete (physx::PxVehicleAntiRollBarData*) address;
+JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleAntiRollBarData__1delete_1native_1instance(JNIEnv*, jclass, jlong _address) {
+    delete (physx::PxVehicleAntiRollBarData*) _address;
 }
-JNIEXPORT jint JNICALL Java_physx_vehicle_PxVehicleAntiRollBarData__1getMWheel0(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleAntiRollBarData* self = (physx::PxVehicleAntiRollBarData*) address;
-    return (jint) self->mWheel0;
+JNIEXPORT jint JNICALL Java_physx_vehicle_PxVehicleAntiRollBarData__1getMWheel0(JNIEnv*, jclass, jlong _address) {
+    physx::PxVehicleAntiRollBarData* _self = (physx::PxVehicleAntiRollBarData*) _address;
+    return (jint) _self->mWheel0;
 }
-JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleAntiRollBarData__1setMWheel0(JNIEnv* env, jclass, jlong address, jint value) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleAntiRollBarData* self = (physx::PxVehicleAntiRollBarData*) address;
-    self->mWheel0 = value;
+JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleAntiRollBarData__1setMWheel0(JNIEnv*, jclass, jlong _address, jint value) {
+    physx::PxVehicleAntiRollBarData* _self = (physx::PxVehicleAntiRollBarData*) _address;
+    _self->mWheel0 = value;
 }
-JNIEXPORT jint JNICALL Java_physx_vehicle_PxVehicleAntiRollBarData__1getMWheel1(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleAntiRollBarData* self = (physx::PxVehicleAntiRollBarData*) address;
-    return (jint) self->mWheel1;
+JNIEXPORT jint JNICALL Java_physx_vehicle_PxVehicleAntiRollBarData__1getMWheel1(JNIEnv*, jclass, jlong _address) {
+    physx::PxVehicleAntiRollBarData* _self = (physx::PxVehicleAntiRollBarData*) _address;
+    return (jint) _self->mWheel1;
 }
-JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleAntiRollBarData__1setMWheel1(JNIEnv* env, jclass, jlong address, jint value) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleAntiRollBarData* self = (physx::PxVehicleAntiRollBarData*) address;
-    self->mWheel1 = value;
+JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleAntiRollBarData__1setMWheel1(JNIEnv*, jclass, jlong _address, jint value) {
+    physx::PxVehicleAntiRollBarData* _self = (physx::PxVehicleAntiRollBarData*) _address;
+    _self->mWheel1 = value;
 }
-JNIEXPORT jfloat JNICALL Java_physx_vehicle_PxVehicleAntiRollBarData__1getMStiffness(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleAntiRollBarData* self = (physx::PxVehicleAntiRollBarData*) address;
-    return (jfloat) self->mStiffness;
+JNIEXPORT jfloat JNICALL Java_physx_vehicle_PxVehicleAntiRollBarData__1getMStiffness(JNIEnv*, jclass, jlong _address) {
+    physx::PxVehicleAntiRollBarData* _self = (physx::PxVehicleAntiRollBarData*) _address;
+    return (jfloat) _self->mStiffness;
 }
-JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleAntiRollBarData__1setMStiffness(JNIEnv* env, jclass, jlong address, jfloat value) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleAntiRollBarData* self = (physx::PxVehicleAntiRollBarData*) address;
-    self->mStiffness = value;
+JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleAntiRollBarData__1setMStiffness(JNIEnv*, jclass, jlong _address, jfloat value) {
+    physx::PxVehicleAntiRollBarData* _self = (physx::PxVehicleAntiRollBarData*) _address;
+    _self->mStiffness = value;
 }
 
 // PxVehicleAutoBoxData
-JNIEXPORT jlong JNICALL Java_physx_vehicle_PxVehicleAutoBoxData__1PxVehicleAutoBoxData(JNIEnv* env, jclass) {
-    (void) env;    // avoid unused parameter warning / error
+JNIEXPORT jlong JNICALL Java_physx_vehicle_PxVehicleAutoBoxData__1PxVehicleAutoBoxData(JNIEnv*, jclass) {
     return (jlong) new physx::PxVehicleAutoBoxData();
 }
-JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleAutoBoxData__1setLatency(JNIEnv* env, jclass, jlong address, jfloat latency) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleAutoBoxData* self = (physx::PxVehicleAutoBoxData*) address;
+JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleAutoBoxData__1setLatency(JNIEnv*, jclass, jlong _address, jfloat latency) {
+    physx::PxVehicleAutoBoxData* self = (physx::PxVehicleAutoBoxData*) _address;
     self->setLatency(latency);
 }
-JNIEXPORT jfloat JNICALL Java_physx_vehicle_PxVehicleAutoBoxData__1getLatency(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleAutoBoxData* self = (physx::PxVehicleAutoBoxData*) address;
+JNIEXPORT jfloat JNICALL Java_physx_vehicle_PxVehicleAutoBoxData__1getLatency(JNIEnv*, jclass, jlong _address) {
+    physx::PxVehicleAutoBoxData* self = (physx::PxVehicleAutoBoxData*) _address;
     return (jfloat) self->getLatency();
 }
-JNIEXPORT jfloat JNICALL Java_physx_vehicle_PxVehicleAutoBoxData__1getUpRatios(JNIEnv* env, jclass, jlong address, jint a) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleAutoBoxData* self = (physx::PxVehicleAutoBoxData*) address;
+JNIEXPORT jfloat JNICALL Java_physx_vehicle_PxVehicleAutoBoxData__1getUpRatios(JNIEnv*, jclass, jlong _address, jint a) {
+    physx::PxVehicleAutoBoxData* self = (physx::PxVehicleAutoBoxData*) _address;
     return (jfloat) self->getUpRatios((PxVehicleGearEnum) a);
 }
-JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleAutoBoxData__1setUpRatios(JNIEnv* env, jclass, jlong address, jint a, jfloat ratio) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleAutoBoxData* self = (physx::PxVehicleAutoBoxData*) address;
+JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleAutoBoxData__1setUpRatios(JNIEnv*, jclass, jlong _address, jint a, jfloat ratio) {
+    physx::PxVehicleAutoBoxData* self = (physx::PxVehicleAutoBoxData*) _address;
     self->setUpRatios((PxVehicleGearEnum) a, ratio);
 }
-JNIEXPORT jfloat JNICALL Java_physx_vehicle_PxVehicleAutoBoxData__1getDownRatios(JNIEnv* env, jclass, jlong address, jint a) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleAutoBoxData* self = (physx::PxVehicleAutoBoxData*) address;
+JNIEXPORT jfloat JNICALL Java_physx_vehicle_PxVehicleAutoBoxData__1getDownRatios(JNIEnv*, jclass, jlong _address, jint a) {
+    physx::PxVehicleAutoBoxData* self = (physx::PxVehicleAutoBoxData*) _address;
     return (jfloat) self->getDownRatios((PxVehicleGearEnum) a);
 }
-JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleAutoBoxData__1setDownRatios(JNIEnv* env, jclass, jlong address, jint a, jfloat ratio) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleAutoBoxData* self = (physx::PxVehicleAutoBoxData*) address;
+JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleAutoBoxData__1setDownRatios(JNIEnv*, jclass, jlong _address, jint a, jfloat ratio) {
+    physx::PxVehicleAutoBoxData* self = (physx::PxVehicleAutoBoxData*) _address;
     self->setDownRatios((PxVehicleGearEnum) a, ratio);
 }
-JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleAutoBoxData__1delete_1native_1instance(JNIEnv*, jclass, jlong address) {
-    delete (physx::PxVehicleAutoBoxData*) address;
+JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleAutoBoxData__1delete_1native_1instance(JNIEnv*, jclass, jlong _address) {
+    delete (physx::PxVehicleAutoBoxData*) _address;
 }
-JNIEXPORT jfloat JNICALL Java_physx_vehicle_PxVehicleAutoBoxData__1getMUpRatios(JNIEnv* env, jclass, jlong address, jint index) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleAutoBoxData* self = (physx::PxVehicleAutoBoxData*) address;
-    return (jfloat) self->mUpRatios[index];
+JNIEXPORT jfloat JNICALL Java_physx_vehicle_PxVehicleAutoBoxData__1getMUpRatios(JNIEnv*, jclass, jlong _address, jint _index) {
+    physx::PxVehicleAutoBoxData* _self = (physx::PxVehicleAutoBoxData*) _address;
+    return (jfloat) _self->mUpRatios[_index];
 }
-JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleAutoBoxData__1setMUpRatios(JNIEnv* env, jclass, jlong address, jint index, jfloat value) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleAutoBoxData* self = (physx::PxVehicleAutoBoxData*) address;
-    self->mUpRatios[index] = value;
+JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleAutoBoxData__1setMUpRatios(JNIEnv*, jclass, jlong _address, jint _index, jfloat value) {
+    physx::PxVehicleAutoBoxData* _self = (physx::PxVehicleAutoBoxData*) _address;
+    _self->mUpRatios[_index] = value;
 }
-JNIEXPORT jfloat JNICALL Java_physx_vehicle_PxVehicleAutoBoxData__1getMDownRatios(JNIEnv* env, jclass, jlong address, jint index) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleAutoBoxData* self = (physx::PxVehicleAutoBoxData*) address;
-    return (jfloat) self->mDownRatios[index];
+JNIEXPORT jfloat JNICALL Java_physx_vehicle_PxVehicleAutoBoxData__1getMDownRatios(JNIEnv*, jclass, jlong _address, jint _index) {
+    physx::PxVehicleAutoBoxData* _self = (physx::PxVehicleAutoBoxData*) _address;
+    return (jfloat) _self->mDownRatios[_index];
 }
-JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleAutoBoxData__1setMDownRatios(JNIEnv* env, jclass, jlong address, jint index, jfloat value) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleAutoBoxData* self = (physx::PxVehicleAutoBoxData*) address;
-    self->mDownRatios[index] = value;
+JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleAutoBoxData__1setMDownRatios(JNIEnv*, jclass, jlong _address, jint _index, jfloat value) {
+    physx::PxVehicleAutoBoxData* _self = (physx::PxVehicleAutoBoxData*) _address;
+    _self->mDownRatios[_index] = value;
 }
 
 // PxVehicleChassisData
-JNIEXPORT jlong JNICALL Java_physx_vehicle_PxVehicleChassisData__1PxVehicleChassisData(JNIEnv* env, jclass) {
-    (void) env;    // avoid unused parameter warning / error
+JNIEXPORT jlong JNICALL Java_physx_vehicle_PxVehicleChassisData__1PxVehicleChassisData(JNIEnv*, jclass) {
     return (jlong) new physx::PxVehicleChassisData();
 }
-JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleChassisData__1delete_1native_1instance(JNIEnv*, jclass, jlong address) {
-    delete (physx::PxVehicleChassisData*) address;
+JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleChassisData__1delete_1native_1instance(JNIEnv*, jclass, jlong _address) {
+    delete (physx::PxVehicleChassisData*) _address;
 }
-JNIEXPORT jlong JNICALL Java_physx_vehicle_PxVehicleChassisData__1getMMOI(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleChassisData* self = (physx::PxVehicleChassisData*) address;
-    return (jlong) &self->mMOI;
+JNIEXPORT jlong JNICALL Java_physx_vehicle_PxVehicleChassisData__1getMMOI(JNIEnv*, jclass, jlong _address) {
+    physx::PxVehicleChassisData* _self = (physx::PxVehicleChassisData*) _address;
+    return (jlong) &_self->mMOI;
 }
-JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleChassisData__1setMMOI(JNIEnv* env, jclass, jlong address, jlong value) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleChassisData* self = (physx::PxVehicleChassisData*) address;
-    self->mMOI = *((physx::PxVec3*) value);
+JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleChassisData__1setMMOI(JNIEnv*, jclass, jlong _address, jlong value) {
+    physx::PxVehicleChassisData* _self = (physx::PxVehicleChassisData*) _address;
+    _self->mMOI = *((physx::PxVec3*) value);
 }
-JNIEXPORT jfloat JNICALL Java_physx_vehicle_PxVehicleChassisData__1getMMass(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleChassisData* self = (physx::PxVehicleChassisData*) address;
-    return (jfloat) self->mMass;
+JNIEXPORT jfloat JNICALL Java_physx_vehicle_PxVehicleChassisData__1getMMass(JNIEnv*, jclass, jlong _address) {
+    physx::PxVehicleChassisData* _self = (physx::PxVehicleChassisData*) _address;
+    return (jfloat) _self->mMass;
 }
-JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleChassisData__1setMMass(JNIEnv* env, jclass, jlong address, jfloat value) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleChassisData* self = (physx::PxVehicleChassisData*) address;
-    self->mMass = value;
+JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleChassisData__1setMMass(JNIEnv*, jclass, jlong _address, jfloat value) {
+    physx::PxVehicleChassisData* _self = (physx::PxVehicleChassisData*) _address;
+    _self->mMass = value;
 }
-JNIEXPORT jlong JNICALL Java_physx_vehicle_PxVehicleChassisData__1getMCMOffset(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleChassisData* self = (physx::PxVehicleChassisData*) address;
-    return (jlong) &self->mCMOffset;
+JNIEXPORT jlong JNICALL Java_physx_vehicle_PxVehicleChassisData__1getMCMOffset(JNIEnv*, jclass, jlong _address) {
+    physx::PxVehicleChassisData* _self = (physx::PxVehicleChassisData*) _address;
+    return (jlong) &_self->mCMOffset;
 }
-JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleChassisData__1setMCMOffset(JNIEnv* env, jclass, jlong address, jlong value) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleChassisData* self = (physx::PxVehicleChassisData*) address;
-    self->mCMOffset = *((physx::PxVec3*) value);
+JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleChassisData__1setMCMOffset(JNIEnv*, jclass, jlong _address, jlong value) {
+    physx::PxVehicleChassisData* _self = (physx::PxVehicleChassisData*) _address;
+    _self->mCMOffset = *((physx::PxVec3*) value);
 }
 
 // PxVehicleClutchData
-JNIEXPORT jlong JNICALL Java_physx_vehicle_PxVehicleClutchData__1PxVehicleClutchData(JNIEnv* env, jclass) {
-    (void) env;    // avoid unused parameter warning / error
+JNIEXPORT jlong JNICALL Java_physx_vehicle_PxVehicleClutchData__1PxVehicleClutchData(JNIEnv*, jclass) {
     return (jlong) new physx::PxVehicleClutchData();
 }
-JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleClutchData__1delete_1native_1instance(JNIEnv*, jclass, jlong address) {
-    delete (physx::PxVehicleClutchData*) address;
+JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleClutchData__1delete_1native_1instance(JNIEnv*, jclass, jlong _address) {
+    delete (physx::PxVehicleClutchData*) _address;
 }
-JNIEXPORT jfloat JNICALL Java_physx_vehicle_PxVehicleClutchData__1getMStrength(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleClutchData* self = (physx::PxVehicleClutchData*) address;
-    return (jfloat) self->mStrength;
+JNIEXPORT jfloat JNICALL Java_physx_vehicle_PxVehicleClutchData__1getMStrength(JNIEnv*, jclass, jlong _address) {
+    physx::PxVehicleClutchData* _self = (physx::PxVehicleClutchData*) _address;
+    return (jfloat) _self->mStrength;
 }
-JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleClutchData__1setMStrength(JNIEnv* env, jclass, jlong address, jfloat value) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleClutchData* self = (physx::PxVehicleClutchData*) address;
-    self->mStrength = value;
+JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleClutchData__1setMStrength(JNIEnv*, jclass, jlong _address, jfloat value) {
+    physx::PxVehicleClutchData* _self = (physx::PxVehicleClutchData*) _address;
+    _self->mStrength = value;
 }
-JNIEXPORT jint JNICALL Java_physx_vehicle_PxVehicleClutchData__1getMAccuracyMode(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleClutchData* self = (physx::PxVehicleClutchData*) address;
-    return (PxVehicleClutchAccuracyModeEnum) self->mAccuracyMode;
+JNIEXPORT jint JNICALL Java_physx_vehicle_PxVehicleClutchData__1getMAccuracyMode(JNIEnv*, jclass, jlong _address) {
+    physx::PxVehicleClutchData* _self = (physx::PxVehicleClutchData*) _address;
+    return (jint) _self->mAccuracyMode;
 }
-JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleClutchData__1setMAccuracyMode(JNIEnv* env, jclass, jlong address, jint value) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleClutchData* self = (physx::PxVehicleClutchData*) address;
-    self->mAccuracyMode = (PxVehicleClutchAccuracyModeEnum) value;
+JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleClutchData__1setMAccuracyMode(JNIEnv*, jclass, jlong _address, jint value) {
+    physx::PxVehicleClutchData* _self = (physx::PxVehicleClutchData*) _address;
+    _self->mAccuracyMode = (PxVehicleClutchAccuracyModeEnum) value;
 }
-JNIEXPORT jint JNICALL Java_physx_vehicle_PxVehicleClutchData__1getMEstimateIterations(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleClutchData* self = (physx::PxVehicleClutchData*) address;
-    return (jint) self->mEstimateIterations;
+JNIEXPORT jint JNICALL Java_physx_vehicle_PxVehicleClutchData__1getMEstimateIterations(JNIEnv*, jclass, jlong _address) {
+    physx::PxVehicleClutchData* _self = (physx::PxVehicleClutchData*) _address;
+    return (jint) _self->mEstimateIterations;
 }
-JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleClutchData__1setMEstimateIterations(JNIEnv* env, jclass, jlong address, jint value) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleClutchData* self = (physx::PxVehicleClutchData*) address;
-    self->mEstimateIterations = value;
+JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleClutchData__1setMEstimateIterations(JNIEnv*, jclass, jlong _address, jint value) {
+    physx::PxVehicleClutchData* _self = (physx::PxVehicleClutchData*) _address;
+    _self->mEstimateIterations = value;
 }
 
 // PxVehicleDifferential4WData
-JNIEXPORT jlong JNICALL Java_physx_vehicle_PxVehicleDifferential4WData__1PxVehicleDifferential4WData(JNIEnv* env, jclass) {
-    (void) env;    // avoid unused parameter warning / error
+JNIEXPORT jlong JNICALL Java_physx_vehicle_PxVehicleDifferential4WData__1PxVehicleDifferential4WData(JNIEnv*, jclass) {
     return (jlong) new physx::PxVehicleDifferential4WData();
 }
-JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleDifferential4WData__1delete_1native_1instance(JNIEnv*, jclass, jlong address) {
-    delete (physx::PxVehicleDifferential4WData*) address;
+JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleDifferential4WData__1delete_1native_1instance(JNIEnv*, jclass, jlong _address) {
+    delete (physx::PxVehicleDifferential4WData*) _address;
 }
-JNIEXPORT jfloat JNICALL Java_physx_vehicle_PxVehicleDifferential4WData__1getMFrontRearSplit(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleDifferential4WData* self = (physx::PxVehicleDifferential4WData*) address;
-    return (jfloat) self->mFrontRearSplit;
+JNIEXPORT jfloat JNICALL Java_physx_vehicle_PxVehicleDifferential4WData__1getMFrontRearSplit(JNIEnv*, jclass, jlong _address) {
+    physx::PxVehicleDifferential4WData* _self = (physx::PxVehicleDifferential4WData*) _address;
+    return (jfloat) _self->mFrontRearSplit;
 }
-JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleDifferential4WData__1setMFrontRearSplit(JNIEnv* env, jclass, jlong address, jfloat value) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleDifferential4WData* self = (physx::PxVehicleDifferential4WData*) address;
-    self->mFrontRearSplit = value;
+JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleDifferential4WData__1setMFrontRearSplit(JNIEnv*, jclass, jlong _address, jfloat value) {
+    physx::PxVehicleDifferential4WData* _self = (physx::PxVehicleDifferential4WData*) _address;
+    _self->mFrontRearSplit = value;
 }
-JNIEXPORT jfloat JNICALL Java_physx_vehicle_PxVehicleDifferential4WData__1getMFrontLeftRightSplit(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleDifferential4WData* self = (physx::PxVehicleDifferential4WData*) address;
-    return (jfloat) self->mFrontLeftRightSplit;
+JNIEXPORT jfloat JNICALL Java_physx_vehicle_PxVehicleDifferential4WData__1getMFrontLeftRightSplit(JNIEnv*, jclass, jlong _address) {
+    physx::PxVehicleDifferential4WData* _self = (physx::PxVehicleDifferential4WData*) _address;
+    return (jfloat) _self->mFrontLeftRightSplit;
 }
-JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleDifferential4WData__1setMFrontLeftRightSplit(JNIEnv* env, jclass, jlong address, jfloat value) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleDifferential4WData* self = (physx::PxVehicleDifferential4WData*) address;
-    self->mFrontLeftRightSplit = value;
+JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleDifferential4WData__1setMFrontLeftRightSplit(JNIEnv*, jclass, jlong _address, jfloat value) {
+    physx::PxVehicleDifferential4WData* _self = (physx::PxVehicleDifferential4WData*) _address;
+    _self->mFrontLeftRightSplit = value;
 }
-JNIEXPORT jfloat JNICALL Java_physx_vehicle_PxVehicleDifferential4WData__1getMRearLeftRightSplit(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleDifferential4WData* self = (physx::PxVehicleDifferential4WData*) address;
-    return (jfloat) self->mRearLeftRightSplit;
+JNIEXPORT jfloat JNICALL Java_physx_vehicle_PxVehicleDifferential4WData__1getMRearLeftRightSplit(JNIEnv*, jclass, jlong _address) {
+    physx::PxVehicleDifferential4WData* _self = (physx::PxVehicleDifferential4WData*) _address;
+    return (jfloat) _self->mRearLeftRightSplit;
 }
-JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleDifferential4WData__1setMRearLeftRightSplit(JNIEnv* env, jclass, jlong address, jfloat value) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleDifferential4WData* self = (physx::PxVehicleDifferential4WData*) address;
-    self->mRearLeftRightSplit = value;
+JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleDifferential4WData__1setMRearLeftRightSplit(JNIEnv*, jclass, jlong _address, jfloat value) {
+    physx::PxVehicleDifferential4WData* _self = (physx::PxVehicleDifferential4WData*) _address;
+    _self->mRearLeftRightSplit = value;
 }
-JNIEXPORT jfloat JNICALL Java_physx_vehicle_PxVehicleDifferential4WData__1getMCentreBias(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleDifferential4WData* self = (physx::PxVehicleDifferential4WData*) address;
-    return (jfloat) self->mCentreBias;
+JNIEXPORT jfloat JNICALL Java_physx_vehicle_PxVehicleDifferential4WData__1getMCentreBias(JNIEnv*, jclass, jlong _address) {
+    physx::PxVehicleDifferential4WData* _self = (physx::PxVehicleDifferential4WData*) _address;
+    return (jfloat) _self->mCentreBias;
 }
-JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleDifferential4WData__1setMCentreBias(JNIEnv* env, jclass, jlong address, jfloat value) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleDifferential4WData* self = (physx::PxVehicleDifferential4WData*) address;
-    self->mCentreBias = value;
+JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleDifferential4WData__1setMCentreBias(JNIEnv*, jclass, jlong _address, jfloat value) {
+    physx::PxVehicleDifferential4WData* _self = (physx::PxVehicleDifferential4WData*) _address;
+    _self->mCentreBias = value;
 }
-JNIEXPORT jfloat JNICALL Java_physx_vehicle_PxVehicleDifferential4WData__1getMFrontBias(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleDifferential4WData* self = (physx::PxVehicleDifferential4WData*) address;
-    return (jfloat) self->mFrontBias;
+JNIEXPORT jfloat JNICALL Java_physx_vehicle_PxVehicleDifferential4WData__1getMFrontBias(JNIEnv*, jclass, jlong _address) {
+    physx::PxVehicleDifferential4WData* _self = (physx::PxVehicleDifferential4WData*) _address;
+    return (jfloat) _self->mFrontBias;
 }
-JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleDifferential4WData__1setMFrontBias(JNIEnv* env, jclass, jlong address, jfloat value) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleDifferential4WData* self = (physx::PxVehicleDifferential4WData*) address;
-    self->mFrontBias = value;
+JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleDifferential4WData__1setMFrontBias(JNIEnv*, jclass, jlong _address, jfloat value) {
+    physx::PxVehicleDifferential4WData* _self = (physx::PxVehicleDifferential4WData*) _address;
+    _self->mFrontBias = value;
 }
-JNIEXPORT jfloat JNICALL Java_physx_vehicle_PxVehicleDifferential4WData__1getMRearBias(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleDifferential4WData* self = (physx::PxVehicleDifferential4WData*) address;
-    return (jfloat) self->mRearBias;
+JNIEXPORT jfloat JNICALL Java_physx_vehicle_PxVehicleDifferential4WData__1getMRearBias(JNIEnv*, jclass, jlong _address) {
+    physx::PxVehicleDifferential4WData* _self = (physx::PxVehicleDifferential4WData*) _address;
+    return (jfloat) _self->mRearBias;
 }
-JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleDifferential4WData__1setMRearBias(JNIEnv* env, jclass, jlong address, jfloat value) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleDifferential4WData* self = (physx::PxVehicleDifferential4WData*) address;
-    self->mRearBias = value;
+JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleDifferential4WData__1setMRearBias(JNIEnv*, jclass, jlong _address, jfloat value) {
+    physx::PxVehicleDifferential4WData* _self = (physx::PxVehicleDifferential4WData*) _address;
+    _self->mRearBias = value;
 }
-JNIEXPORT jint JNICALL Java_physx_vehicle_PxVehicleDifferential4WData__1getMType(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleDifferential4WData* self = (physx::PxVehicleDifferential4WData*) address;
-    return (PxVehicleDifferential4WDataEnum) self->mType;
+JNIEXPORT jint JNICALL Java_physx_vehicle_PxVehicleDifferential4WData__1getMType(JNIEnv*, jclass, jlong _address) {
+    physx::PxVehicleDifferential4WData* _self = (physx::PxVehicleDifferential4WData*) _address;
+    return (jint) _self->mType;
 }
-JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleDifferential4WData__1setMType(JNIEnv* env, jclass, jlong address, jint value) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleDifferential4WData* self = (physx::PxVehicleDifferential4WData*) address;
-    self->mType = (PxVehicleDifferential4WDataEnum) value;
+JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleDifferential4WData__1setMType(JNIEnv*, jclass, jlong _address, jint value) {
+    physx::PxVehicleDifferential4WData* _self = (physx::PxVehicleDifferential4WData*) _address;
+    _self->mType = (PxVehicleDifferential4WDataEnum) value;
 }
 
 // PxVehicleDrivableSurfaceToTireFrictionPairs
-JNIEXPORT jlong JNICALL Java_physx_vehicle_PxVehicleDrivableSurfaceToTireFrictionPairs__1allocate(JNIEnv* env, jclass, jint maxNbTireTypes, jint maxNbSurfaceTypes) {
-    (void) env;    // avoid unused parameter warning / error
+JNIEXPORT jlong JNICALL Java_physx_vehicle_PxVehicleDrivableSurfaceToTireFrictionPairs__1allocate(JNIEnv*, jclass, jint maxNbTireTypes, jint maxNbSurfaceTypes) {
     return (jlong) physx::PxVehicleDrivableSurfaceToTireFrictionPairs::allocate(maxNbTireTypes, maxNbSurfaceTypes);
 }
-JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleDrivableSurfaceToTireFrictionPairs__1setup(JNIEnv* env, jclass, jlong address, jint nbTireTypes, jint nbSurfaceTypes, jlong drivableSurfaceMaterials, jlong drivableSurfaceTypes) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleDrivableSurfaceToTireFrictionPairs* self = (physx::PxVehicleDrivableSurfaceToTireFrictionPairs*) address;
+JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleDrivableSurfaceToTireFrictionPairs__1setup(JNIEnv*, jclass, jlong _address, jint nbTireTypes, jint nbSurfaceTypes, jlong drivableSurfaceMaterials, jlong drivableSurfaceTypes) {
+    physx::PxVehicleDrivableSurfaceToTireFrictionPairs* self = (physx::PxVehicleDrivableSurfaceToTireFrictionPairs*) _address;
     self->setup(nbTireTypes, nbSurfaceTypes, (PxMaterialPtr*) drivableSurfaceMaterials, (physx::PxVehicleDrivableSurfaceType*) drivableSurfaceTypes);
 }
-JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleDrivableSurfaceToTireFrictionPairs__1release(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleDrivableSurfaceToTireFrictionPairs* self = (physx::PxVehicleDrivableSurfaceToTireFrictionPairs*) address;
+JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleDrivableSurfaceToTireFrictionPairs__1release(JNIEnv*, jclass, jlong _address) {
+    physx::PxVehicleDrivableSurfaceToTireFrictionPairs* self = (physx::PxVehicleDrivableSurfaceToTireFrictionPairs*) _address;
     self->release();
 }
-JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleDrivableSurfaceToTireFrictionPairs__1setTypePairFriction(JNIEnv* env, jclass, jlong address, jint surfaceType, jint tireType, jfloat value) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleDrivableSurfaceToTireFrictionPairs* self = (physx::PxVehicleDrivableSurfaceToTireFrictionPairs*) address;
+JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleDrivableSurfaceToTireFrictionPairs__1setTypePairFriction(JNIEnv*, jclass, jlong _address, jint surfaceType, jint tireType, jfloat value) {
+    physx::PxVehicleDrivableSurfaceToTireFrictionPairs* self = (physx::PxVehicleDrivableSurfaceToTireFrictionPairs*) _address;
     self->setTypePairFriction(surfaceType, tireType, value);
 }
-JNIEXPORT jfloat JNICALL Java_physx_vehicle_PxVehicleDrivableSurfaceToTireFrictionPairs__1getTypePairFriction(JNIEnv* env, jclass, jlong address, jint surfaceType, jint tireType) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleDrivableSurfaceToTireFrictionPairs* self = (physx::PxVehicleDrivableSurfaceToTireFrictionPairs*) address;
+JNIEXPORT jfloat JNICALL Java_physx_vehicle_PxVehicleDrivableSurfaceToTireFrictionPairs__1getTypePairFriction(JNIEnv*, jclass, jlong _address, jint surfaceType, jint tireType) {
+    physx::PxVehicleDrivableSurfaceToTireFrictionPairs* self = (physx::PxVehicleDrivableSurfaceToTireFrictionPairs*) _address;
     return (jfloat) self->getTypePairFriction(surfaceType, tireType);
 }
-JNIEXPORT jint JNICALL Java_physx_vehicle_PxVehicleDrivableSurfaceToTireFrictionPairs__1getMaxNbSurfaceTypes(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleDrivableSurfaceToTireFrictionPairs* self = (physx::PxVehicleDrivableSurfaceToTireFrictionPairs*) address;
+JNIEXPORT jint JNICALL Java_physx_vehicle_PxVehicleDrivableSurfaceToTireFrictionPairs__1getMaxNbSurfaceTypes(JNIEnv*, jclass, jlong _address) {
+    physx::PxVehicleDrivableSurfaceToTireFrictionPairs* self = (physx::PxVehicleDrivableSurfaceToTireFrictionPairs*) _address;
     return (jint) self->getMaxNbSurfaceTypes();
 }
-JNIEXPORT jint JNICALL Java_physx_vehicle_PxVehicleDrivableSurfaceToTireFrictionPairs__1getMaxNbTireTypes(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleDrivableSurfaceToTireFrictionPairs* self = (physx::PxVehicleDrivableSurfaceToTireFrictionPairs*) address;
+JNIEXPORT jint JNICALL Java_physx_vehicle_PxVehicleDrivableSurfaceToTireFrictionPairs__1getMaxNbTireTypes(JNIEnv*, jclass, jlong _address) {
+    physx::PxVehicleDrivableSurfaceToTireFrictionPairs* self = (physx::PxVehicleDrivableSurfaceToTireFrictionPairs*) _address;
     return (jint) self->getMaxNbTireTypes();
 }
 
 // PxVehicleDrivableSurfaceType
-JNIEXPORT jlong JNICALL Java_physx_vehicle_PxVehicleDrivableSurfaceType__1PxVehicleDrivableSurfaceType(JNIEnv* env, jclass) {
-    (void) env;    // avoid unused parameter warning / error
+JNIEXPORT jlong JNICALL Java_physx_vehicle_PxVehicleDrivableSurfaceType__1PxVehicleDrivableSurfaceType(JNIEnv*, jclass) {
     return (jlong) new physx::PxVehicleDrivableSurfaceType();
 }
-JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleDrivableSurfaceType__1delete_1native_1instance(JNIEnv*, jclass, jlong address) {
-    delete (physx::PxVehicleDrivableSurfaceType*) address;
+JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleDrivableSurfaceType__1delete_1native_1instance(JNIEnv*, jclass, jlong _address) {
+    delete (physx::PxVehicleDrivableSurfaceType*) _address;
 }
-JNIEXPORT jint JNICALL Java_physx_vehicle_PxVehicleDrivableSurfaceType__1getMType(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleDrivableSurfaceType* self = (physx::PxVehicleDrivableSurfaceType*) address;
-    return (jint) self->mType;
+JNIEXPORT jint JNICALL Java_physx_vehicle_PxVehicleDrivableSurfaceType__1getMType(JNIEnv*, jclass, jlong _address) {
+    physx::PxVehicleDrivableSurfaceType* _self = (physx::PxVehicleDrivableSurfaceType*) _address;
+    return (jint) _self->mType;
 }
-JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleDrivableSurfaceType__1setMType(JNIEnv* env, jclass, jlong address, jint value) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleDrivableSurfaceType* self = (physx::PxVehicleDrivableSurfaceType*) address;
-    self->mType = value;
+JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleDrivableSurfaceType__1setMType(JNIEnv*, jclass, jlong _address, jint value) {
+    physx::PxVehicleDrivableSurfaceType* _self = (physx::PxVehicleDrivableSurfaceType*) _address;
+    _self->mType = value;
 }
 
 // PxVehicleDrive
-JNIEXPORT jlong JNICALL Java_physx_vehicle_PxVehicleDrive__1getMDriveDynData(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleDrive* self = (physx::PxVehicleDrive*) address;
-    return (jlong) &self->mDriveDynData;
+JNIEXPORT jlong JNICALL Java_physx_vehicle_PxVehicleDrive__1getMDriveDynData(JNIEnv*, jclass, jlong _address) {
+    physx::PxVehicleDrive* _self = (physx::PxVehicleDrive*) _address;
+    return (jlong) &_self->mDriveDynData;
 }
-JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleDrive__1setMDriveDynData(JNIEnv* env, jclass, jlong address, jlong value) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleDrive* self = (physx::PxVehicleDrive*) address;
-    self->mDriveDynData = *((physx::PxVehicleDriveDynData*) value);
+JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleDrive__1setMDriveDynData(JNIEnv*, jclass, jlong _address, jlong value) {
+    physx::PxVehicleDrive* _self = (physx::PxVehicleDrive*) _address;
+    _self->mDriveDynData = *((physx::PxVehicleDriveDynData*) value);
 }
 
 // PxVehicleDrive4W
-JNIEXPORT jlong JNICALL Java_physx_vehicle_PxVehicleDrive4W__1allocate(JNIEnv* env, jclass, jint nbWheels) {
-    (void) env;    // avoid unused parameter warning / error
+JNIEXPORT jlong JNICALL Java_physx_vehicle_PxVehicleDrive4W__1allocate(JNIEnv*, jclass, jint nbWheels) {
     return (jlong) physx::PxVehicleDrive4W::allocate(nbWheels);
 }
-JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleDrive4W__1free(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleDrive4W* self = (physx::PxVehicleDrive4W*) address;
+JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleDrive4W__1free(JNIEnv*, jclass, jlong _address) {
+    physx::PxVehicleDrive4W* self = (physx::PxVehicleDrive4W*) _address;
     self->free();
 }
-JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleDrive4W__1setup(JNIEnv* env, jclass, jlong address, jlong physics, jlong vehActor, jlong wheelsData, jlong driveData, jint nbNonDrivenWheels) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleDrive4W* self = (physx::PxVehicleDrive4W*) address;
+JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleDrive4W__1setup(JNIEnv*, jclass, jlong _address, jlong physics, jlong vehActor, jlong wheelsData, jlong driveData, jint nbNonDrivenWheels) {
+    physx::PxVehicleDrive4W* self = (physx::PxVehicleDrive4W*) _address;
     self->setup((physx::PxPhysics*) physics, (physx::PxRigidDynamic*) vehActor, *((physx::PxVehicleWheelsSimData*) wheelsData), *((physx::PxVehicleDriveSimData4W*) driveData), nbNonDrivenWheels);
 }
-JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleDrive4W__1setToRestState(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleDrive4W* self = (physx::PxVehicleDrive4W*) address;
+JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleDrive4W__1setToRestState(JNIEnv*, jclass, jlong _address) {
+    physx::PxVehicleDrive4W* self = (physx::PxVehicleDrive4W*) _address;
     self->setToRestState();
 }
-JNIEXPORT jlong JNICALL Java_physx_vehicle_PxVehicleDrive4W__1getMDriveSimData(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleDrive4W* self = (physx::PxVehicleDrive4W*) address;
-    return (jlong) &self->mDriveSimData;
+JNIEXPORT jlong JNICALL Java_physx_vehicle_PxVehicleDrive4W__1getMDriveSimData(JNIEnv*, jclass, jlong _address) {
+    physx::PxVehicleDrive4W* _self = (physx::PxVehicleDrive4W*) _address;
+    return (jlong) &_self->mDriveSimData;
 }
-JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleDrive4W__1setMDriveSimData(JNIEnv* env, jclass, jlong address, jlong value) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleDrive4W* self = (physx::PxVehicleDrive4W*) address;
-    self->mDriveSimData = *((physx::PxVehicleDriveSimData4W*) value);
+JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleDrive4W__1setMDriveSimData(JNIEnv*, jclass, jlong _address, jlong value) {
+    physx::PxVehicleDrive4W* _self = (physx::PxVehicleDrive4W*) _address;
+    _self->mDriveSimData = *((physx::PxVehicleDriveSimData4W*) value);
 }
 
 // PxVehicleDriveDynData
-JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleDriveDynData__1setToRestState(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleDriveDynData* self = (physx::PxVehicleDriveDynData*) address;
+JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleDriveDynData__1setToRestState(JNIEnv*, jclass, jlong _address) {
+    physx::PxVehicleDriveDynData* self = (physx::PxVehicleDriveDynData*) _address;
     self->setToRestState();
 }
-JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleDriveDynData__1setAnalogInput(JNIEnv* env, jclass, jlong address, jint type, jfloat analogVal) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleDriveDynData* self = (physx::PxVehicleDriveDynData*) address;
+JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleDriveDynData__1setAnalogInput(JNIEnv*, jclass, jlong _address, jint type, jfloat analogVal) {
+    physx::PxVehicleDriveDynData* self = (physx::PxVehicleDriveDynData*) _address;
     self->setAnalogInput(type, analogVal);
 }
-JNIEXPORT jfloat JNICALL Java_physx_vehicle_PxVehicleDriveDynData__1getAnalogInput(JNIEnv* env, jclass, jlong address, jint type) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleDriveDynData* self = (physx::PxVehicleDriveDynData*) address;
+JNIEXPORT jfloat JNICALL Java_physx_vehicle_PxVehicleDriveDynData__1getAnalogInput(JNIEnv*, jclass, jlong _address, jint type) {
+    physx::PxVehicleDriveDynData* self = (physx::PxVehicleDriveDynData*) _address;
     return (jfloat) self->getAnalogInput(type);
 }
-JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleDriveDynData__1setGearUp(JNIEnv* env, jclass, jlong address, jboolean digitalVal) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleDriveDynData* self = (physx::PxVehicleDriveDynData*) address;
+JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleDriveDynData__1setGearUp(JNIEnv*, jclass, jlong _address, jboolean digitalVal) {
+    physx::PxVehicleDriveDynData* self = (physx::PxVehicleDriveDynData*) _address;
     self->setGearUp(digitalVal);
 }
-JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleDriveDynData__1setGearDown(JNIEnv* env, jclass, jlong address, jboolean digitalVal) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleDriveDynData* self = (physx::PxVehicleDriveDynData*) address;
+JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleDriveDynData__1setGearDown(JNIEnv*, jclass, jlong _address, jboolean digitalVal) {
+    physx::PxVehicleDriveDynData* self = (physx::PxVehicleDriveDynData*) _address;
     self->setGearDown(digitalVal);
 }
-JNIEXPORT jboolean JNICALL Java_physx_vehicle_PxVehicleDriveDynData__1getGearUp(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleDriveDynData* self = (physx::PxVehicleDriveDynData*) address;
+JNIEXPORT jboolean JNICALL Java_physx_vehicle_PxVehicleDriveDynData__1getGearUp(JNIEnv*, jclass, jlong _address) {
+    physx::PxVehicleDriveDynData* self = (physx::PxVehicleDriveDynData*) _address;
     return (jboolean) self->getGearUp();
 }
-JNIEXPORT jboolean JNICALL Java_physx_vehicle_PxVehicleDriveDynData__1getGearDown(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleDriveDynData* self = (physx::PxVehicleDriveDynData*) address;
+JNIEXPORT jboolean JNICALL Java_physx_vehicle_PxVehicleDriveDynData__1getGearDown(JNIEnv*, jclass, jlong _address) {
+    physx::PxVehicleDriveDynData* self = (physx::PxVehicleDriveDynData*) _address;
     return (jboolean) self->getGearDown();
 }
-JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleDriveDynData__1setUseAutoGears(JNIEnv* env, jclass, jlong address, jboolean useAutoGears) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleDriveDynData* self = (physx::PxVehicleDriveDynData*) address;
+JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleDriveDynData__1setUseAutoGears(JNIEnv*, jclass, jlong _address, jboolean useAutoGears) {
+    physx::PxVehicleDriveDynData* self = (physx::PxVehicleDriveDynData*) _address;
     self->setUseAutoGears(useAutoGears);
 }
-JNIEXPORT jboolean JNICALL Java_physx_vehicle_PxVehicleDriveDynData__1getUseAutoGears(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleDriveDynData* self = (physx::PxVehicleDriveDynData*) address;
+JNIEXPORT jboolean JNICALL Java_physx_vehicle_PxVehicleDriveDynData__1getUseAutoGears(JNIEnv*, jclass, jlong _address) {
+    physx::PxVehicleDriveDynData* self = (physx::PxVehicleDriveDynData*) _address;
     return (jboolean) self->getUseAutoGears();
 }
-JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleDriveDynData__1toggleAutoGears(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleDriveDynData* self = (physx::PxVehicleDriveDynData*) address;
+JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleDriveDynData__1toggleAutoGears(JNIEnv*, jclass, jlong _address) {
+    physx::PxVehicleDriveDynData* self = (physx::PxVehicleDriveDynData*) _address;
     self->toggleAutoGears();
 }
-JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleDriveDynData__1setCurrentGear(JNIEnv* env, jclass, jlong address, jint currentGear) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleDriveDynData* self = (physx::PxVehicleDriveDynData*) address;
+JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleDriveDynData__1setCurrentGear(JNIEnv*, jclass, jlong _address, jint currentGear) {
+    physx::PxVehicleDriveDynData* self = (physx::PxVehicleDriveDynData*) _address;
     self->setCurrentGear(currentGear);
 }
-JNIEXPORT jint JNICALL Java_physx_vehicle_PxVehicleDriveDynData__1getCurrentGear(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleDriveDynData* self = (physx::PxVehicleDriveDynData*) address;
+JNIEXPORT jint JNICALL Java_physx_vehicle_PxVehicleDriveDynData__1getCurrentGear(JNIEnv*, jclass, jlong _address) {
+    physx::PxVehicleDriveDynData* self = (physx::PxVehicleDriveDynData*) _address;
     return (jint) self->getCurrentGear();
 }
-JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleDriveDynData__1setTargetGear(JNIEnv* env, jclass, jlong address, jint targetGear) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleDriveDynData* self = (physx::PxVehicleDriveDynData*) address;
+JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleDriveDynData__1setTargetGear(JNIEnv*, jclass, jlong _address, jint targetGear) {
+    physx::PxVehicleDriveDynData* self = (physx::PxVehicleDriveDynData*) _address;
     self->setTargetGear(targetGear);
 }
-JNIEXPORT jint JNICALL Java_physx_vehicle_PxVehicleDriveDynData__1getTargetGear(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleDriveDynData* self = (physx::PxVehicleDriveDynData*) address;
+JNIEXPORT jint JNICALL Java_physx_vehicle_PxVehicleDriveDynData__1getTargetGear(JNIEnv*, jclass, jlong _address) {
+    physx::PxVehicleDriveDynData* self = (physx::PxVehicleDriveDynData*) _address;
     return (jint) self->getTargetGear();
 }
-JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleDriveDynData__1startGearChange(JNIEnv* env, jclass, jlong address, jint targetGear) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleDriveDynData* self = (physx::PxVehicleDriveDynData*) address;
+JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleDriveDynData__1startGearChange(JNIEnv*, jclass, jlong _address, jint targetGear) {
+    physx::PxVehicleDriveDynData* self = (physx::PxVehicleDriveDynData*) _address;
     self->startGearChange(targetGear);
 }
-JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleDriveDynData__1forceGearChange(JNIEnv* env, jclass, jlong address, jint targetGear) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleDriveDynData* self = (physx::PxVehicleDriveDynData*) address;
+JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleDriveDynData__1forceGearChange(JNIEnv*, jclass, jlong _address, jint targetGear) {
+    physx::PxVehicleDriveDynData* self = (physx::PxVehicleDriveDynData*) _address;
     self->forceGearChange(targetGear);
 }
-JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleDriveDynData__1setEngineRotationSpeed(JNIEnv* env, jclass, jlong address, jfloat speed) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleDriveDynData* self = (physx::PxVehicleDriveDynData*) address;
+JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleDriveDynData__1setEngineRotationSpeed(JNIEnv*, jclass, jlong _address, jfloat speed) {
+    physx::PxVehicleDriveDynData* self = (physx::PxVehicleDriveDynData*) _address;
     self->setEngineRotationSpeed(speed);
 }
-JNIEXPORT jfloat JNICALL Java_physx_vehicle_PxVehicleDriveDynData__1getEngineRotationSpeed(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleDriveDynData* self = (physx::PxVehicleDriveDynData*) address;
+JNIEXPORT jfloat JNICALL Java_physx_vehicle_PxVehicleDriveDynData__1getEngineRotationSpeed(JNIEnv*, jclass, jlong _address) {
+    physx::PxVehicleDriveDynData* self = (physx::PxVehicleDriveDynData*) _address;
     return (jfloat) self->getEngineRotationSpeed();
 }
-JNIEXPORT jfloat JNICALL Java_physx_vehicle_PxVehicleDriveDynData__1getGearSwitchTime(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleDriveDynData* self = (physx::PxVehicleDriveDynData*) address;
+JNIEXPORT jfloat JNICALL Java_physx_vehicle_PxVehicleDriveDynData__1getGearSwitchTime(JNIEnv*, jclass, jlong _address) {
+    physx::PxVehicleDriveDynData* self = (physx::PxVehicleDriveDynData*) _address;
     return (jfloat) self->getGearSwitchTime();
 }
-JNIEXPORT jfloat JNICALL Java_physx_vehicle_PxVehicleDriveDynData__1getAutoBoxSwitchTime(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleDriveDynData* self = (physx::PxVehicleDriveDynData*) address;
+JNIEXPORT jfloat JNICALL Java_physx_vehicle_PxVehicleDriveDynData__1getAutoBoxSwitchTime(JNIEnv*, jclass, jlong _address) {
+    physx::PxVehicleDriveDynData* self = (physx::PxVehicleDriveDynData*) _address;
     return (jfloat) self->getAutoBoxSwitchTime();
 }
-JNIEXPORT jint JNICALL Java_physx_vehicle_PxVehicleDriveDynData__1getNbAnalogInput(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleDriveDynData* self = (physx::PxVehicleDriveDynData*) address;
+JNIEXPORT jint JNICALL Java_physx_vehicle_PxVehicleDriveDynData__1getNbAnalogInput(JNIEnv*, jclass, jlong _address) {
+    physx::PxVehicleDriveDynData* self = (physx::PxVehicleDriveDynData*) _address;
     return (jint) self->getNbAnalogInput();
 }
-JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleDriveDynData__1setGearChange(JNIEnv* env, jclass, jlong address, jint gearChange) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleDriveDynData* self = (physx::PxVehicleDriveDynData*) address;
+JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleDriveDynData__1setGearChange(JNIEnv*, jclass, jlong _address, jint gearChange) {
+    physx::PxVehicleDriveDynData* self = (physx::PxVehicleDriveDynData*) _address;
     self->setGearChange(gearChange);
 }
-JNIEXPORT jint JNICALL Java_physx_vehicle_PxVehicleDriveDynData__1getGearChange(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleDriveDynData* self = (physx::PxVehicleDriveDynData*) address;
+JNIEXPORT jint JNICALL Java_physx_vehicle_PxVehicleDriveDynData__1getGearChange(JNIEnv*, jclass, jlong _address) {
+    physx::PxVehicleDriveDynData* self = (physx::PxVehicleDriveDynData*) _address;
     return (jint) self->getGearChange();
 }
-JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleDriveDynData__1setGearSwitchTime(JNIEnv* env, jclass, jlong address, jfloat switchTime) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleDriveDynData* self = (physx::PxVehicleDriveDynData*) address;
+JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleDriveDynData__1setGearSwitchTime(JNIEnv*, jclass, jlong _address, jfloat switchTime) {
+    physx::PxVehicleDriveDynData* self = (physx::PxVehicleDriveDynData*) _address;
     self->setGearSwitchTime(switchTime);
 }
-JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleDriveDynData__1setAutoBoxSwitchTime(JNIEnv* env, jclass, jlong address, jfloat autoBoxSwitchTime) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleDriveDynData* self = (physx::PxVehicleDriveDynData*) address;
+JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleDriveDynData__1setAutoBoxSwitchTime(JNIEnv*, jclass, jlong _address, jfloat autoBoxSwitchTime) {
+    physx::PxVehicleDriveDynData* self = (physx::PxVehicleDriveDynData*) _address;
     self->setAutoBoxSwitchTime(autoBoxSwitchTime);
 }
-JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleDriveDynData__1delete_1native_1instance(JNIEnv*, jclass, jlong address) {
-    delete (physx::PxVehicleDriveDynData*) address;
+JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleDriveDynData__1delete_1native_1instance(JNIEnv*, jclass, jlong _address) {
+    delete (physx::PxVehicleDriveDynData*) _address;
 }
-JNIEXPORT jfloat JNICALL Java_physx_vehicle_PxVehicleDriveDynData__1getMControlAnalogVals(JNIEnv* env, jclass, jlong address, jint index) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleDriveDynData* self = (physx::PxVehicleDriveDynData*) address;
-    return (jfloat) self->mControlAnalogVals[index];
+JNIEXPORT jfloat JNICALL Java_physx_vehicle_PxVehicleDriveDynData__1getMControlAnalogVals(JNIEnv*, jclass, jlong _address, jint _index) {
+    physx::PxVehicleDriveDynData* _self = (physx::PxVehicleDriveDynData*) _address;
+    return (jfloat) _self->mControlAnalogVals[_index];
 }
-JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleDriveDynData__1setMControlAnalogVals(JNIEnv* env, jclass, jlong address, jint index, jfloat value) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleDriveDynData* self = (physx::PxVehicleDriveDynData*) address;
-    self->mControlAnalogVals[index] = value;
+JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleDriveDynData__1setMControlAnalogVals(JNIEnv*, jclass, jlong _address, jint _index, jfloat value) {
+    physx::PxVehicleDriveDynData* _self = (physx::PxVehicleDriveDynData*) _address;
+    _self->mControlAnalogVals[_index] = value;
 }
-JNIEXPORT jboolean JNICALL Java_physx_vehicle_PxVehicleDriveDynData__1getMUseAutoGears(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleDriveDynData* self = (physx::PxVehicleDriveDynData*) address;
-    return (jboolean) self->mUseAutoGears;
+JNIEXPORT jboolean JNICALL Java_physx_vehicle_PxVehicleDriveDynData__1getMUseAutoGears(JNIEnv*, jclass, jlong _address) {
+    physx::PxVehicleDriveDynData* _self = (physx::PxVehicleDriveDynData*) _address;
+    return (jboolean) _self->mUseAutoGears;
 }
-JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleDriveDynData__1setMUseAutoGears(JNIEnv* env, jclass, jlong address, jboolean value) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleDriveDynData* self = (physx::PxVehicleDriveDynData*) address;
-    self->mUseAutoGears = value;
+JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleDriveDynData__1setMUseAutoGears(JNIEnv*, jclass, jlong _address, jboolean value) {
+    physx::PxVehicleDriveDynData* _self = (physx::PxVehicleDriveDynData*) _address;
+    _self->mUseAutoGears = value;
 }
-JNIEXPORT jboolean JNICALL Java_physx_vehicle_PxVehicleDriveDynData__1getMGearUpPressed(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleDriveDynData* self = (physx::PxVehicleDriveDynData*) address;
-    return (jboolean) self->mGearUpPressed;
+JNIEXPORT jboolean JNICALL Java_physx_vehicle_PxVehicleDriveDynData__1getMGearUpPressed(JNIEnv*, jclass, jlong _address) {
+    physx::PxVehicleDriveDynData* _self = (physx::PxVehicleDriveDynData*) _address;
+    return (jboolean) _self->mGearUpPressed;
 }
-JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleDriveDynData__1setMGearUpPressed(JNIEnv* env, jclass, jlong address, jboolean value) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleDriveDynData* self = (physx::PxVehicleDriveDynData*) address;
-    self->mGearUpPressed = value;
+JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleDriveDynData__1setMGearUpPressed(JNIEnv*, jclass, jlong _address, jboolean value) {
+    physx::PxVehicleDriveDynData* _self = (physx::PxVehicleDriveDynData*) _address;
+    _self->mGearUpPressed = value;
 }
-JNIEXPORT jboolean JNICALL Java_physx_vehicle_PxVehicleDriveDynData__1getMGearDownPressed(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleDriveDynData* self = (physx::PxVehicleDriveDynData*) address;
-    return (jboolean) self->mGearDownPressed;
+JNIEXPORT jboolean JNICALL Java_physx_vehicle_PxVehicleDriveDynData__1getMGearDownPressed(JNIEnv*, jclass, jlong _address) {
+    physx::PxVehicleDriveDynData* _self = (physx::PxVehicleDriveDynData*) _address;
+    return (jboolean) _self->mGearDownPressed;
 }
-JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleDriveDynData__1setMGearDownPressed(JNIEnv* env, jclass, jlong address, jboolean value) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleDriveDynData* self = (physx::PxVehicleDriveDynData*) address;
-    self->mGearDownPressed = value;
+JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleDriveDynData__1setMGearDownPressed(JNIEnv*, jclass, jlong _address, jboolean value) {
+    physx::PxVehicleDriveDynData* _self = (physx::PxVehicleDriveDynData*) _address;
+    _self->mGearDownPressed = value;
 }
-JNIEXPORT jint JNICALL Java_physx_vehicle_PxVehicleDriveDynData__1getMCurrentGear(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleDriveDynData* self = (physx::PxVehicleDriveDynData*) address;
-    return (jint) self->mCurrentGear;
+JNIEXPORT jint JNICALL Java_physx_vehicle_PxVehicleDriveDynData__1getMCurrentGear(JNIEnv*, jclass, jlong _address) {
+    physx::PxVehicleDriveDynData* _self = (physx::PxVehicleDriveDynData*) _address;
+    return (jint) _self->mCurrentGear;
 }
-JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleDriveDynData__1setMCurrentGear(JNIEnv* env, jclass, jlong address, jint value) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleDriveDynData* self = (physx::PxVehicleDriveDynData*) address;
-    self->mCurrentGear = value;
+JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleDriveDynData__1setMCurrentGear(JNIEnv*, jclass, jlong _address, jint value) {
+    physx::PxVehicleDriveDynData* _self = (physx::PxVehicleDriveDynData*) _address;
+    _self->mCurrentGear = value;
 }
-JNIEXPORT jint JNICALL Java_physx_vehicle_PxVehicleDriveDynData__1getMTargetGear(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleDriveDynData* self = (physx::PxVehicleDriveDynData*) address;
-    return (jint) self->mTargetGear;
+JNIEXPORT jint JNICALL Java_physx_vehicle_PxVehicleDriveDynData__1getMTargetGear(JNIEnv*, jclass, jlong _address) {
+    physx::PxVehicleDriveDynData* _self = (physx::PxVehicleDriveDynData*) _address;
+    return (jint) _self->mTargetGear;
 }
-JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleDriveDynData__1setMTargetGear(JNIEnv* env, jclass, jlong address, jint value) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleDriveDynData* self = (physx::PxVehicleDriveDynData*) address;
-    self->mTargetGear = value;
+JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleDriveDynData__1setMTargetGear(JNIEnv*, jclass, jlong _address, jint value) {
+    physx::PxVehicleDriveDynData* _self = (physx::PxVehicleDriveDynData*) _address;
+    _self->mTargetGear = value;
 }
-JNIEXPORT jfloat JNICALL Java_physx_vehicle_PxVehicleDriveDynData__1getMEnginespeed(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleDriveDynData* self = (physx::PxVehicleDriveDynData*) address;
-    return (jfloat) self->mEnginespeed;
+JNIEXPORT jfloat JNICALL Java_physx_vehicle_PxVehicleDriveDynData__1getMEnginespeed(JNIEnv*, jclass, jlong _address) {
+    physx::PxVehicleDriveDynData* _self = (physx::PxVehicleDriveDynData*) _address;
+    return (jfloat) _self->mEnginespeed;
 }
-JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleDriveDynData__1setMEnginespeed(JNIEnv* env, jclass, jlong address, jfloat value) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleDriveDynData* self = (physx::PxVehicleDriveDynData*) address;
-    self->mEnginespeed = value;
+JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleDriveDynData__1setMEnginespeed(JNIEnv*, jclass, jlong _address, jfloat value) {
+    physx::PxVehicleDriveDynData* _self = (physx::PxVehicleDriveDynData*) _address;
+    _self->mEnginespeed = value;
 }
-JNIEXPORT jfloat JNICALL Java_physx_vehicle_PxVehicleDriveDynData__1getMGearSwitchTime(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleDriveDynData* self = (physx::PxVehicleDriveDynData*) address;
-    return (jfloat) self->mGearSwitchTime;
+JNIEXPORT jfloat JNICALL Java_physx_vehicle_PxVehicleDriveDynData__1getMGearSwitchTime(JNIEnv*, jclass, jlong _address) {
+    physx::PxVehicleDriveDynData* _self = (physx::PxVehicleDriveDynData*) _address;
+    return (jfloat) _self->mGearSwitchTime;
 }
-JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleDriveDynData__1setMGearSwitchTime(JNIEnv* env, jclass, jlong address, jfloat value) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleDriveDynData* self = (physx::PxVehicleDriveDynData*) address;
-    self->mGearSwitchTime = value;
+JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleDriveDynData__1setMGearSwitchTime(JNIEnv*, jclass, jlong _address, jfloat value) {
+    physx::PxVehicleDriveDynData* _self = (physx::PxVehicleDriveDynData*) _address;
+    _self->mGearSwitchTime = value;
 }
-JNIEXPORT jfloat JNICALL Java_physx_vehicle_PxVehicleDriveDynData__1getMAutoBoxSwitchTime(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleDriveDynData* self = (physx::PxVehicleDriveDynData*) address;
-    return (jfloat) self->mAutoBoxSwitchTime;
+JNIEXPORT jfloat JNICALL Java_physx_vehicle_PxVehicleDriveDynData__1getMAutoBoxSwitchTime(JNIEnv*, jclass, jlong _address) {
+    physx::PxVehicleDriveDynData* _self = (physx::PxVehicleDriveDynData*) _address;
+    return (jfloat) _self->mAutoBoxSwitchTime;
 }
-JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleDriveDynData__1setMAutoBoxSwitchTime(JNIEnv* env, jclass, jlong address, jfloat value) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleDriveDynData* self = (physx::PxVehicleDriveDynData*) address;
-    self->mAutoBoxSwitchTime = value;
+JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleDriveDynData__1setMAutoBoxSwitchTime(JNIEnv*, jclass, jlong _address, jfloat value) {
+    physx::PxVehicleDriveDynData* _self = (physx::PxVehicleDriveDynData*) _address;
+    _self->mAutoBoxSwitchTime = value;
 }
 
 // PxVehicleDriveSimData
-JNIEXPORT jlong JNICALL Java_physx_vehicle_PxVehicleDriveSimData__1PxVehicleDriveSimData(JNIEnv* env, jclass) {
-    (void) env;    // avoid unused parameter warning / error
+JNIEXPORT jlong JNICALL Java_physx_vehicle_PxVehicleDriveSimData__1PxVehicleDriveSimData(JNIEnv*, jclass) {
     return (jlong) new physx::PxVehicleDriveSimData();
 }
-JNIEXPORT jlong JNICALL Java_physx_vehicle_PxVehicleDriveSimData__1getEngineData(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleDriveSimData* self = (physx::PxVehicleDriveSimData*) address;
+JNIEXPORT jlong JNICALL Java_physx_vehicle_PxVehicleDriveSimData__1getEngineData(JNIEnv*, jclass, jlong _address) {
+    physx::PxVehicleDriveSimData* self = (physx::PxVehicleDriveSimData*) _address;
     return (jlong) &self->getEngineData();
 }
-JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleDriveSimData__1setEngineData(JNIEnv* env, jclass, jlong address, jlong engine) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleDriveSimData* self = (physx::PxVehicleDriveSimData*) address;
+JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleDriveSimData__1setEngineData(JNIEnv*, jclass, jlong _address, jlong engine) {
+    physx::PxVehicleDriveSimData* self = (physx::PxVehicleDriveSimData*) _address;
     self->setEngineData(*((physx::PxVehicleEngineData*) engine));
 }
-JNIEXPORT jlong JNICALL Java_physx_vehicle_PxVehicleDriveSimData__1getGearsData(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleDriveSimData* self = (physx::PxVehicleDriveSimData*) address;
+JNIEXPORT jlong JNICALL Java_physx_vehicle_PxVehicleDriveSimData__1getGearsData(JNIEnv*, jclass, jlong _address) {
+    physx::PxVehicleDriveSimData* self = (physx::PxVehicleDriveSimData*) _address;
     return (jlong) &self->getGearsData();
 }
-JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleDriveSimData__1setGearsData(JNIEnv* env, jclass, jlong address, jlong gears) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleDriveSimData* self = (physx::PxVehicleDriveSimData*) address;
+JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleDriveSimData__1setGearsData(JNIEnv*, jclass, jlong _address, jlong gears) {
+    physx::PxVehicleDriveSimData* self = (physx::PxVehicleDriveSimData*) _address;
     self->setGearsData(*((physx::PxVehicleGearsData*) gears));
 }
-JNIEXPORT jlong JNICALL Java_physx_vehicle_PxVehicleDriveSimData__1getClutchData(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleDriveSimData* self = (physx::PxVehicleDriveSimData*) address;
+JNIEXPORT jlong JNICALL Java_physx_vehicle_PxVehicleDriveSimData__1getClutchData(JNIEnv*, jclass, jlong _address) {
+    physx::PxVehicleDriveSimData* self = (physx::PxVehicleDriveSimData*) _address;
     return (jlong) &self->getClutchData();
 }
-JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleDriveSimData__1setClutchData(JNIEnv* env, jclass, jlong address, jlong clutch) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleDriveSimData* self = (physx::PxVehicleDriveSimData*) address;
+JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleDriveSimData__1setClutchData(JNIEnv*, jclass, jlong _address, jlong clutch) {
+    physx::PxVehicleDriveSimData* self = (physx::PxVehicleDriveSimData*) _address;
     self->setClutchData(*((physx::PxVehicleClutchData*) clutch));
 }
-JNIEXPORT jlong JNICALL Java_physx_vehicle_PxVehicleDriveSimData__1getAutoBoxData(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleDriveSimData* self = (physx::PxVehicleDriveSimData*) address;
+JNIEXPORT jlong JNICALL Java_physx_vehicle_PxVehicleDriveSimData__1getAutoBoxData(JNIEnv*, jclass, jlong _address) {
+    physx::PxVehicleDriveSimData* self = (physx::PxVehicleDriveSimData*) _address;
     return (jlong) &self->getAutoBoxData();
 }
-JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleDriveSimData__1setAutoBoxData(JNIEnv* env, jclass, jlong address, jlong clutch) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleDriveSimData* self = (physx::PxVehicleDriveSimData*) address;
+JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleDriveSimData__1setAutoBoxData(JNIEnv*, jclass, jlong _address, jlong clutch) {
+    physx::PxVehicleDriveSimData* self = (physx::PxVehicleDriveSimData*) _address;
     self->setAutoBoxData(*((physx::PxVehicleAutoBoxData*) clutch));
 }
-JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleDriveSimData__1delete_1native_1instance(JNIEnv*, jclass, jlong address) {
-    delete (physx::PxVehicleDriveSimData*) address;
+JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleDriveSimData__1delete_1native_1instance(JNIEnv*, jclass, jlong _address) {
+    delete (physx::PxVehicleDriveSimData*) _address;
 }
 
 // PxVehicleDriveSimData4W
-JNIEXPORT jlong JNICALL Java_physx_vehicle_PxVehicleDriveSimData4W__1PxVehicleDriveSimData4W(JNIEnv* env, jclass) {
-    (void) env;    // avoid unused parameter warning / error
+JNIEXPORT jlong JNICALL Java_physx_vehicle_PxVehicleDriveSimData4W__1PxVehicleDriveSimData4W(JNIEnv*, jclass) {
     return (jlong) new physx::PxVehicleDriveSimData4W();
 }
-JNIEXPORT jlong JNICALL Java_physx_vehicle_PxVehicleDriveSimData4W__1getDiffData(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleDriveSimData4W* self = (physx::PxVehicleDriveSimData4W*) address;
+JNIEXPORT jlong JNICALL Java_physx_vehicle_PxVehicleDriveSimData4W__1getDiffData(JNIEnv*, jclass, jlong _address) {
+    physx::PxVehicleDriveSimData4W* self = (physx::PxVehicleDriveSimData4W*) _address;
     return (jlong) &self->getDiffData();
 }
-JNIEXPORT jlong JNICALL Java_physx_vehicle_PxVehicleDriveSimData4W__1getAckermannGeometryData(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleDriveSimData4W* self = (physx::PxVehicleDriveSimData4W*) address;
+JNIEXPORT jlong JNICALL Java_physx_vehicle_PxVehicleDriveSimData4W__1getAckermannGeometryData(JNIEnv*, jclass, jlong _address) {
+    physx::PxVehicleDriveSimData4W* self = (physx::PxVehicleDriveSimData4W*) _address;
     return (jlong) &self->getAckermannGeometryData();
 }
-JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleDriveSimData4W__1setDiffData(JNIEnv* env, jclass, jlong address, jlong diff) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleDriveSimData4W* self = (physx::PxVehicleDriveSimData4W*) address;
+JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleDriveSimData4W__1setDiffData(JNIEnv*, jclass, jlong _address, jlong diff) {
+    physx::PxVehicleDriveSimData4W* self = (physx::PxVehicleDriveSimData4W*) _address;
     self->setDiffData(*((physx::PxVehicleDifferential4WData*) diff));
 }
-JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleDriveSimData4W__1setAckermannGeometryData(JNIEnv* env, jclass, jlong address, jlong ackermannData) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleDriveSimData4W* self = (physx::PxVehicleDriveSimData4W*) address;
+JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleDriveSimData4W__1setAckermannGeometryData(JNIEnv*, jclass, jlong _address, jlong ackermannData) {
+    physx::PxVehicleDriveSimData4W* self = (physx::PxVehicleDriveSimData4W*) _address;
     self->setAckermannGeometryData(*((physx::PxVehicleAckermannGeometryData*) ackermannData));
 }
-JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleDriveSimData4W__1delete_1native_1instance(JNIEnv*, jclass, jlong address) {
-    delete (physx::PxVehicleDriveSimData4W*) address;
+JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleDriveSimData4W__1delete_1native_1instance(JNIEnv*, jclass, jlong _address) {
+    delete (physx::PxVehicleDriveSimData4W*) _address;
 }
 
 // PxVehicleEngineData
-JNIEXPORT jlong JNICALL Java_physx_vehicle_PxVehicleEngineData__1PxVehicleEngineData(JNIEnv* env, jclass) {
-    (void) env;    // avoid unused parameter warning / error
+JNIEXPORT jlong JNICALL Java_physx_vehicle_PxVehicleEngineData__1PxVehicleEngineData(JNIEnv*, jclass) {
     return (jlong) new physx::PxVehicleEngineData();
 }
-JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleEngineData__1delete_1native_1instance(JNIEnv*, jclass, jlong address) {
-    delete (physx::PxVehicleEngineData*) address;
+JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleEngineData__1delete_1native_1instance(JNIEnv*, jclass, jlong _address) {
+    delete (physx::PxVehicleEngineData*) _address;
 }
-JNIEXPORT jlong JNICALL Java_physx_vehicle_PxVehicleEngineData__1getMTorqueCurve(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleEngineData* self = (physx::PxVehicleEngineData*) address;
-    return (jlong) &self->mTorqueCurve;
+JNIEXPORT jlong JNICALL Java_physx_vehicle_PxVehicleEngineData__1getMTorqueCurve(JNIEnv*, jclass, jlong _address) {
+    physx::PxVehicleEngineData* _self = (physx::PxVehicleEngineData*) _address;
+    return (jlong) &_self->mTorqueCurve;
 }
-JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleEngineData__1setMTorqueCurve(JNIEnv* env, jclass, jlong address, jlong value) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleEngineData* self = (physx::PxVehicleEngineData*) address;
-    self->mTorqueCurve = *((PxEngineTorqueLookupTable*) value);
+JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleEngineData__1setMTorqueCurve(JNIEnv*, jclass, jlong _address, jlong value) {
+    physx::PxVehicleEngineData* _self = (physx::PxVehicleEngineData*) _address;
+    _self->mTorqueCurve = *((PxEngineTorqueLookupTable*) value);
 }
-JNIEXPORT jfloat JNICALL Java_physx_vehicle_PxVehicleEngineData__1getMMOI(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleEngineData* self = (physx::PxVehicleEngineData*) address;
-    return (jfloat) self->mMOI;
+JNIEXPORT jfloat JNICALL Java_physx_vehicle_PxVehicleEngineData__1getMMOI(JNIEnv*, jclass, jlong _address) {
+    physx::PxVehicleEngineData* _self = (physx::PxVehicleEngineData*) _address;
+    return (jfloat) _self->mMOI;
 }
-JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleEngineData__1setMMOI(JNIEnv* env, jclass, jlong address, jfloat value) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleEngineData* self = (physx::PxVehicleEngineData*) address;
-    self->mMOI = value;
+JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleEngineData__1setMMOI(JNIEnv*, jclass, jlong _address, jfloat value) {
+    physx::PxVehicleEngineData* _self = (physx::PxVehicleEngineData*) _address;
+    _self->mMOI = value;
 }
-JNIEXPORT jfloat JNICALL Java_physx_vehicle_PxVehicleEngineData__1getMPeakTorque(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleEngineData* self = (physx::PxVehicleEngineData*) address;
-    return (jfloat) self->mPeakTorque;
+JNIEXPORT jfloat JNICALL Java_physx_vehicle_PxVehicleEngineData__1getMPeakTorque(JNIEnv*, jclass, jlong _address) {
+    physx::PxVehicleEngineData* _self = (physx::PxVehicleEngineData*) _address;
+    return (jfloat) _self->mPeakTorque;
 }
-JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleEngineData__1setMPeakTorque(JNIEnv* env, jclass, jlong address, jfloat value) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleEngineData* self = (physx::PxVehicleEngineData*) address;
-    self->mPeakTorque = value;
+JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleEngineData__1setMPeakTorque(JNIEnv*, jclass, jlong _address, jfloat value) {
+    physx::PxVehicleEngineData* _self = (physx::PxVehicleEngineData*) _address;
+    _self->mPeakTorque = value;
 }
-JNIEXPORT jfloat JNICALL Java_physx_vehicle_PxVehicleEngineData__1getMMaxOmega(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleEngineData* self = (physx::PxVehicleEngineData*) address;
-    return (jfloat) self->mMaxOmega;
+JNIEXPORT jfloat JNICALL Java_physx_vehicle_PxVehicleEngineData__1getMMaxOmega(JNIEnv*, jclass, jlong _address) {
+    physx::PxVehicleEngineData* _self = (physx::PxVehicleEngineData*) _address;
+    return (jfloat) _self->mMaxOmega;
 }
-JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleEngineData__1setMMaxOmega(JNIEnv* env, jclass, jlong address, jfloat value) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleEngineData* self = (physx::PxVehicleEngineData*) address;
-    self->mMaxOmega = value;
+JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleEngineData__1setMMaxOmega(JNIEnv*, jclass, jlong _address, jfloat value) {
+    physx::PxVehicleEngineData* _self = (physx::PxVehicleEngineData*) _address;
+    _self->mMaxOmega = value;
 }
-JNIEXPORT jfloat JNICALL Java_physx_vehicle_PxVehicleEngineData__1getMDampingRateFullThrottle(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleEngineData* self = (physx::PxVehicleEngineData*) address;
-    return (jfloat) self->mDampingRateFullThrottle;
+JNIEXPORT jfloat JNICALL Java_physx_vehicle_PxVehicleEngineData__1getMDampingRateFullThrottle(JNIEnv*, jclass, jlong _address) {
+    physx::PxVehicleEngineData* _self = (physx::PxVehicleEngineData*) _address;
+    return (jfloat) _self->mDampingRateFullThrottle;
 }
-JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleEngineData__1setMDampingRateFullThrottle(JNIEnv* env, jclass, jlong address, jfloat value) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleEngineData* self = (physx::PxVehicleEngineData*) address;
-    self->mDampingRateFullThrottle = value;
+JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleEngineData__1setMDampingRateFullThrottle(JNIEnv*, jclass, jlong _address, jfloat value) {
+    physx::PxVehicleEngineData* _self = (physx::PxVehicleEngineData*) _address;
+    _self->mDampingRateFullThrottle = value;
 }
-JNIEXPORT jfloat JNICALL Java_physx_vehicle_PxVehicleEngineData__1getMDampingRateZeroThrottleClutchEngaged(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleEngineData* self = (physx::PxVehicleEngineData*) address;
-    return (jfloat) self->mDampingRateZeroThrottleClutchEngaged;
+JNIEXPORT jfloat JNICALL Java_physx_vehicle_PxVehicleEngineData__1getMDampingRateZeroThrottleClutchEngaged(JNIEnv*, jclass, jlong _address) {
+    physx::PxVehicleEngineData* _self = (physx::PxVehicleEngineData*) _address;
+    return (jfloat) _self->mDampingRateZeroThrottleClutchEngaged;
 }
-JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleEngineData__1setMDampingRateZeroThrottleClutchEngaged(JNIEnv* env, jclass, jlong address, jfloat value) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleEngineData* self = (physx::PxVehicleEngineData*) address;
-    self->mDampingRateZeroThrottleClutchEngaged = value;
+JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleEngineData__1setMDampingRateZeroThrottleClutchEngaged(JNIEnv*, jclass, jlong _address, jfloat value) {
+    physx::PxVehicleEngineData* _self = (physx::PxVehicleEngineData*) _address;
+    _self->mDampingRateZeroThrottleClutchEngaged = value;
 }
-JNIEXPORT jfloat JNICALL Java_physx_vehicle_PxVehicleEngineData__1getMDampingRateZeroThrottleClutchDisengaged(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleEngineData* self = (physx::PxVehicleEngineData*) address;
-    return (jfloat) self->mDampingRateZeroThrottleClutchDisengaged;
+JNIEXPORT jfloat JNICALL Java_physx_vehicle_PxVehicleEngineData__1getMDampingRateZeroThrottleClutchDisengaged(JNIEnv*, jclass, jlong _address) {
+    physx::PxVehicleEngineData* _self = (physx::PxVehicleEngineData*) _address;
+    return (jfloat) _self->mDampingRateZeroThrottleClutchDisengaged;
 }
-JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleEngineData__1setMDampingRateZeroThrottleClutchDisengaged(JNIEnv* env, jclass, jlong address, jfloat value) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleEngineData* self = (physx::PxVehicleEngineData*) address;
-    self->mDampingRateZeroThrottleClutchDisengaged = value;
+JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleEngineData__1setMDampingRateZeroThrottleClutchDisengaged(JNIEnv*, jclass, jlong _address, jfloat value) {
+    physx::PxVehicleEngineData* _self = (physx::PxVehicleEngineData*) _address;
+    _self->mDampingRateZeroThrottleClutchDisengaged = value;
 }
 
 // PxEngineTorqueLookupTable
-JNIEXPORT jlong JNICALL Java_physx_vehicle_PxEngineTorqueLookupTable__1PxEngineTorqueLookupTable(JNIEnv* env, jclass) {
-    (void) env;    // avoid unused parameter warning / error
+JNIEXPORT jlong JNICALL Java_physx_vehicle_PxEngineTorqueLookupTable__1PxEngineTorqueLookupTable(JNIEnv*, jclass) {
     return (jlong) new PxEngineTorqueLookupTable();
 }
-JNIEXPORT void JNICALL Java_physx_vehicle_PxEngineTorqueLookupTable__1addPair(JNIEnv* env, jclass, jlong address, jfloat x, jfloat y) {
-    (void) env;    // avoid unused parameter warning / error
-    PxEngineTorqueLookupTable* self = (PxEngineTorqueLookupTable*) address;
+JNIEXPORT void JNICALL Java_physx_vehicle_PxEngineTorqueLookupTable__1addPair(JNIEnv*, jclass, jlong _address, jfloat x, jfloat y) {
+    PxEngineTorqueLookupTable* self = (PxEngineTorqueLookupTable*) _address;
     self->addPair(x, y);
 }
-JNIEXPORT jfloat JNICALL Java_physx_vehicle_PxEngineTorqueLookupTable__1getYVal(JNIEnv* env, jclass, jlong address, jfloat x) {
-    (void) env;    // avoid unused parameter warning / error
-    PxEngineTorqueLookupTable* self = (PxEngineTorqueLookupTable*) address;
+JNIEXPORT jfloat JNICALL Java_physx_vehicle_PxEngineTorqueLookupTable__1getYVal(JNIEnv*, jclass, jlong _address, jfloat x) {
+    PxEngineTorqueLookupTable* self = (PxEngineTorqueLookupTable*) _address;
     return (jfloat) self->getYVal(x);
 }
-JNIEXPORT jint JNICALL Java_physx_vehicle_PxEngineTorqueLookupTable__1getNbDataPairs(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    PxEngineTorqueLookupTable* self = (PxEngineTorqueLookupTable*) address;
+JNIEXPORT jint JNICALL Java_physx_vehicle_PxEngineTorqueLookupTable__1getNbDataPairs(JNIEnv*, jclass, jlong _address) {
+    PxEngineTorqueLookupTable* self = (PxEngineTorqueLookupTable*) _address;
     return (jint) self->getNbDataPairs();
 }
-JNIEXPORT void JNICALL Java_physx_vehicle_PxEngineTorqueLookupTable__1clear(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    PxEngineTorqueLookupTable* self = (PxEngineTorqueLookupTable*) address;
+JNIEXPORT void JNICALL Java_physx_vehicle_PxEngineTorqueLookupTable__1clear(JNIEnv*, jclass, jlong _address) {
+    PxEngineTorqueLookupTable* self = (PxEngineTorqueLookupTable*) _address;
     self->clear();
 }
-JNIEXPORT jfloat JNICALL Java_physx_vehicle_PxEngineTorqueLookupTable__1getX(JNIEnv* env, jclass, jlong address, jint i) {
-    (void) env;    // avoid unused parameter warning / error
-    PxEngineTorqueLookupTable* self = (PxEngineTorqueLookupTable*) address;
+JNIEXPORT jfloat JNICALL Java_physx_vehicle_PxEngineTorqueLookupTable__1getX(JNIEnv*, jclass, jlong _address, jint i) {
+    PxEngineTorqueLookupTable* self = (PxEngineTorqueLookupTable*) _address;
     return (jfloat) self->getX(i);
 }
-JNIEXPORT jfloat JNICALL Java_physx_vehicle_PxEngineTorqueLookupTable__1getY(JNIEnv* env, jclass, jlong address, jint i) {
-    (void) env;    // avoid unused parameter warning / error
-    PxEngineTorqueLookupTable* self = (PxEngineTorqueLookupTable*) address;
+JNIEXPORT jfloat JNICALL Java_physx_vehicle_PxEngineTorqueLookupTable__1getY(JNIEnv*, jclass, jlong _address, jint i) {
+    PxEngineTorqueLookupTable* self = (PxEngineTorqueLookupTable*) _address;
     return (jfloat) self->getY(i);
 }
-JNIEXPORT void JNICALL Java_physx_vehicle_PxEngineTorqueLookupTable__1delete_1native_1instance(JNIEnv*, jclass, jlong address) {
-    delete (PxEngineTorqueLookupTable*) address;
+JNIEXPORT void JNICALL Java_physx_vehicle_PxEngineTorqueLookupTable__1delete_1native_1instance(JNIEnv*, jclass, jlong _address) {
+    delete (PxEngineTorqueLookupTable*) _address;
 }
-JNIEXPORT jfloat JNICALL Java_physx_vehicle_PxEngineTorqueLookupTable__1getMDataPairs(JNIEnv* env, jclass, jlong address, jint index) {
-    (void) env;    // avoid unused parameter warning / error
-    PxEngineTorqueLookupTable* self = (PxEngineTorqueLookupTable*) address;
-    return (jfloat) self->mDataPairs[index];
+JNIEXPORT jfloat JNICALL Java_physx_vehicle_PxEngineTorqueLookupTable__1getMDataPairs(JNIEnv*, jclass, jlong _address, jint _index) {
+    PxEngineTorqueLookupTable* _self = (PxEngineTorqueLookupTable*) _address;
+    return (jfloat) _self->mDataPairs[_index];
 }
-JNIEXPORT void JNICALL Java_physx_vehicle_PxEngineTorqueLookupTable__1setMDataPairs(JNIEnv* env, jclass, jlong address, jint index, jfloat value) {
-    (void) env;    // avoid unused parameter warning / error
-    PxEngineTorqueLookupTable* self = (PxEngineTorqueLookupTable*) address;
-    self->mDataPairs[index] = value;
+JNIEXPORT void JNICALL Java_physx_vehicle_PxEngineTorqueLookupTable__1setMDataPairs(JNIEnv*, jclass, jlong _address, jint _index, jfloat value) {
+    PxEngineTorqueLookupTable* _self = (PxEngineTorqueLookupTable*) _address;
+    _self->mDataPairs[_index] = value;
 }
-JNIEXPORT jint JNICALL Java_physx_vehicle_PxEngineTorqueLookupTable__1getMNbDataPairs(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    PxEngineTorqueLookupTable* self = (PxEngineTorqueLookupTable*) address;
-    return (jint) self->mNbDataPairs;
+JNIEXPORT jint JNICALL Java_physx_vehicle_PxEngineTorqueLookupTable__1getMNbDataPairs(JNIEnv*, jclass, jlong _address) {
+    PxEngineTorqueLookupTable* _self = (PxEngineTorqueLookupTable*) _address;
+    return (jint) _self->mNbDataPairs;
 }
-JNIEXPORT void JNICALL Java_physx_vehicle_PxEngineTorqueLookupTable__1setMNbDataPairs(JNIEnv* env, jclass, jlong address, jint value) {
-    (void) env;    // avoid unused parameter warning / error
-    PxEngineTorqueLookupTable* self = (PxEngineTorqueLookupTable*) address;
-    self->mNbDataPairs = value;
+JNIEXPORT void JNICALL Java_physx_vehicle_PxEngineTorqueLookupTable__1setMNbDataPairs(JNIEnv*, jclass, jlong _address, jint value) {
+    PxEngineTorqueLookupTable* _self = (PxEngineTorqueLookupTable*) _address;
+    _self->mNbDataPairs = value;
 }
 
 // PxVehicleGearsData
-JNIEXPORT jlong JNICALL Java_physx_vehicle_PxVehicleGearsData__1PxVehicleGearsData(JNIEnv* env, jclass) {
-    (void) env;    // avoid unused parameter warning / error
+JNIEXPORT jlong JNICALL Java_physx_vehicle_PxVehicleGearsData__1PxVehicleGearsData(JNIEnv*, jclass) {
     return (jlong) new physx::PxVehicleGearsData();
 }
-JNIEXPORT jfloat JNICALL Java_physx_vehicle_PxVehicleGearsData__1getGearRatio(JNIEnv* env, jclass, jlong address, jint a) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleGearsData* self = (physx::PxVehicleGearsData*) address;
+JNIEXPORT jfloat JNICALL Java_physx_vehicle_PxVehicleGearsData__1getGearRatio(JNIEnv*, jclass, jlong _address, jint a) {
+    physx::PxVehicleGearsData* self = (physx::PxVehicleGearsData*) _address;
     return (jfloat) self->getGearRatio((PxVehicleGearEnum) a);
 }
-JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleGearsData__1setGearRatio(JNIEnv* env, jclass, jlong address, jint a, jfloat ratio) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleGearsData* self = (physx::PxVehicleGearsData*) address;
+JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleGearsData__1setGearRatio(JNIEnv*, jclass, jlong _address, jint a, jfloat ratio) {
+    physx::PxVehicleGearsData* self = (physx::PxVehicleGearsData*) _address;
     self->setGearRatio((PxVehicleGearEnum) a, ratio);
 }
-JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleGearsData__1delete_1native_1instance(JNIEnv*, jclass, jlong address) {
-    delete (physx::PxVehicleGearsData*) address;
+JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleGearsData__1delete_1native_1instance(JNIEnv*, jclass, jlong _address) {
+    delete (physx::PxVehicleGearsData*) _address;
 }
-JNIEXPORT jfloat JNICALL Java_physx_vehicle_PxVehicleGearsData__1getMRatios(JNIEnv* env, jclass, jlong address, jint index) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleGearsData* self = (physx::PxVehicleGearsData*) address;
-    return (jfloat) self->mRatios[index];
+JNIEXPORT jfloat JNICALL Java_physx_vehicle_PxVehicleGearsData__1getMRatios(JNIEnv*, jclass, jlong _address, jint _index) {
+    physx::PxVehicleGearsData* _self = (physx::PxVehicleGearsData*) _address;
+    return (jfloat) _self->mRatios[_index];
 }
-JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleGearsData__1setMRatios(JNIEnv* env, jclass, jlong address, jint index, jfloat value) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleGearsData* self = (physx::PxVehicleGearsData*) address;
-    self->mRatios[index] = value;
+JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleGearsData__1setMRatios(JNIEnv*, jclass, jlong _address, jint _index, jfloat value) {
+    physx::PxVehicleGearsData* _self = (physx::PxVehicleGearsData*) _address;
+    _self->mRatios[_index] = value;
 }
-JNIEXPORT jfloat JNICALL Java_physx_vehicle_PxVehicleGearsData__1getMFinalRatio(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleGearsData* self = (physx::PxVehicleGearsData*) address;
-    return (jfloat) self->mFinalRatio;
+JNIEXPORT jfloat JNICALL Java_physx_vehicle_PxVehicleGearsData__1getMFinalRatio(JNIEnv*, jclass, jlong _address) {
+    physx::PxVehicleGearsData* _self = (physx::PxVehicleGearsData*) _address;
+    return (jfloat) _self->mFinalRatio;
 }
-JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleGearsData__1setMFinalRatio(JNIEnv* env, jclass, jlong address, jfloat value) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleGearsData* self = (physx::PxVehicleGearsData*) address;
-    self->mFinalRatio = value;
+JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleGearsData__1setMFinalRatio(JNIEnv*, jclass, jlong _address, jfloat value) {
+    physx::PxVehicleGearsData* _self = (physx::PxVehicleGearsData*) _address;
+    _self->mFinalRatio = value;
 }
-JNIEXPORT jint JNICALL Java_physx_vehicle_PxVehicleGearsData__1getMNbRatios(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleGearsData* self = (physx::PxVehicleGearsData*) address;
-    return (jint) self->mNbRatios;
+JNIEXPORT jint JNICALL Java_physx_vehicle_PxVehicleGearsData__1getMNbRatios(JNIEnv*, jclass, jlong _address) {
+    physx::PxVehicleGearsData* _self = (physx::PxVehicleGearsData*) _address;
+    return (jint) _self->mNbRatios;
 }
-JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleGearsData__1setMNbRatios(JNIEnv* env, jclass, jlong address, jint value) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleGearsData* self = (physx::PxVehicleGearsData*) address;
-    self->mNbRatios = value;
+JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleGearsData__1setMNbRatios(JNIEnv*, jclass, jlong _address, jint value) {
+    physx::PxVehicleGearsData* _self = (physx::PxVehicleGearsData*) _address;
+    _self->mNbRatios = value;
 }
-JNIEXPORT jfloat JNICALL Java_physx_vehicle_PxVehicleGearsData__1getMSwitchTime(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleGearsData* self = (physx::PxVehicleGearsData*) address;
-    return (jfloat) self->mSwitchTime;
+JNIEXPORT jfloat JNICALL Java_physx_vehicle_PxVehicleGearsData__1getMSwitchTime(JNIEnv*, jclass, jlong _address) {
+    physx::PxVehicleGearsData* _self = (physx::PxVehicleGearsData*) _address;
+    return (jfloat) _self->mSwitchTime;
 }
-JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleGearsData__1setMSwitchTime(JNIEnv* env, jclass, jlong address, jfloat value) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleGearsData* self = (physx::PxVehicleGearsData*) address;
-    self->mSwitchTime = value;
+JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleGearsData__1setMSwitchTime(JNIEnv*, jclass, jlong _address, jfloat value) {
+    physx::PxVehicleGearsData* _self = (physx::PxVehicleGearsData*) _address;
+    _self->mSwitchTime = value;
 }
 
 // PxVehicleSuspensionData
-JNIEXPORT jlong JNICALL Java_physx_vehicle_PxVehicleSuspensionData__1PxVehicleSuspensionData(JNIEnv* env, jclass) {
-    (void) env;    // avoid unused parameter warning / error
+JNIEXPORT jlong JNICALL Java_physx_vehicle_PxVehicleSuspensionData__1PxVehicleSuspensionData(JNIEnv*, jclass) {
     return (jlong) new physx::PxVehicleSuspensionData();
 }
-JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleSuspensionData__1setMassAndPreserveNaturalFrequency(JNIEnv* env, jclass, jlong address, jfloat newSprungMass) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleSuspensionData* self = (physx::PxVehicleSuspensionData*) address;
+JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleSuspensionData__1setMassAndPreserveNaturalFrequency(JNIEnv*, jclass, jlong _address, jfloat newSprungMass) {
+    physx::PxVehicleSuspensionData* self = (physx::PxVehicleSuspensionData*) _address;
     self->setMassAndPreserveNaturalFrequency(newSprungMass);
 }
-JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleSuspensionData__1delete_1native_1instance(JNIEnv*, jclass, jlong address) {
-    delete (physx::PxVehicleSuspensionData*) address;
+JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleSuspensionData__1delete_1native_1instance(JNIEnv*, jclass, jlong _address) {
+    delete (physx::PxVehicleSuspensionData*) _address;
 }
-JNIEXPORT jfloat JNICALL Java_physx_vehicle_PxVehicleSuspensionData__1getMSpringStrength(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleSuspensionData* self = (physx::PxVehicleSuspensionData*) address;
-    return (jfloat) self->mSpringStrength;
+JNIEXPORT jfloat JNICALL Java_physx_vehicle_PxVehicleSuspensionData__1getMSpringStrength(JNIEnv*, jclass, jlong _address) {
+    physx::PxVehicleSuspensionData* _self = (physx::PxVehicleSuspensionData*) _address;
+    return (jfloat) _self->mSpringStrength;
 }
-JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleSuspensionData__1setMSpringStrength(JNIEnv* env, jclass, jlong address, jfloat value) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleSuspensionData* self = (physx::PxVehicleSuspensionData*) address;
-    self->mSpringStrength = value;
+JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleSuspensionData__1setMSpringStrength(JNIEnv*, jclass, jlong _address, jfloat value) {
+    physx::PxVehicleSuspensionData* _self = (physx::PxVehicleSuspensionData*) _address;
+    _self->mSpringStrength = value;
 }
-JNIEXPORT jfloat JNICALL Java_physx_vehicle_PxVehicleSuspensionData__1getMSpringDamperRate(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleSuspensionData* self = (physx::PxVehicleSuspensionData*) address;
-    return (jfloat) self->mSpringDamperRate;
+JNIEXPORT jfloat JNICALL Java_physx_vehicle_PxVehicleSuspensionData__1getMSpringDamperRate(JNIEnv*, jclass, jlong _address) {
+    physx::PxVehicleSuspensionData* _self = (physx::PxVehicleSuspensionData*) _address;
+    return (jfloat) _self->mSpringDamperRate;
 }
-JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleSuspensionData__1setMSpringDamperRate(JNIEnv* env, jclass, jlong address, jfloat value) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleSuspensionData* self = (physx::PxVehicleSuspensionData*) address;
-    self->mSpringDamperRate = value;
+JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleSuspensionData__1setMSpringDamperRate(JNIEnv*, jclass, jlong _address, jfloat value) {
+    physx::PxVehicleSuspensionData* _self = (physx::PxVehicleSuspensionData*) _address;
+    _self->mSpringDamperRate = value;
 }
-JNIEXPORT jfloat JNICALL Java_physx_vehicle_PxVehicleSuspensionData__1getMMaxCompression(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleSuspensionData* self = (physx::PxVehicleSuspensionData*) address;
-    return (jfloat) self->mMaxCompression;
+JNIEXPORT jfloat JNICALL Java_physx_vehicle_PxVehicleSuspensionData__1getMMaxCompression(JNIEnv*, jclass, jlong _address) {
+    physx::PxVehicleSuspensionData* _self = (physx::PxVehicleSuspensionData*) _address;
+    return (jfloat) _self->mMaxCompression;
 }
-JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleSuspensionData__1setMMaxCompression(JNIEnv* env, jclass, jlong address, jfloat value) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleSuspensionData* self = (physx::PxVehicleSuspensionData*) address;
-    self->mMaxCompression = value;
+JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleSuspensionData__1setMMaxCompression(JNIEnv*, jclass, jlong _address, jfloat value) {
+    physx::PxVehicleSuspensionData* _self = (physx::PxVehicleSuspensionData*) _address;
+    _self->mMaxCompression = value;
 }
-JNIEXPORT jfloat JNICALL Java_physx_vehicle_PxVehicleSuspensionData__1getMMaxDroop(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleSuspensionData* self = (physx::PxVehicleSuspensionData*) address;
-    return (jfloat) self->mMaxDroop;
+JNIEXPORT jfloat JNICALL Java_physx_vehicle_PxVehicleSuspensionData__1getMMaxDroop(JNIEnv*, jclass, jlong _address) {
+    physx::PxVehicleSuspensionData* _self = (physx::PxVehicleSuspensionData*) _address;
+    return (jfloat) _self->mMaxDroop;
 }
-JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleSuspensionData__1setMMaxDroop(JNIEnv* env, jclass, jlong address, jfloat value) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleSuspensionData* self = (physx::PxVehicleSuspensionData*) address;
-    self->mMaxDroop = value;
+JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleSuspensionData__1setMMaxDroop(JNIEnv*, jclass, jlong _address, jfloat value) {
+    physx::PxVehicleSuspensionData* _self = (physx::PxVehicleSuspensionData*) _address;
+    _self->mMaxDroop = value;
 }
-JNIEXPORT jfloat JNICALL Java_physx_vehicle_PxVehicleSuspensionData__1getMSprungMass(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleSuspensionData* self = (physx::PxVehicleSuspensionData*) address;
-    return (jfloat) self->mSprungMass;
+JNIEXPORT jfloat JNICALL Java_physx_vehicle_PxVehicleSuspensionData__1getMSprungMass(JNIEnv*, jclass, jlong _address) {
+    physx::PxVehicleSuspensionData* _self = (physx::PxVehicleSuspensionData*) _address;
+    return (jfloat) _self->mSprungMass;
 }
-JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleSuspensionData__1setMSprungMass(JNIEnv* env, jclass, jlong address, jfloat value) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleSuspensionData* self = (physx::PxVehicleSuspensionData*) address;
-    self->mSprungMass = value;
+JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleSuspensionData__1setMSprungMass(JNIEnv*, jclass, jlong _address, jfloat value) {
+    physx::PxVehicleSuspensionData* _self = (physx::PxVehicleSuspensionData*) _address;
+    _self->mSprungMass = value;
 }
-JNIEXPORT jfloat JNICALL Java_physx_vehicle_PxVehicleSuspensionData__1getMCamberAtRest(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleSuspensionData* self = (physx::PxVehicleSuspensionData*) address;
-    return (jfloat) self->mCamberAtRest;
+JNIEXPORT jfloat JNICALL Java_physx_vehicle_PxVehicleSuspensionData__1getMCamberAtRest(JNIEnv*, jclass, jlong _address) {
+    physx::PxVehicleSuspensionData* _self = (physx::PxVehicleSuspensionData*) _address;
+    return (jfloat) _self->mCamberAtRest;
 }
-JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleSuspensionData__1setMCamberAtRest(JNIEnv* env, jclass, jlong address, jfloat value) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleSuspensionData* self = (physx::PxVehicleSuspensionData*) address;
-    self->mCamberAtRest = value;
+JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleSuspensionData__1setMCamberAtRest(JNIEnv*, jclass, jlong _address, jfloat value) {
+    physx::PxVehicleSuspensionData* _self = (physx::PxVehicleSuspensionData*) _address;
+    _self->mCamberAtRest = value;
 }
-JNIEXPORT jfloat JNICALL Java_physx_vehicle_PxVehicleSuspensionData__1getMCamberAtMaxCompression(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleSuspensionData* self = (physx::PxVehicleSuspensionData*) address;
-    return (jfloat) self->mCamberAtMaxCompression;
+JNIEXPORT jfloat JNICALL Java_physx_vehicle_PxVehicleSuspensionData__1getMCamberAtMaxCompression(JNIEnv*, jclass, jlong _address) {
+    physx::PxVehicleSuspensionData* _self = (physx::PxVehicleSuspensionData*) _address;
+    return (jfloat) _self->mCamberAtMaxCompression;
 }
-JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleSuspensionData__1setMCamberAtMaxCompression(JNIEnv* env, jclass, jlong address, jfloat value) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleSuspensionData* self = (physx::PxVehicleSuspensionData*) address;
-    self->mCamberAtMaxCompression = value;
+JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleSuspensionData__1setMCamberAtMaxCompression(JNIEnv*, jclass, jlong _address, jfloat value) {
+    physx::PxVehicleSuspensionData* _self = (physx::PxVehicleSuspensionData*) _address;
+    _self->mCamberAtMaxCompression = value;
 }
-JNIEXPORT jfloat JNICALL Java_physx_vehicle_PxVehicleSuspensionData__1getMCamberAtMaxDroop(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleSuspensionData* self = (physx::PxVehicleSuspensionData*) address;
-    return (jfloat) self->mCamberAtMaxDroop;
+JNIEXPORT jfloat JNICALL Java_physx_vehicle_PxVehicleSuspensionData__1getMCamberAtMaxDroop(JNIEnv*, jclass, jlong _address) {
+    physx::PxVehicleSuspensionData* _self = (physx::PxVehicleSuspensionData*) _address;
+    return (jfloat) _self->mCamberAtMaxDroop;
 }
-JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleSuspensionData__1setMCamberAtMaxDroop(JNIEnv* env, jclass, jlong address, jfloat value) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleSuspensionData* self = (physx::PxVehicleSuspensionData*) address;
-    self->mCamberAtMaxDroop = value;
+JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleSuspensionData__1setMCamberAtMaxDroop(JNIEnv*, jclass, jlong _address, jfloat value) {
+    physx::PxVehicleSuspensionData* _self = (physx::PxVehicleSuspensionData*) _address;
+    _self->mCamberAtMaxDroop = value;
 }
 
 // PxVehicleTireData
-JNIEXPORT jlong JNICALL Java_physx_vehicle_PxVehicleTireData__1PxVehicleTireData(JNIEnv* env, jclass) {
-    (void) env;    // avoid unused parameter warning / error
+JNIEXPORT jlong JNICALL Java_physx_vehicle_PxVehicleTireData__1PxVehicleTireData(JNIEnv*, jclass) {
     return (jlong) new physx::PxVehicleTireData();
 }
-JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleTireData__1delete_1native_1instance(JNIEnv*, jclass, jlong address) {
-    delete (physx::PxVehicleTireData*) address;
+JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleTireData__1delete_1native_1instance(JNIEnv*, jclass, jlong _address) {
+    delete (physx::PxVehicleTireData*) _address;
 }
-JNIEXPORT jfloat JNICALL Java_physx_vehicle_PxVehicleTireData__1getMLatStiffX(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleTireData* self = (physx::PxVehicleTireData*) address;
-    return (jfloat) self->mLatStiffX;
+JNIEXPORT jfloat JNICALL Java_physx_vehicle_PxVehicleTireData__1getMLatStiffX(JNIEnv*, jclass, jlong _address) {
+    physx::PxVehicleTireData* _self = (physx::PxVehicleTireData*) _address;
+    return (jfloat) _self->mLatStiffX;
 }
-JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleTireData__1setMLatStiffX(JNIEnv* env, jclass, jlong address, jfloat value) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleTireData* self = (physx::PxVehicleTireData*) address;
-    self->mLatStiffX = value;
+JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleTireData__1setMLatStiffX(JNIEnv*, jclass, jlong _address, jfloat value) {
+    physx::PxVehicleTireData* _self = (physx::PxVehicleTireData*) _address;
+    _self->mLatStiffX = value;
 }
-JNIEXPORT jfloat JNICALL Java_physx_vehicle_PxVehicleTireData__1getMLatStiffY(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleTireData* self = (physx::PxVehicleTireData*) address;
-    return (jfloat) self->mLatStiffY;
+JNIEXPORT jfloat JNICALL Java_physx_vehicle_PxVehicleTireData__1getMLatStiffY(JNIEnv*, jclass, jlong _address) {
+    physx::PxVehicleTireData* _self = (physx::PxVehicleTireData*) _address;
+    return (jfloat) _self->mLatStiffY;
 }
-JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleTireData__1setMLatStiffY(JNIEnv* env, jclass, jlong address, jfloat value) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleTireData* self = (physx::PxVehicleTireData*) address;
-    self->mLatStiffY = value;
+JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleTireData__1setMLatStiffY(JNIEnv*, jclass, jlong _address, jfloat value) {
+    physx::PxVehicleTireData* _self = (physx::PxVehicleTireData*) _address;
+    _self->mLatStiffY = value;
 }
-JNIEXPORT jfloat JNICALL Java_physx_vehicle_PxVehicleTireData__1getMLongitudinalStiffnessPerUnitGravity(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleTireData* self = (physx::PxVehicleTireData*) address;
-    return (jfloat) self->mLongitudinalStiffnessPerUnitGravity;
+JNIEXPORT jfloat JNICALL Java_physx_vehicle_PxVehicleTireData__1getMLongitudinalStiffnessPerUnitGravity(JNIEnv*, jclass, jlong _address) {
+    physx::PxVehicleTireData* _self = (physx::PxVehicleTireData*) _address;
+    return (jfloat) _self->mLongitudinalStiffnessPerUnitGravity;
 }
-JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleTireData__1setMLongitudinalStiffnessPerUnitGravity(JNIEnv* env, jclass, jlong address, jfloat value) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleTireData* self = (physx::PxVehicleTireData*) address;
-    self->mLongitudinalStiffnessPerUnitGravity = value;
+JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleTireData__1setMLongitudinalStiffnessPerUnitGravity(JNIEnv*, jclass, jlong _address, jfloat value) {
+    physx::PxVehicleTireData* _self = (physx::PxVehicleTireData*) _address;
+    _self->mLongitudinalStiffnessPerUnitGravity = value;
 }
-JNIEXPORT jfloat JNICALL Java_physx_vehicle_PxVehicleTireData__1getMCamberStiffnessPerUnitGravity(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleTireData* self = (physx::PxVehicleTireData*) address;
-    return (jfloat) self->mCamberStiffnessPerUnitGravity;
+JNIEXPORT jfloat JNICALL Java_physx_vehicle_PxVehicleTireData__1getMCamberStiffnessPerUnitGravity(JNIEnv*, jclass, jlong _address) {
+    physx::PxVehicleTireData* _self = (physx::PxVehicleTireData*) _address;
+    return (jfloat) _self->mCamberStiffnessPerUnitGravity;
 }
-JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleTireData__1setMCamberStiffnessPerUnitGravity(JNIEnv* env, jclass, jlong address, jfloat value) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleTireData* self = (physx::PxVehicleTireData*) address;
-    self->mCamberStiffnessPerUnitGravity = value;
+JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleTireData__1setMCamberStiffnessPerUnitGravity(JNIEnv*, jclass, jlong _address, jfloat value) {
+    physx::PxVehicleTireData* _self = (physx::PxVehicleTireData*) _address;
+    _self->mCamberStiffnessPerUnitGravity = value;
 }
-JNIEXPORT jint JNICALL Java_physx_vehicle_PxVehicleTireData__1getMType(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleTireData* self = (physx::PxVehicleTireData*) address;
-    return (jint) self->mType;
+JNIEXPORT jint JNICALL Java_physx_vehicle_PxVehicleTireData__1getMType(JNIEnv*, jclass, jlong _address) {
+    physx::PxVehicleTireData* _self = (physx::PxVehicleTireData*) _address;
+    return (jint) _self->mType;
 }
-JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleTireData__1setMType(JNIEnv* env, jclass, jlong address, jint value) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleTireData* self = (physx::PxVehicleTireData*) address;
-    self->mType = value;
+JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleTireData__1setMType(JNIEnv*, jclass, jlong _address, jint value) {
+    physx::PxVehicleTireData* _self = (physx::PxVehicleTireData*) _address;
+    _self->mType = value;
 }
 
 // PxVehicleTireLoadFilterData
-JNIEXPORT jlong JNICALL Java_physx_vehicle_PxVehicleTireLoadFilterData__1PxVehicleTireLoadFilterData(JNIEnv* env, jclass) {
-    (void) env;    // avoid unused parameter warning / error
+JNIEXPORT jlong JNICALL Java_physx_vehicle_PxVehicleTireLoadFilterData__1PxVehicleTireLoadFilterData(JNIEnv*, jclass) {
     return (jlong) new physx::PxVehicleTireLoadFilterData();
 }
-JNIEXPORT jfloat JNICALL Java_physx_vehicle_PxVehicleTireLoadFilterData__1getDenominator(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleTireLoadFilterData* self = (physx::PxVehicleTireLoadFilterData*) address;
+JNIEXPORT jfloat JNICALL Java_physx_vehicle_PxVehicleTireLoadFilterData__1getDenominator(JNIEnv*, jclass, jlong _address) {
+    physx::PxVehicleTireLoadFilterData* self = (physx::PxVehicleTireLoadFilterData*) _address;
     return (jfloat) self->getDenominator();
 }
-JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleTireLoadFilterData__1delete_1native_1instance(JNIEnv*, jclass, jlong address) {
-    delete (physx::PxVehicleTireLoadFilterData*) address;
+JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleTireLoadFilterData__1delete_1native_1instance(JNIEnv*, jclass, jlong _address) {
+    delete (physx::PxVehicleTireLoadFilterData*) _address;
 }
-JNIEXPORT jfloat JNICALL Java_physx_vehicle_PxVehicleTireLoadFilterData__1getMMinNormalisedLoad(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleTireLoadFilterData* self = (physx::PxVehicleTireLoadFilterData*) address;
-    return (jfloat) self->mMinNormalisedLoad;
+JNIEXPORT jfloat JNICALL Java_physx_vehicle_PxVehicleTireLoadFilterData__1getMMinNormalisedLoad(JNIEnv*, jclass, jlong _address) {
+    physx::PxVehicleTireLoadFilterData* _self = (physx::PxVehicleTireLoadFilterData*) _address;
+    return (jfloat) _self->mMinNormalisedLoad;
 }
-JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleTireLoadFilterData__1setMMinNormalisedLoad(JNIEnv* env, jclass, jlong address, jfloat value) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleTireLoadFilterData* self = (physx::PxVehicleTireLoadFilterData*) address;
-    self->mMinNormalisedLoad = value;
+JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleTireLoadFilterData__1setMMinNormalisedLoad(JNIEnv*, jclass, jlong _address, jfloat value) {
+    physx::PxVehicleTireLoadFilterData* _self = (physx::PxVehicleTireLoadFilterData*) _address;
+    _self->mMinNormalisedLoad = value;
 }
-JNIEXPORT jfloat JNICALL Java_physx_vehicle_PxVehicleTireLoadFilterData__1getMMinFilteredNormalisedLoad(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleTireLoadFilterData* self = (physx::PxVehicleTireLoadFilterData*) address;
-    return (jfloat) self->mMinFilteredNormalisedLoad;
+JNIEXPORT jfloat JNICALL Java_physx_vehicle_PxVehicleTireLoadFilterData__1getMMinFilteredNormalisedLoad(JNIEnv*, jclass, jlong _address) {
+    physx::PxVehicleTireLoadFilterData* _self = (physx::PxVehicleTireLoadFilterData*) _address;
+    return (jfloat) _self->mMinFilteredNormalisedLoad;
 }
-JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleTireLoadFilterData__1setMMinFilteredNormalisedLoad(JNIEnv* env, jclass, jlong address, jfloat value) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleTireLoadFilterData* self = (physx::PxVehicleTireLoadFilterData*) address;
-    self->mMinFilteredNormalisedLoad = value;
+JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleTireLoadFilterData__1setMMinFilteredNormalisedLoad(JNIEnv*, jclass, jlong _address, jfloat value) {
+    physx::PxVehicleTireLoadFilterData* _self = (physx::PxVehicleTireLoadFilterData*) _address;
+    _self->mMinFilteredNormalisedLoad = value;
 }
-JNIEXPORT jfloat JNICALL Java_physx_vehicle_PxVehicleTireLoadFilterData__1getMMaxNormalisedLoad(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleTireLoadFilterData* self = (physx::PxVehicleTireLoadFilterData*) address;
-    return (jfloat) self->mMaxNormalisedLoad;
+JNIEXPORT jfloat JNICALL Java_physx_vehicle_PxVehicleTireLoadFilterData__1getMMaxNormalisedLoad(JNIEnv*, jclass, jlong _address) {
+    physx::PxVehicleTireLoadFilterData* _self = (physx::PxVehicleTireLoadFilterData*) _address;
+    return (jfloat) _self->mMaxNormalisedLoad;
 }
-JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleTireLoadFilterData__1setMMaxNormalisedLoad(JNIEnv* env, jclass, jlong address, jfloat value) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleTireLoadFilterData* self = (physx::PxVehicleTireLoadFilterData*) address;
-    self->mMaxNormalisedLoad = value;
+JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleTireLoadFilterData__1setMMaxNormalisedLoad(JNIEnv*, jclass, jlong _address, jfloat value) {
+    physx::PxVehicleTireLoadFilterData* _self = (physx::PxVehicleTireLoadFilterData*) _address;
+    _self->mMaxNormalisedLoad = value;
 }
-JNIEXPORT jfloat JNICALL Java_physx_vehicle_PxVehicleTireLoadFilterData__1getMMaxFilteredNormalisedLoad(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleTireLoadFilterData* self = (physx::PxVehicleTireLoadFilterData*) address;
-    return (jfloat) self->mMaxFilteredNormalisedLoad;
+JNIEXPORT jfloat JNICALL Java_physx_vehicle_PxVehicleTireLoadFilterData__1getMMaxFilteredNormalisedLoad(JNIEnv*, jclass, jlong _address) {
+    physx::PxVehicleTireLoadFilterData* _self = (physx::PxVehicleTireLoadFilterData*) _address;
+    return (jfloat) _self->mMaxFilteredNormalisedLoad;
 }
-JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleTireLoadFilterData__1setMMaxFilteredNormalisedLoad(JNIEnv* env, jclass, jlong address, jfloat value) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleTireLoadFilterData* self = (physx::PxVehicleTireLoadFilterData*) address;
-    self->mMaxFilteredNormalisedLoad = value;
+JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleTireLoadFilterData__1setMMaxFilteredNormalisedLoad(JNIEnv*, jclass, jlong _address, jfloat value) {
+    physx::PxVehicleTireLoadFilterData* _self = (physx::PxVehicleTireLoadFilterData*) _address;
+    _self->mMaxFilteredNormalisedLoad = value;
 }
 
 // PxVehicleWheelData
-JNIEXPORT jlong JNICALL Java_physx_vehicle_PxVehicleWheelData__1PxVehicleWheelData(JNIEnv* env, jclass) {
-    (void) env;    // avoid unused parameter warning / error
+JNIEXPORT jlong JNICALL Java_physx_vehicle_PxVehicleWheelData__1PxVehicleWheelData(JNIEnv*, jclass) {
     return (jlong) new physx::PxVehicleWheelData();
 }
-JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleWheelData__1delete_1native_1instance(JNIEnv*, jclass, jlong address) {
-    delete (physx::PxVehicleWheelData*) address;
+JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleWheelData__1delete_1native_1instance(JNIEnv*, jclass, jlong _address) {
+    delete (physx::PxVehicleWheelData*) _address;
 }
-JNIEXPORT jfloat JNICALL Java_physx_vehicle_PxVehicleWheelData__1getMRadius(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleWheelData* self = (physx::PxVehicleWheelData*) address;
-    return (jfloat) self->mRadius;
+JNIEXPORT jfloat JNICALL Java_physx_vehicle_PxVehicleWheelData__1getMRadius(JNIEnv*, jclass, jlong _address) {
+    physx::PxVehicleWheelData* _self = (physx::PxVehicleWheelData*) _address;
+    return (jfloat) _self->mRadius;
 }
-JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleWheelData__1setMRadius(JNIEnv* env, jclass, jlong address, jfloat value) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleWheelData* self = (physx::PxVehicleWheelData*) address;
-    self->mRadius = value;
+JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleWheelData__1setMRadius(JNIEnv*, jclass, jlong _address, jfloat value) {
+    physx::PxVehicleWheelData* _self = (physx::PxVehicleWheelData*) _address;
+    _self->mRadius = value;
 }
-JNIEXPORT jfloat JNICALL Java_physx_vehicle_PxVehicleWheelData__1getMWidth(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleWheelData* self = (physx::PxVehicleWheelData*) address;
-    return (jfloat) self->mWidth;
+JNIEXPORT jfloat JNICALL Java_physx_vehicle_PxVehicleWheelData__1getMWidth(JNIEnv*, jclass, jlong _address) {
+    physx::PxVehicleWheelData* _self = (physx::PxVehicleWheelData*) _address;
+    return (jfloat) _self->mWidth;
 }
-JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleWheelData__1setMWidth(JNIEnv* env, jclass, jlong address, jfloat value) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleWheelData* self = (physx::PxVehicleWheelData*) address;
-    self->mWidth = value;
+JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleWheelData__1setMWidth(JNIEnv*, jclass, jlong _address, jfloat value) {
+    physx::PxVehicleWheelData* _self = (physx::PxVehicleWheelData*) _address;
+    _self->mWidth = value;
 }
-JNIEXPORT jfloat JNICALL Java_physx_vehicle_PxVehicleWheelData__1getMMass(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleWheelData* self = (physx::PxVehicleWheelData*) address;
-    return (jfloat) self->mMass;
+JNIEXPORT jfloat JNICALL Java_physx_vehicle_PxVehicleWheelData__1getMMass(JNIEnv*, jclass, jlong _address) {
+    physx::PxVehicleWheelData* _self = (physx::PxVehicleWheelData*) _address;
+    return (jfloat) _self->mMass;
 }
-JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleWheelData__1setMMass(JNIEnv* env, jclass, jlong address, jfloat value) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleWheelData* self = (physx::PxVehicleWheelData*) address;
-    self->mMass = value;
+JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleWheelData__1setMMass(JNIEnv*, jclass, jlong _address, jfloat value) {
+    physx::PxVehicleWheelData* _self = (physx::PxVehicleWheelData*) _address;
+    _self->mMass = value;
 }
-JNIEXPORT jfloat JNICALL Java_physx_vehicle_PxVehicleWheelData__1getMMOI(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleWheelData* self = (physx::PxVehicleWheelData*) address;
-    return (jfloat) self->mMOI;
+JNIEXPORT jfloat JNICALL Java_physx_vehicle_PxVehicleWheelData__1getMMOI(JNIEnv*, jclass, jlong _address) {
+    physx::PxVehicleWheelData* _self = (physx::PxVehicleWheelData*) _address;
+    return (jfloat) _self->mMOI;
 }
-JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleWheelData__1setMMOI(JNIEnv* env, jclass, jlong address, jfloat value) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleWheelData* self = (physx::PxVehicleWheelData*) address;
-    self->mMOI = value;
+JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleWheelData__1setMMOI(JNIEnv*, jclass, jlong _address, jfloat value) {
+    physx::PxVehicleWheelData* _self = (physx::PxVehicleWheelData*) _address;
+    _self->mMOI = value;
 }
-JNIEXPORT jfloat JNICALL Java_physx_vehicle_PxVehicleWheelData__1getMDampingRate(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleWheelData* self = (physx::PxVehicleWheelData*) address;
-    return (jfloat) self->mDampingRate;
+JNIEXPORT jfloat JNICALL Java_physx_vehicle_PxVehicleWheelData__1getMDampingRate(JNIEnv*, jclass, jlong _address) {
+    physx::PxVehicleWheelData* _self = (physx::PxVehicleWheelData*) _address;
+    return (jfloat) _self->mDampingRate;
 }
-JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleWheelData__1setMDampingRate(JNIEnv* env, jclass, jlong address, jfloat value) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleWheelData* self = (physx::PxVehicleWheelData*) address;
-    self->mDampingRate = value;
+JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleWheelData__1setMDampingRate(JNIEnv*, jclass, jlong _address, jfloat value) {
+    physx::PxVehicleWheelData* _self = (physx::PxVehicleWheelData*) _address;
+    _self->mDampingRate = value;
 }
-JNIEXPORT jfloat JNICALL Java_physx_vehicle_PxVehicleWheelData__1getMMaxBrakeTorque(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleWheelData* self = (physx::PxVehicleWheelData*) address;
-    return (jfloat) self->mMaxBrakeTorque;
+JNIEXPORT jfloat JNICALL Java_physx_vehicle_PxVehicleWheelData__1getMMaxBrakeTorque(JNIEnv*, jclass, jlong _address) {
+    physx::PxVehicleWheelData* _self = (physx::PxVehicleWheelData*) _address;
+    return (jfloat) _self->mMaxBrakeTorque;
 }
-JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleWheelData__1setMMaxBrakeTorque(JNIEnv* env, jclass, jlong address, jfloat value) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleWheelData* self = (physx::PxVehicleWheelData*) address;
-    self->mMaxBrakeTorque = value;
+JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleWheelData__1setMMaxBrakeTorque(JNIEnv*, jclass, jlong _address, jfloat value) {
+    physx::PxVehicleWheelData* _self = (physx::PxVehicleWheelData*) _address;
+    _self->mMaxBrakeTorque = value;
 }
-JNIEXPORT jfloat JNICALL Java_physx_vehicle_PxVehicleWheelData__1getMMaxHandBrakeTorque(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleWheelData* self = (physx::PxVehicleWheelData*) address;
-    return (jfloat) self->mMaxHandBrakeTorque;
+JNIEXPORT jfloat JNICALL Java_physx_vehicle_PxVehicleWheelData__1getMMaxHandBrakeTorque(JNIEnv*, jclass, jlong _address) {
+    physx::PxVehicleWheelData* _self = (physx::PxVehicleWheelData*) _address;
+    return (jfloat) _self->mMaxHandBrakeTorque;
 }
-JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleWheelData__1setMMaxHandBrakeTorque(JNIEnv* env, jclass, jlong address, jfloat value) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleWheelData* self = (physx::PxVehicleWheelData*) address;
-    self->mMaxHandBrakeTorque = value;
+JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleWheelData__1setMMaxHandBrakeTorque(JNIEnv*, jclass, jlong _address, jfloat value) {
+    physx::PxVehicleWheelData* _self = (physx::PxVehicleWheelData*) _address;
+    _self->mMaxHandBrakeTorque = value;
 }
-JNIEXPORT jfloat JNICALL Java_physx_vehicle_PxVehicleWheelData__1getMMaxSteer(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleWheelData* self = (physx::PxVehicleWheelData*) address;
-    return (jfloat) self->mMaxSteer;
+JNIEXPORT jfloat JNICALL Java_physx_vehicle_PxVehicleWheelData__1getMMaxSteer(JNIEnv*, jclass, jlong _address) {
+    physx::PxVehicleWheelData* _self = (physx::PxVehicleWheelData*) _address;
+    return (jfloat) _self->mMaxSteer;
 }
-JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleWheelData__1setMMaxSteer(JNIEnv* env, jclass, jlong address, jfloat value) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleWheelData* self = (physx::PxVehicleWheelData*) address;
-    self->mMaxSteer = value;
+JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleWheelData__1setMMaxSteer(JNIEnv*, jclass, jlong _address, jfloat value) {
+    physx::PxVehicleWheelData* _self = (physx::PxVehicleWheelData*) _address;
+    _self->mMaxSteer = value;
 }
-JNIEXPORT jfloat JNICALL Java_physx_vehicle_PxVehicleWheelData__1getMToeAngle(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleWheelData* self = (physx::PxVehicleWheelData*) address;
-    return (jfloat) self->mToeAngle;
+JNIEXPORT jfloat JNICALL Java_physx_vehicle_PxVehicleWheelData__1getMToeAngle(JNIEnv*, jclass, jlong _address) {
+    physx::PxVehicleWheelData* _self = (physx::PxVehicleWheelData*) _address;
+    return (jfloat) _self->mToeAngle;
 }
-JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleWheelData__1setMToeAngle(JNIEnv* env, jclass, jlong address, jfloat value) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleWheelData* self = (physx::PxVehicleWheelData*) address;
-    self->mToeAngle = value;
+JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleWheelData__1setMToeAngle(JNIEnv*, jclass, jlong _address, jfloat value) {
+    physx::PxVehicleWheelData* _self = (physx::PxVehicleWheelData*) _address;
+    _self->mToeAngle = value;
 }
 
 // PxVehicleWheelQueryResult
-JNIEXPORT jlong JNICALL Java_physx_vehicle_PxVehicleWheelQueryResult__1PxVehicleWheelQueryResult(JNIEnv* env, jclass) {
-    (void) env;    // avoid unused parameter warning / error
+JNIEXPORT jlong JNICALL Java_physx_vehicle_PxVehicleWheelQueryResult__1PxVehicleWheelQueryResult(JNIEnv*, jclass) {
     return (jlong) new physx::PxVehicleWheelQueryResult();
 }
-JNIEXPORT jlong JNICALL Java_physx_vehicle_PxVehicleWheelQueryResult__1getWheelQueryResults(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleWheelQueryResult* self = (physx::PxVehicleWheelQueryResult*) address;
-    return (jlong) self->wheelQueryResults;
+JNIEXPORT jlong JNICALL Java_physx_vehicle_PxVehicleWheelQueryResult__1getWheelQueryResults(JNIEnv*, jclass, jlong _address) {
+    physx::PxVehicleWheelQueryResult* _self = (physx::PxVehicleWheelQueryResult*) _address;
+    return (jlong) _self->wheelQueryResults;
 }
-JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleWheelQueryResult__1setWheelQueryResults(JNIEnv* env, jclass, jlong address, jlong value) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleWheelQueryResult* self = (physx::PxVehicleWheelQueryResult*) address;
-    self->wheelQueryResults = (physx::PxWheelQueryResult*) value;
+JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleWheelQueryResult__1setWheelQueryResults(JNIEnv*, jclass, jlong _address, jlong value) {
+    physx::PxVehicleWheelQueryResult* _self = (physx::PxVehicleWheelQueryResult*) _address;
+    _self->wheelQueryResults = (physx::PxWheelQueryResult*) value;
 }
-JNIEXPORT jint JNICALL Java_physx_vehicle_PxVehicleWheelQueryResult__1getNbWheelQueryResults(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleWheelQueryResult* self = (physx::PxVehicleWheelQueryResult*) address;
-    return (jint) self->nbWheelQueryResults;
+JNIEXPORT jint JNICALL Java_physx_vehicle_PxVehicleWheelQueryResult__1getNbWheelQueryResults(JNIEnv*, jclass, jlong _address) {
+    physx::PxVehicleWheelQueryResult* _self = (physx::PxVehicleWheelQueryResult*) _address;
+    return (jint) _self->nbWheelQueryResults;
 }
-JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleWheelQueryResult__1setNbWheelQueryResults(JNIEnv* env, jclass, jlong address, jint value) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleWheelQueryResult* self = (physx::PxVehicleWheelQueryResult*) address;
-    self->nbWheelQueryResults = value;
+JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleWheelQueryResult__1setNbWheelQueryResults(JNIEnv*, jclass, jlong _address, jint value) {
+    physx::PxVehicleWheelQueryResult* _self = (physx::PxVehicleWheelQueryResult*) _address;
+    _self->nbWheelQueryResults = value;
 }
 
 // PxVehicleWheels
-JNIEXPORT jint JNICALL Java_physx_vehicle_PxVehicleWheels__1getVehicleType(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleWheels* self = (physx::PxVehicleWheels*) address;
+JNIEXPORT jint JNICALL Java_physx_vehicle_PxVehicleWheels__1getVehicleType(JNIEnv*, jclass, jlong _address) {
+    physx::PxVehicleWheels* self = (physx::PxVehicleWheels*) _address;
     return (jint) self->getVehicleType();
 }
-JNIEXPORT jlong JNICALL Java_physx_vehicle_PxVehicleWheels__1getRigidDynamicActor(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleWheels* self = (physx::PxVehicleWheels*) address;
+JNIEXPORT jlong JNICALL Java_physx_vehicle_PxVehicleWheels__1getRigidDynamicActor(JNIEnv*, jclass, jlong _address) {
+    physx::PxVehicleWheels* self = (physx::PxVehicleWheels*) _address;
     return (jlong) self->getRigidDynamicActor();
 }
-JNIEXPORT jfloat JNICALL Java_physx_vehicle_PxVehicleWheels__1computeForwardSpeed(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleWheels* self = (physx::PxVehicleWheels*) address;
+JNIEXPORT jfloat JNICALL Java_physx_vehicle_PxVehicleWheels__1computeForwardSpeed(JNIEnv*, jclass, jlong _address) {
+    physx::PxVehicleWheels* self = (physx::PxVehicleWheels*) _address;
     return (jfloat) self->computeForwardSpeed();
 }
-JNIEXPORT jfloat JNICALL Java_physx_vehicle_PxVehicleWheels__1computeSidewaysSpeed(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleWheels* self = (physx::PxVehicleWheels*) address;
+JNIEXPORT jfloat JNICALL Java_physx_vehicle_PxVehicleWheels__1computeSidewaysSpeed(JNIEnv*, jclass, jlong _address) {
+    physx::PxVehicleWheels* self = (physx::PxVehicleWheels*) _address;
     return (jfloat) self->computeSidewaysSpeed();
 }
-JNIEXPORT jint JNICALL Java_physx_vehicle_PxVehicleWheels__1getNbNonDrivenWheels(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleWheels* self = (physx::PxVehicleWheels*) address;
+JNIEXPORT jint JNICALL Java_physx_vehicle_PxVehicleWheels__1getNbNonDrivenWheels(JNIEnv*, jclass, jlong _address) {
+    physx::PxVehicleWheels* self = (physx::PxVehicleWheels*) _address;
     return (jint) self->getNbNonDrivenWheels();
 }
-JNIEXPORT jlong JNICALL Java_physx_vehicle_PxVehicleWheels__1getMWheelsSimData(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleWheels* self = (physx::PxVehicleWheels*) address;
-    return (jlong) &self->mWheelsSimData;
+JNIEXPORT jlong JNICALL Java_physx_vehicle_PxVehicleWheels__1getMWheelsSimData(JNIEnv*, jclass, jlong _address) {
+    physx::PxVehicleWheels* _self = (physx::PxVehicleWheels*) _address;
+    return (jlong) &_self->mWheelsSimData;
 }
-JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleWheels__1setMWheelsSimData(JNIEnv* env, jclass, jlong address, jlong value) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleWheels* self = (physx::PxVehicleWheels*) address;
-    self->mWheelsSimData = *((physx::PxVehicleWheelsSimData*) value);
+JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleWheels__1setMWheelsSimData(JNIEnv*, jclass, jlong _address, jlong value) {
+    physx::PxVehicleWheels* _self = (physx::PxVehicleWheels*) _address;
+    _self->mWheelsSimData = *((physx::PxVehicleWheelsSimData*) value);
 }
-JNIEXPORT jlong JNICALL Java_physx_vehicle_PxVehicleWheels__1getMWheelsDynData(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleWheels* self = (physx::PxVehicleWheels*) address;
-    return (jlong) &self->mWheelsDynData;
+JNIEXPORT jlong JNICALL Java_physx_vehicle_PxVehicleWheels__1getMWheelsDynData(JNIEnv*, jclass, jlong _address) {
+    physx::PxVehicleWheels* _self = (physx::PxVehicleWheels*) _address;
+    return (jlong) &_self->mWheelsDynData;
 }
-JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleWheels__1setMWheelsDynData(JNIEnv* env, jclass, jlong address, jlong value) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleWheels* self = (physx::PxVehicleWheels*) address;
-    self->mWheelsDynData = *((physx::PxVehicleWheelsDynData*) value);
+JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleWheels__1setMWheelsDynData(JNIEnv*, jclass, jlong _address, jlong value) {
+    physx::PxVehicleWheels* _self = (physx::PxVehicleWheels*) _address;
+    _self->mWheelsDynData = *((physx::PxVehicleWheelsDynData*) value);
 }
 
 // PxVehicleWheelsDynData
-JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleWheelsDynData__1setToRestState(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleWheelsDynData* self = (physx::PxVehicleWheelsDynData*) address;
+JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleWheelsDynData__1setToRestState(JNIEnv*, jclass, jlong _address) {
+    physx::PxVehicleWheelsDynData* self = (physx::PxVehicleWheelsDynData*) _address;
     self->setToRestState();
 }
-JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleWheelsDynData__1setWheelRotationSpeed(JNIEnv* env, jclass, jlong address, jint wheelIdx, jfloat speed) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleWheelsDynData* self = (physx::PxVehicleWheelsDynData*) address;
+JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleWheelsDynData__1setWheelRotationSpeed(JNIEnv*, jclass, jlong _address, jint wheelIdx, jfloat speed) {
+    physx::PxVehicleWheelsDynData* self = (physx::PxVehicleWheelsDynData*) _address;
     self->setWheelRotationSpeed(wheelIdx, speed);
 }
-JNIEXPORT jfloat JNICALL Java_physx_vehicle_PxVehicleWheelsDynData__1getWheelRotationSpeed(JNIEnv* env, jclass, jlong address, jint wheelIdx) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleWheelsDynData* self = (physx::PxVehicleWheelsDynData*) address;
+JNIEXPORT jfloat JNICALL Java_physx_vehicle_PxVehicleWheelsDynData__1getWheelRotationSpeed(JNIEnv*, jclass, jlong _address, jint wheelIdx) {
+    physx::PxVehicleWheelsDynData* self = (physx::PxVehicleWheelsDynData*) _address;
     return (jfloat) self->getWheelRotationSpeed(wheelIdx);
 }
-JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleWheelsDynData__1setWheelRotationAngle(JNIEnv* env, jclass, jlong address, jint wheelIdx, jfloat angle) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleWheelsDynData* self = (physx::PxVehicleWheelsDynData*) address;
+JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleWheelsDynData__1setWheelRotationAngle(JNIEnv*, jclass, jlong _address, jint wheelIdx, jfloat angle) {
+    physx::PxVehicleWheelsDynData* self = (physx::PxVehicleWheelsDynData*) _address;
     self->setWheelRotationAngle(wheelIdx, angle);
 }
-JNIEXPORT jfloat JNICALL Java_physx_vehicle_PxVehicleWheelsDynData__1getWheelRotationAngle(JNIEnv* env, jclass, jlong address, jint wheelIdx) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleWheelsDynData* self = (physx::PxVehicleWheelsDynData*) address;
+JNIEXPORT jfloat JNICALL Java_physx_vehicle_PxVehicleWheelsDynData__1getWheelRotationAngle(JNIEnv*, jclass, jlong _address, jint wheelIdx) {
+    physx::PxVehicleWheelsDynData* self = (physx::PxVehicleWheelsDynData*) _address;
     return (jfloat) self->getWheelRotationAngle(wheelIdx);
 }
-JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleWheelsDynData__1copy(JNIEnv* env, jclass, jlong address, jlong src, jint srcWheel, jint trgWheel) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleWheelsDynData* self = (physx::PxVehicleWheelsDynData*) address;
+JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleWheelsDynData__1copy(JNIEnv*, jclass, jlong _address, jlong src, jint srcWheel, jint trgWheel) {
+    physx::PxVehicleWheelsDynData* self = (physx::PxVehicleWheelsDynData*) _address;
     self->copy(*((physx::PxVehicleWheelsDynData*) src), srcWheel, trgWheel);
 }
-JNIEXPORT jint JNICALL Java_physx_vehicle_PxVehicleWheelsDynData__1getNbWheelRotationSpeed(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleWheelsDynData* self = (physx::PxVehicleWheelsDynData*) address;
+JNIEXPORT jint JNICALL Java_physx_vehicle_PxVehicleWheelsDynData__1getNbWheelRotationSpeed(JNIEnv*, jclass, jlong _address) {
+    physx::PxVehicleWheelsDynData* self = (physx::PxVehicleWheelsDynData*) _address;
     return (jint) self->getNbWheelRotationSpeed();
 }
-JNIEXPORT jint JNICALL Java_physx_vehicle_PxVehicleWheelsDynData__1getNbWheelRotationAngle(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleWheelsDynData* self = (physx::PxVehicleWheelsDynData*) address;
+JNIEXPORT jint JNICALL Java_physx_vehicle_PxVehicleWheelsDynData__1getNbWheelRotationAngle(JNIEnv*, jclass, jlong _address) {
+    physx::PxVehicleWheelsDynData* self = (physx::PxVehicleWheelsDynData*) _address;
     return (jint) self->getNbWheelRotationAngle();
 }
-JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleWheelsDynData__1delete_1native_1instance(JNIEnv*, jclass, jlong address) {
-    delete (physx::PxVehicleWheelsDynData*) address;
+JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleWheelsDynData__1delete_1native_1instance(JNIEnv*, jclass, jlong _address) {
+    delete (physx::PxVehicleWheelsDynData*) _address;
 }
 
 // PxVehicleWheelsSimData
-JNIEXPORT jlong JNICALL Java_physx_vehicle_PxVehicleWheelsSimData__1allocate(JNIEnv* env, jclass, jint nbWheels) {
-    (void) env;    // avoid unused parameter warning / error
+JNIEXPORT jlong JNICALL Java_physx_vehicle_PxVehicleWheelsSimData__1allocate(JNIEnv*, jclass, jint nbWheels) {
     return (jlong) physx::PxVehicleWheelsSimData::allocate(nbWheels);
 }
-JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleWheelsSimData__1setChassisMass(JNIEnv* env, jclass, jlong address, jfloat chassisMass) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleWheelsSimData* self = (physx::PxVehicleWheelsSimData*) address;
+JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleWheelsSimData__1setChassisMass(JNIEnv*, jclass, jlong _address, jfloat chassisMass) {
+    physx::PxVehicleWheelsSimData* self = (physx::PxVehicleWheelsSimData*) _address;
     self->setChassisMass(chassisMass);
 }
-JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleWheelsSimData__1free(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleWheelsSimData* self = (physx::PxVehicleWheelsSimData*) address;
+JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleWheelsSimData__1free(JNIEnv*, jclass, jlong _address) {
+    physx::PxVehicleWheelsSimData* self = (physx::PxVehicleWheelsSimData*) _address;
     self->free();
 }
-JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleWheelsSimData__1copy(JNIEnv* env, jclass, jlong address, jlong src, jint srcWheel, jint trgWheel) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleWheelsSimData* self = (physx::PxVehicleWheelsSimData*) address;
+JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleWheelsSimData__1copy(JNIEnv*, jclass, jlong _address, jlong src, jint srcWheel, jint trgWheel) {
+    physx::PxVehicleWheelsSimData* self = (physx::PxVehicleWheelsSimData*) _address;
     self->copy(*((physx::PxVehicleWheelsSimData*) src), srcWheel, trgWheel);
 }
-JNIEXPORT jint JNICALL Java_physx_vehicle_PxVehicleWheelsSimData__1getNbWheels(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleWheelsSimData* self = (physx::PxVehicleWheelsSimData*) address;
+JNIEXPORT jint JNICALL Java_physx_vehicle_PxVehicleWheelsSimData__1getNbWheels(JNIEnv*, jclass, jlong _address) {
+    physx::PxVehicleWheelsSimData* self = (physx::PxVehicleWheelsSimData*) _address;
     return (jint) self->getNbWheels();
 }
-JNIEXPORT jlong JNICALL Java_physx_vehicle_PxVehicleWheelsSimData__1getSuspensionData(JNIEnv* env, jclass, jlong address, jint id) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleWheelsSimData* self = (physx::PxVehicleWheelsSimData*) address;
+JNIEXPORT jlong JNICALL Java_physx_vehicle_PxVehicleWheelsSimData__1getSuspensionData(JNIEnv*, jclass, jlong _address, jint id) {
+    physx::PxVehicleWheelsSimData* self = (physx::PxVehicleWheelsSimData*) _address;
     return (jlong) &self->getSuspensionData(id);
 }
-JNIEXPORT jlong JNICALL Java_physx_vehicle_PxVehicleWheelsSimData__1getWheelData(JNIEnv* env, jclass, jlong address, jint id) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleWheelsSimData* self = (physx::PxVehicleWheelsSimData*) address;
+JNIEXPORT jlong JNICALL Java_physx_vehicle_PxVehicleWheelsSimData__1getWheelData(JNIEnv*, jclass, jlong _address, jint id) {
+    physx::PxVehicleWheelsSimData* self = (physx::PxVehicleWheelsSimData*) _address;
     return (jlong) &self->getWheelData(id);
 }
-JNIEXPORT jlong JNICALL Java_physx_vehicle_PxVehicleWheelsSimData__1getTireData(JNIEnv* env, jclass, jlong address, jint id) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleWheelsSimData* self = (physx::PxVehicleWheelsSimData*) address;
+JNIEXPORT jlong JNICALL Java_physx_vehicle_PxVehicleWheelsSimData__1getTireData(JNIEnv*, jclass, jlong _address, jint id) {
+    physx::PxVehicleWheelsSimData* self = (physx::PxVehicleWheelsSimData*) _address;
     return (jlong) &self->getTireData(id);
 }
-JNIEXPORT jlong JNICALL Java_physx_vehicle_PxVehicleWheelsSimData__1getSuspTravelDirection(JNIEnv* env, jclass, jlong address, jint id) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleWheelsSimData* self = (physx::PxVehicleWheelsSimData*) address;
+JNIEXPORT jlong JNICALL Java_physx_vehicle_PxVehicleWheelsSimData__1getSuspTravelDirection(JNIEnv*, jclass, jlong _address, jint id) {
+    physx::PxVehicleWheelsSimData* self = (physx::PxVehicleWheelsSimData*) _address;
     return (jlong) &self->getSuspTravelDirection(id);
 }
-JNIEXPORT jlong JNICALL Java_physx_vehicle_PxVehicleWheelsSimData__1getSuspForceAppPointOffset(JNIEnv* env, jclass, jlong address, jint id) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleWheelsSimData* self = (physx::PxVehicleWheelsSimData*) address;
+JNIEXPORT jlong JNICALL Java_physx_vehicle_PxVehicleWheelsSimData__1getSuspForceAppPointOffset(JNIEnv*, jclass, jlong _address, jint id) {
+    physx::PxVehicleWheelsSimData* self = (physx::PxVehicleWheelsSimData*) _address;
     return (jlong) &self->getSuspForceAppPointOffset(id);
 }
-JNIEXPORT jlong JNICALL Java_physx_vehicle_PxVehicleWheelsSimData__1getTireForceAppPointOffset(JNIEnv* env, jclass, jlong address, jint id) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleWheelsSimData* self = (physx::PxVehicleWheelsSimData*) address;
+JNIEXPORT jlong JNICALL Java_physx_vehicle_PxVehicleWheelsSimData__1getTireForceAppPointOffset(JNIEnv*, jclass, jlong _address, jint id) {
+    physx::PxVehicleWheelsSimData* self = (physx::PxVehicleWheelsSimData*) _address;
     return (jlong) &self->getTireForceAppPointOffset(id);
 }
-JNIEXPORT jlong JNICALL Java_physx_vehicle_PxVehicleWheelsSimData__1getWheelCentreOffset(JNIEnv* env, jclass, jlong address, jint id) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleWheelsSimData* self = (physx::PxVehicleWheelsSimData*) address;
+JNIEXPORT jlong JNICALL Java_physx_vehicle_PxVehicleWheelsSimData__1getWheelCentreOffset(JNIEnv*, jclass, jlong _address, jint id) {
+    physx::PxVehicleWheelsSimData* self = (physx::PxVehicleWheelsSimData*) _address;
     return (jlong) &self->getWheelCentreOffset(id);
 }
-JNIEXPORT jint JNICALL Java_physx_vehicle_PxVehicleWheelsSimData__1getWheelShapeMapping(JNIEnv* env, jclass, jlong address, jint wheelId) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleWheelsSimData* self = (physx::PxVehicleWheelsSimData*) address;
+JNIEXPORT jint JNICALL Java_physx_vehicle_PxVehicleWheelsSimData__1getWheelShapeMapping(JNIEnv*, jclass, jlong _address, jint wheelId) {
+    physx::PxVehicleWheelsSimData* self = (physx::PxVehicleWheelsSimData*) _address;
     return (jint) self->getWheelShapeMapping(wheelId);
 }
-JNIEXPORT jlong JNICALL Java_physx_vehicle_PxVehicleWheelsSimData__1getSceneQueryFilterData(JNIEnv* env, jclass, jlong address, jint suspId) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleWheelsSimData* self = (physx::PxVehicleWheelsSimData*) address;
+JNIEXPORT jlong JNICALL Java_physx_vehicle_PxVehicleWheelsSimData__1getSceneQueryFilterData(JNIEnv*, jclass, jlong _address, jint suspId) {
+    physx::PxVehicleWheelsSimData* self = (physx::PxVehicleWheelsSimData*) _address;
     return (jlong) &self->getSceneQueryFilterData(suspId);
 }
-JNIEXPORT jint JNICALL Java_physx_vehicle_PxVehicleWheelsSimData__1getNbAntiRollBars(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleWheelsSimData* self = (physx::PxVehicleWheelsSimData*) address;
+JNIEXPORT jint JNICALL Java_physx_vehicle_PxVehicleWheelsSimData__1getNbAntiRollBars(JNIEnv*, jclass, jlong _address) {
+    physx::PxVehicleWheelsSimData* self = (physx::PxVehicleWheelsSimData*) _address;
     return (jint) self->getNbAntiRollBars();
 }
-JNIEXPORT jlong JNICALL Java_physx_vehicle_PxVehicleWheelsSimData__1getAntiRollBarData(JNIEnv* env, jclass, jlong address, jint antiRollId) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleWheelsSimData* self = (physx::PxVehicleWheelsSimData*) address;
+JNIEXPORT jlong JNICALL Java_physx_vehicle_PxVehicleWheelsSimData__1getAntiRollBarData(JNIEnv*, jclass, jlong _address, jint antiRollId) {
+    physx::PxVehicleWheelsSimData* self = (physx::PxVehicleWheelsSimData*) _address;
     return (jlong) &self->getAntiRollBarData(antiRollId);
 }
-JNIEXPORT jlong JNICALL Java_physx_vehicle_PxVehicleWheelsSimData__1getTireLoadFilterData(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleWheelsSimData* self = (physx::PxVehicleWheelsSimData*) address;
+JNIEXPORT jlong JNICALL Java_physx_vehicle_PxVehicleWheelsSimData__1getTireLoadFilterData(JNIEnv*, jclass, jlong _address) {
+    physx::PxVehicleWheelsSimData* self = (physx::PxVehicleWheelsSimData*) _address;
     return (jlong) &self->getTireLoadFilterData();
 }
-JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleWheelsSimData__1setSuspensionData(JNIEnv* env, jclass, jlong address, jint id, jlong susp) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleWheelsSimData* self = (physx::PxVehicleWheelsSimData*) address;
+JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleWheelsSimData__1setSuspensionData(JNIEnv*, jclass, jlong _address, jint id, jlong susp) {
+    physx::PxVehicleWheelsSimData* self = (physx::PxVehicleWheelsSimData*) _address;
     self->setSuspensionData(id, *((physx::PxVehicleSuspensionData*) susp));
 }
-JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleWheelsSimData__1setWheelData(JNIEnv* env, jclass, jlong address, jint id, jlong wheel) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleWheelsSimData* self = (physx::PxVehicleWheelsSimData*) address;
+JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleWheelsSimData__1setWheelData(JNIEnv*, jclass, jlong _address, jint id, jlong wheel) {
+    physx::PxVehicleWheelsSimData* self = (physx::PxVehicleWheelsSimData*) _address;
     self->setWheelData(id, *((physx::PxVehicleWheelData*) wheel));
 }
-JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleWheelsSimData__1setTireData(JNIEnv* env, jclass, jlong address, jint id, jlong tire) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleWheelsSimData* self = (physx::PxVehicleWheelsSimData*) address;
+JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleWheelsSimData__1setTireData(JNIEnv*, jclass, jlong _address, jint id, jlong tire) {
+    physx::PxVehicleWheelsSimData* self = (physx::PxVehicleWheelsSimData*) _address;
     self->setTireData(id, *((physx::PxVehicleTireData*) tire));
 }
-JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleWheelsSimData__1setSuspTravelDirection(JNIEnv* env, jclass, jlong address, jint id, jlong dir) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleWheelsSimData* self = (physx::PxVehicleWheelsSimData*) address;
+JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleWheelsSimData__1setSuspTravelDirection(JNIEnv*, jclass, jlong _address, jint id, jlong dir) {
+    physx::PxVehicleWheelsSimData* self = (physx::PxVehicleWheelsSimData*) _address;
     self->setSuspTravelDirection(id, *((physx::PxVec3*) dir));
 }
-JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleWheelsSimData__1setSuspForceAppPointOffset(JNIEnv* env, jclass, jlong address, jint id, jlong offset) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleWheelsSimData* self = (physx::PxVehicleWheelsSimData*) address;
+JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleWheelsSimData__1setSuspForceAppPointOffset(JNIEnv*, jclass, jlong _address, jint id, jlong offset) {
+    physx::PxVehicleWheelsSimData* self = (physx::PxVehicleWheelsSimData*) _address;
     self->setSuspForceAppPointOffset(id, *((physx::PxVec3*) offset));
 }
-JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleWheelsSimData__1setTireForceAppPointOffset(JNIEnv* env, jclass, jlong address, jint id, jlong offset) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleWheelsSimData* self = (physx::PxVehicleWheelsSimData*) address;
+JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleWheelsSimData__1setTireForceAppPointOffset(JNIEnv*, jclass, jlong _address, jint id, jlong offset) {
+    physx::PxVehicleWheelsSimData* self = (physx::PxVehicleWheelsSimData*) _address;
     self->setTireForceAppPointOffset(id, *((physx::PxVec3*) offset));
 }
-JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleWheelsSimData__1setWheelCentreOffset(JNIEnv* env, jclass, jlong address, jint id, jlong offset) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleWheelsSimData* self = (physx::PxVehicleWheelsSimData*) address;
+JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleWheelsSimData__1setWheelCentreOffset(JNIEnv*, jclass, jlong _address, jint id, jlong offset) {
+    physx::PxVehicleWheelsSimData* self = (physx::PxVehicleWheelsSimData*) _address;
     self->setWheelCentreOffset(id, *((physx::PxVec3*) offset));
 }
-JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleWheelsSimData__1setWheelShapeMapping(JNIEnv* env, jclass, jlong address, jint wheelId, jint shapeId) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleWheelsSimData* self = (physx::PxVehicleWheelsSimData*) address;
+JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleWheelsSimData__1setWheelShapeMapping(JNIEnv*, jclass, jlong _address, jint wheelId, jint shapeId) {
+    physx::PxVehicleWheelsSimData* self = (physx::PxVehicleWheelsSimData*) _address;
     self->setWheelShapeMapping(wheelId, shapeId);
 }
-JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleWheelsSimData__1setSceneQueryFilterData(JNIEnv* env, jclass, jlong address, jint suspId, jlong sqFilterData) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleWheelsSimData* self = (physx::PxVehicleWheelsSimData*) address;
+JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleWheelsSimData__1setSceneQueryFilterData(JNIEnv*, jclass, jlong _address, jint suspId, jlong sqFilterData) {
+    physx::PxVehicleWheelsSimData* self = (physx::PxVehicleWheelsSimData*) _address;
     self->setSceneQueryFilterData(suspId, *((physx::PxFilterData*) sqFilterData));
 }
-JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleWheelsSimData__1setTireLoadFilterData(JNIEnv* env, jclass, jlong address, jlong tireLoadFilter) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleWheelsSimData* self = (physx::PxVehicleWheelsSimData*) address;
+JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleWheelsSimData__1setTireLoadFilterData(JNIEnv*, jclass, jlong _address, jlong tireLoadFilter) {
+    physx::PxVehicleWheelsSimData* self = (physx::PxVehicleWheelsSimData*) _address;
     self->setTireLoadFilterData(*((physx::PxVehicleTireLoadFilterData*) tireLoadFilter));
 }
-JNIEXPORT jint JNICALL Java_physx_vehicle_PxVehicleWheelsSimData__1addAntiRollBarData(JNIEnv* env, jclass, jlong address, jlong antiRoll) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleWheelsSimData* self = (physx::PxVehicleWheelsSimData*) address;
+JNIEXPORT jint JNICALL Java_physx_vehicle_PxVehicleWheelsSimData__1addAntiRollBarData(JNIEnv*, jclass, jlong _address, jlong antiRoll) {
+    physx::PxVehicleWheelsSimData* self = (physx::PxVehicleWheelsSimData*) _address;
     return (jint) self->addAntiRollBarData(*((physx::PxVehicleAntiRollBarData*) antiRoll));
 }
-JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleWheelsSimData__1disableWheel(JNIEnv* env, jclass, jlong address, jint wheel) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleWheelsSimData* self = (physx::PxVehicleWheelsSimData*) address;
+JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleWheelsSimData__1disableWheel(JNIEnv*, jclass, jlong _address, jint wheel) {
+    physx::PxVehicleWheelsSimData* self = (physx::PxVehicleWheelsSimData*) _address;
     self->disableWheel(wheel);
 }
-JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleWheelsSimData__1enableWheel(JNIEnv* env, jclass, jlong address, jint wheel) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleWheelsSimData* self = (physx::PxVehicleWheelsSimData*) address;
+JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleWheelsSimData__1enableWheel(JNIEnv*, jclass, jlong _address, jint wheel) {
+    physx::PxVehicleWheelsSimData* self = (physx::PxVehicleWheelsSimData*) _address;
     self->enableWheel(wheel);
 }
-JNIEXPORT jboolean JNICALL Java_physx_vehicle_PxVehicleWheelsSimData__1getIsWheelDisabled(JNIEnv* env, jclass, jlong address, jint wheel) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleWheelsSimData* self = (physx::PxVehicleWheelsSimData*) address;
+JNIEXPORT jboolean JNICALL Java_physx_vehicle_PxVehicleWheelsSimData__1getIsWheelDisabled(JNIEnv*, jclass, jlong _address, jint wheel) {
+    physx::PxVehicleWheelsSimData* self = (physx::PxVehicleWheelsSimData*) _address;
     return (jboolean) self->getIsWheelDisabled(wheel);
 }
-JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleWheelsSimData__1setSubStepCount(JNIEnv* env, jclass, jlong address, jfloat thresholdLongitudinalSpeed, jint lowForwardSpeedSubStepCount, jint highForwardSpeedSubStepCount) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleWheelsSimData* self = (physx::PxVehicleWheelsSimData*) address;
+JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleWheelsSimData__1setSubStepCount(JNIEnv*, jclass, jlong _address, jfloat thresholdLongitudinalSpeed, jint lowForwardSpeedSubStepCount, jint highForwardSpeedSubStepCount) {
+    physx::PxVehicleWheelsSimData* self = (physx::PxVehicleWheelsSimData*) _address;
     self->setSubStepCount(thresholdLongitudinalSpeed, lowForwardSpeedSubStepCount, highForwardSpeedSubStepCount);
 }
-JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleWheelsSimData__1setMinLongSlipDenominator(JNIEnv* env, jclass, jlong address, jfloat minLongSlipDenominator) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleWheelsSimData* self = (physx::PxVehicleWheelsSimData*) address;
+JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleWheelsSimData__1setMinLongSlipDenominator(JNIEnv*, jclass, jlong _address, jfloat minLongSlipDenominator) {
+    physx::PxVehicleWheelsSimData* self = (physx::PxVehicleWheelsSimData*) _address;
     self->setMinLongSlipDenominator(minLongSlipDenominator);
 }
-JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleWheelsSimData__1setFlags(JNIEnv* env, jclass, jlong address, jlong flags) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleWheelsSimData* self = (physx::PxVehicleWheelsSimData*) address;
+JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleWheelsSimData__1setFlags(JNIEnv*, jclass, jlong _address, jlong flags) {
+    physx::PxVehicleWheelsSimData* self = (physx::PxVehicleWheelsSimData*) _address;
     self->setFlags(*((physx::PxVehicleWheelsSimFlags*) flags));
 }
-JNIEXPORT jlong JNICALL Java_physx_vehicle_PxVehicleWheelsSimData__1getFlags(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    static physx::PxVehicleWheelsSimFlags cache;
-    physx::PxVehicleWheelsSimData* self = (physx::PxVehicleWheelsSimData*) address;
-    cache = self->getFlags();
-    return (jlong) &cache;
+JNIEXPORT jlong JNICALL Java_physx_vehicle_PxVehicleWheelsSimData__1getFlags(JNIEnv*, jclass, jlong _address) {
+    static thread_local physx::PxVehicleWheelsSimFlags _cache;
+    physx::PxVehicleWheelsSimData* self = (physx::PxVehicleWheelsSimData*) _address;
+    _cache = self->getFlags();
+    return (jlong) &_cache;
 }
-JNIEXPORT jint JNICALL Java_physx_vehicle_PxVehicleWheelsSimData__1getNbWheels4(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleWheelsSimData* self = (physx::PxVehicleWheelsSimData*) address;
+JNIEXPORT jint JNICALL Java_physx_vehicle_PxVehicleWheelsSimData__1getNbWheels4(JNIEnv*, jclass, jlong _address) {
+    physx::PxVehicleWheelsSimData* self = (physx::PxVehicleWheelsSimData*) _address;
     return (jint) self->getNbWheels4();
 }
-JNIEXPORT jint JNICALL Java_physx_vehicle_PxVehicleWheelsSimData__1getNbSuspensionData(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleWheelsSimData* self = (physx::PxVehicleWheelsSimData*) address;
+JNIEXPORT jint JNICALL Java_physx_vehicle_PxVehicleWheelsSimData__1getNbSuspensionData(JNIEnv*, jclass, jlong _address) {
+    physx::PxVehicleWheelsSimData* self = (physx::PxVehicleWheelsSimData*) _address;
     return (jint) self->getNbSuspensionData();
 }
-JNIEXPORT jint JNICALL Java_physx_vehicle_PxVehicleWheelsSimData__1getNbWheelData(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleWheelsSimData* self = (physx::PxVehicleWheelsSimData*) address;
+JNIEXPORT jint JNICALL Java_physx_vehicle_PxVehicleWheelsSimData__1getNbWheelData(JNIEnv*, jclass, jlong _address) {
+    physx::PxVehicleWheelsSimData* self = (physx::PxVehicleWheelsSimData*) _address;
     return (jint) self->getNbWheelData();
 }
-JNIEXPORT jint JNICALL Java_physx_vehicle_PxVehicleWheelsSimData__1getNbSuspTravelDirection(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleWheelsSimData* self = (physx::PxVehicleWheelsSimData*) address;
+JNIEXPORT jint JNICALL Java_physx_vehicle_PxVehicleWheelsSimData__1getNbSuspTravelDirection(JNIEnv*, jclass, jlong _address) {
+    physx::PxVehicleWheelsSimData* self = (physx::PxVehicleWheelsSimData*) _address;
     return (jint) self->getNbSuspTravelDirection();
 }
-JNIEXPORT jint JNICALL Java_physx_vehicle_PxVehicleWheelsSimData__1getNbTireData(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleWheelsSimData* self = (physx::PxVehicleWheelsSimData*) address;
+JNIEXPORT jint JNICALL Java_physx_vehicle_PxVehicleWheelsSimData__1getNbTireData(JNIEnv*, jclass, jlong _address) {
+    physx::PxVehicleWheelsSimData* self = (physx::PxVehicleWheelsSimData*) _address;
     return (jint) self->getNbTireData();
 }
-JNIEXPORT jint JNICALL Java_physx_vehicle_PxVehicleWheelsSimData__1getNbSuspForceAppPointOffset(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleWheelsSimData* self = (physx::PxVehicleWheelsSimData*) address;
+JNIEXPORT jint JNICALL Java_physx_vehicle_PxVehicleWheelsSimData__1getNbSuspForceAppPointOffset(JNIEnv*, jclass, jlong _address) {
+    physx::PxVehicleWheelsSimData* self = (physx::PxVehicleWheelsSimData*) _address;
     return (jint) self->getNbSuspForceAppPointOffset();
 }
-JNIEXPORT jint JNICALL Java_physx_vehicle_PxVehicleWheelsSimData__1getNbTireForceAppPointOffset(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleWheelsSimData* self = (physx::PxVehicleWheelsSimData*) address;
+JNIEXPORT jint JNICALL Java_physx_vehicle_PxVehicleWheelsSimData__1getNbTireForceAppPointOffset(JNIEnv*, jclass, jlong _address) {
+    physx::PxVehicleWheelsSimData* self = (physx::PxVehicleWheelsSimData*) _address;
     return (jint) self->getNbTireForceAppPointOffset();
 }
-JNIEXPORT jint JNICALL Java_physx_vehicle_PxVehicleWheelsSimData__1getNbWheelCentreOffset(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleWheelsSimData* self = (physx::PxVehicleWheelsSimData*) address;
+JNIEXPORT jint JNICALL Java_physx_vehicle_PxVehicleWheelsSimData__1getNbWheelCentreOffset(JNIEnv*, jclass, jlong _address) {
+    physx::PxVehicleWheelsSimData* self = (physx::PxVehicleWheelsSimData*) _address;
     return (jint) self->getNbWheelCentreOffset();
 }
-JNIEXPORT jint JNICALL Java_physx_vehicle_PxVehicleWheelsSimData__1getNbWheelShapeMapping(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleWheelsSimData* self = (physx::PxVehicleWheelsSimData*) address;
+JNIEXPORT jint JNICALL Java_physx_vehicle_PxVehicleWheelsSimData__1getNbWheelShapeMapping(JNIEnv*, jclass, jlong _address) {
+    physx::PxVehicleWheelsSimData* self = (physx::PxVehicleWheelsSimData*) _address;
     return (jint) self->getNbWheelShapeMapping();
 }
-JNIEXPORT jint JNICALL Java_physx_vehicle_PxVehicleWheelsSimData__1getNbSceneQueryFilterData(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleWheelsSimData* self = (physx::PxVehicleWheelsSimData*) address;
+JNIEXPORT jint JNICALL Java_physx_vehicle_PxVehicleWheelsSimData__1getNbSceneQueryFilterData(JNIEnv*, jclass, jlong _address) {
+    physx::PxVehicleWheelsSimData* self = (physx::PxVehicleWheelsSimData*) _address;
     return (jint) self->getNbSceneQueryFilterData();
 }
-JNIEXPORT jfloat JNICALL Java_physx_vehicle_PxVehicleWheelsSimData__1getMinLongSlipDenominator(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleWheelsSimData* self = (physx::PxVehicleWheelsSimData*) address;
+JNIEXPORT jfloat JNICALL Java_physx_vehicle_PxVehicleWheelsSimData__1getMinLongSlipDenominator(JNIEnv*, jclass, jlong _address) {
+    physx::PxVehicleWheelsSimData* self = (physx::PxVehicleWheelsSimData*) _address;
     return (jfloat) self->getMinLongSlipDenominator();
 }
-JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleWheelsSimData__1setThresholdLongSpeed(JNIEnv* env, jclass, jlong address, jfloat f) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleWheelsSimData* self = (physx::PxVehicleWheelsSimData*) address;
+JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleWheelsSimData__1setThresholdLongSpeed(JNIEnv*, jclass, jlong _address, jfloat f) {
+    physx::PxVehicleWheelsSimData* self = (physx::PxVehicleWheelsSimData*) _address;
     self->setThresholdLongSpeed(f);
 }
-JNIEXPORT jfloat JNICALL Java_physx_vehicle_PxVehicleWheelsSimData__1getThresholdLongSpeed(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleWheelsSimData* self = (physx::PxVehicleWheelsSimData*) address;
+JNIEXPORT jfloat JNICALL Java_physx_vehicle_PxVehicleWheelsSimData__1getThresholdLongSpeed(JNIEnv*, jclass, jlong _address) {
+    physx::PxVehicleWheelsSimData* self = (physx::PxVehicleWheelsSimData*) _address;
     return (jfloat) self->getThresholdLongSpeed();
 }
-JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleWheelsSimData__1setLowForwardSpeedSubStepCount(JNIEnv* env, jclass, jlong address, jint f) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleWheelsSimData* self = (physx::PxVehicleWheelsSimData*) address;
+JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleWheelsSimData__1setLowForwardSpeedSubStepCount(JNIEnv*, jclass, jlong _address, jint f) {
+    physx::PxVehicleWheelsSimData* self = (physx::PxVehicleWheelsSimData*) _address;
     self->setLowForwardSpeedSubStepCount(f);
 }
-JNIEXPORT jint JNICALL Java_physx_vehicle_PxVehicleWheelsSimData__1getLowForwardSpeedSubStepCount(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleWheelsSimData* self = (physx::PxVehicleWheelsSimData*) address;
+JNIEXPORT jint JNICALL Java_physx_vehicle_PxVehicleWheelsSimData__1getLowForwardSpeedSubStepCount(JNIEnv*, jclass, jlong _address) {
+    physx::PxVehicleWheelsSimData* self = (physx::PxVehicleWheelsSimData*) _address;
     return (jint) self->getLowForwardSpeedSubStepCount();
 }
-JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleWheelsSimData__1setHighForwardSpeedSubStepCount(JNIEnv* env, jclass, jlong address, jint f) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleWheelsSimData* self = (physx::PxVehicleWheelsSimData*) address;
+JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleWheelsSimData__1setHighForwardSpeedSubStepCount(JNIEnv*, jclass, jlong _address, jint f) {
+    physx::PxVehicleWheelsSimData* self = (physx::PxVehicleWheelsSimData*) _address;
     self->setHighForwardSpeedSubStepCount(f);
 }
-JNIEXPORT jint JNICALL Java_physx_vehicle_PxVehicleWheelsSimData__1getHighForwardSpeedSubStepCount(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleWheelsSimData* self = (physx::PxVehicleWheelsSimData*) address;
+JNIEXPORT jint JNICALL Java_physx_vehicle_PxVehicleWheelsSimData__1getHighForwardSpeedSubStepCount(JNIEnv*, jclass, jlong _address) {
+    physx::PxVehicleWheelsSimData* self = (physx::PxVehicleWheelsSimData*) _address;
     return (jint) self->getHighForwardSpeedSubStepCount();
 }
-JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleWheelsSimData__1setWheelEnabledState(JNIEnv* env, jclass, jlong address, jint wheel, jboolean state) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleWheelsSimData* self = (physx::PxVehicleWheelsSimData*) address;
+JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleWheelsSimData__1setWheelEnabledState(JNIEnv*, jclass, jlong _address, jint wheel, jboolean state) {
+    physx::PxVehicleWheelsSimData* self = (physx::PxVehicleWheelsSimData*) _address;
     self->setWheelEnabledState(wheel, state);
 }
-JNIEXPORT jboolean JNICALL Java_physx_vehicle_PxVehicleWheelsSimData__1getWheelEnabledState(JNIEnv* env, jclass, jlong address, jint wheel) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleWheelsSimData* self = (physx::PxVehicleWheelsSimData*) address;
+JNIEXPORT jboolean JNICALL Java_physx_vehicle_PxVehicleWheelsSimData__1getWheelEnabledState(JNIEnv*, jclass, jlong _address, jint wheel) {
+    physx::PxVehicleWheelsSimData* self = (physx::PxVehicleWheelsSimData*) _address;
     return (jboolean) self->getWheelEnabledState(wheel);
 }
-JNIEXPORT jint JNICALL Java_physx_vehicle_PxVehicleWheelsSimData__1getNbWheelEnabledState(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleWheelsSimData* self = (physx::PxVehicleWheelsSimData*) address;
+JNIEXPORT jint JNICALL Java_physx_vehicle_PxVehicleWheelsSimData__1getNbWheelEnabledState(JNIEnv*, jclass, jlong _address) {
+    physx::PxVehicleWheelsSimData* self = (physx::PxVehicleWheelsSimData*) _address;
     return (jint) self->getNbWheelEnabledState();
 }
-JNIEXPORT jint JNICALL Java_physx_vehicle_PxVehicleWheelsSimData__1getNbAntiRollBars4(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleWheelsSimData* self = (physx::PxVehicleWheelsSimData*) address;
+JNIEXPORT jint JNICALL Java_physx_vehicle_PxVehicleWheelsSimData__1getNbAntiRollBars4(JNIEnv*, jclass, jlong _address) {
+    physx::PxVehicleWheelsSimData* self = (physx::PxVehicleWheelsSimData*) _address;
     return (jint) self->getNbAntiRollBars4();
 }
-JNIEXPORT jint JNICALL Java_physx_vehicle_PxVehicleWheelsSimData__1getNbAntiRollBarData(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleWheelsSimData* self = (physx::PxVehicleWheelsSimData*) address;
+JNIEXPORT jint JNICALL Java_physx_vehicle_PxVehicleWheelsSimData__1getNbAntiRollBarData(JNIEnv*, jclass, jlong _address) {
+    physx::PxVehicleWheelsSimData* self = (physx::PxVehicleWheelsSimData*) _address;
     return (jint) self->getNbAntiRollBarData();
 }
-JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleWheelsSimData__1setAntiRollBarData(JNIEnv* env, jclass, jlong address, jint id, jlong antiRoll) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleWheelsSimData* self = (physx::PxVehicleWheelsSimData*) address;
+JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleWheelsSimData__1setAntiRollBarData(JNIEnv*, jclass, jlong _address, jint id, jlong antiRoll) {
+    physx::PxVehicleWheelsSimData* self = (physx::PxVehicleWheelsSimData*) _address;
     self->setAntiRollBarData(id, *((physx::PxVehicleAntiRollBarData*) antiRoll));
 }
-JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleWheelsSimData__1delete_1native_1instance(JNIEnv*, jclass, jlong address) {
-    delete (physx::PxVehicleWheelsSimData*) address;
+JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleWheelsSimData__1delete_1native_1instance(JNIEnv*, jclass, jlong _address) {
+    delete (physx::PxVehicleWheelsSimData*) _address;
 }
 
 // PxVehicleWheelsSimFlags
 JNIEXPORT jint JNICALL Java_physx_vehicle_PxVehicleWheelsSimFlags__1_1sizeOf(JNIEnv*, jclass) {
     return sizeof(physx::PxVehicleWheelsSimFlags);
 }
-JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleWheelsSimFlags__1_1placement_1new_1PxVehicleWheelsSimFlags(JNIEnv* env, jclass, jlong __placement_address, jint flags) {
-    (void) env;    // avoid unused parameter warning / error
-    new((void*)__placement_address) physx::PxVehicleWheelsSimFlags(flags);
+JNIEXPORT jlong JNICALL Java_physx_vehicle_PxVehicleWheelsSimFlags__1_1placement_1new_1PxVehicleWheelsSimFlags(JNIEnv*, jclass, jlong _placement_address, jint flags) {
+    return (jlong) new((void*)_placement_address) physx::PxVehicleWheelsSimFlags(flags);
 }
-JNIEXPORT jlong JNICALL Java_physx_vehicle_PxVehicleWheelsSimFlags__1PxVehicleWheelsSimFlags(JNIEnv* env, jclass, jint flags) {
-    (void) env;    // avoid unused parameter warning / error
+JNIEXPORT jlong JNICALL Java_physx_vehicle_PxVehicleWheelsSimFlags__1PxVehicleWheelsSimFlags(JNIEnv*, jclass, jint flags) {
     return (jlong) new physx::PxVehicleWheelsSimFlags(flags);
 }
-JNIEXPORT jboolean JNICALL Java_physx_vehicle_PxVehicleWheelsSimFlags__1isSet(JNIEnv* env, jclass, jlong address, jint flag) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleWheelsSimFlags* self = (physx::PxVehicleWheelsSimFlags*) address;
+JNIEXPORT jboolean JNICALL Java_physx_vehicle_PxVehicleWheelsSimFlags__1isSet(JNIEnv*, jclass, jlong _address, jint flag) {
+    physx::PxVehicleWheelsSimFlags* self = (physx::PxVehicleWheelsSimFlags*) _address;
     return (jboolean) self->isSet((PxVehicleWheelsSimFlagEnum) flag);
 }
-JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleWheelsSimFlags__1set(JNIEnv* env, jclass, jlong address, jint flag) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleWheelsSimFlags* self = (physx::PxVehicleWheelsSimFlags*) address;
+JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleWheelsSimFlags__1set(JNIEnv*, jclass, jlong _address, jint flag) {
+    physx::PxVehicleWheelsSimFlags* self = (physx::PxVehicleWheelsSimFlags*) _address;
     self->set((PxVehicleWheelsSimFlagEnum) flag);
 }
-JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleWheelsSimFlags__1clear(JNIEnv* env, jclass, jlong address, jint flag) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxVehicleWheelsSimFlags* self = (physx::PxVehicleWheelsSimFlags*) address;
+JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleWheelsSimFlags__1clear(JNIEnv*, jclass, jlong _address, jint flag) {
+    physx::PxVehicleWheelsSimFlags* self = (physx::PxVehicleWheelsSimFlags*) _address;
     self->clear((PxVehicleWheelsSimFlagEnum) flag);
 }
-JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleWheelsSimFlags__1delete_1native_1instance(JNIEnv*, jclass, jlong address) {
-    delete (physx::PxVehicleWheelsSimFlags*) address;
+JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleWheelsSimFlags__1delete_1native_1instance(JNIEnv*, jclass, jlong _address) {
+    delete (physx::PxVehicleWheelsSimFlags*) _address;
 }
 
 // PxWheelQueryResult
-JNIEXPORT jlong JNICALL Java_physx_vehicle_PxWheelQueryResult__1PxWheelQueryResult(JNIEnv* env, jclass) {
-    (void) env;    // avoid unused parameter warning / error
+JNIEXPORT jlong JNICALL Java_physx_vehicle_PxWheelQueryResult__1PxWheelQueryResult(JNIEnv*, jclass) {
     return (jlong) new physx::PxWheelQueryResult();
 }
-JNIEXPORT void JNICALL Java_physx_vehicle_PxWheelQueryResult__1delete_1native_1instance(JNIEnv*, jclass, jlong address) {
-    delete (physx::PxWheelQueryResult*) address;
+JNIEXPORT void JNICALL Java_physx_vehicle_PxWheelQueryResult__1delete_1native_1instance(JNIEnv*, jclass, jlong _address) {
+    delete (physx::PxWheelQueryResult*) _address;
 }
-JNIEXPORT jlong JNICALL Java_physx_vehicle_PxWheelQueryResult__1getSuspLineStart(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxWheelQueryResult* self = (physx::PxWheelQueryResult*) address;
-    return (jlong) &self->suspLineStart;
+JNIEXPORT jlong JNICALL Java_physx_vehicle_PxWheelQueryResult__1getSuspLineStart(JNIEnv*, jclass, jlong _address) {
+    physx::PxWheelQueryResult* _self = (physx::PxWheelQueryResult*) _address;
+    return (jlong) &_self->suspLineStart;
 }
-JNIEXPORT void JNICALL Java_physx_vehicle_PxWheelQueryResult__1setSuspLineStart(JNIEnv* env, jclass, jlong address, jlong value) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxWheelQueryResult* self = (physx::PxWheelQueryResult*) address;
-    self->suspLineStart = *((physx::PxVec3*) value);
+JNIEXPORT void JNICALL Java_physx_vehicle_PxWheelQueryResult__1setSuspLineStart(JNIEnv*, jclass, jlong _address, jlong value) {
+    physx::PxWheelQueryResult* _self = (physx::PxWheelQueryResult*) _address;
+    _self->suspLineStart = *((physx::PxVec3*) value);
 }
-JNIEXPORT jlong JNICALL Java_physx_vehicle_PxWheelQueryResult__1getSuspLineDir(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxWheelQueryResult* self = (physx::PxWheelQueryResult*) address;
-    return (jlong) &self->suspLineDir;
+JNIEXPORT jlong JNICALL Java_physx_vehicle_PxWheelQueryResult__1getSuspLineDir(JNIEnv*, jclass, jlong _address) {
+    physx::PxWheelQueryResult* _self = (physx::PxWheelQueryResult*) _address;
+    return (jlong) &_self->suspLineDir;
 }
-JNIEXPORT void JNICALL Java_physx_vehicle_PxWheelQueryResult__1setSuspLineDir(JNIEnv* env, jclass, jlong address, jlong value) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxWheelQueryResult* self = (physx::PxWheelQueryResult*) address;
-    self->suspLineDir = *((physx::PxVec3*) value);
+JNIEXPORT void JNICALL Java_physx_vehicle_PxWheelQueryResult__1setSuspLineDir(JNIEnv*, jclass, jlong _address, jlong value) {
+    physx::PxWheelQueryResult* _self = (physx::PxWheelQueryResult*) _address;
+    _self->suspLineDir = *((physx::PxVec3*) value);
 }
-JNIEXPORT jfloat JNICALL Java_physx_vehicle_PxWheelQueryResult__1getSuspLineLength(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxWheelQueryResult* self = (physx::PxWheelQueryResult*) address;
-    return (jfloat) self->suspLineLength;
+JNIEXPORT jfloat JNICALL Java_physx_vehicle_PxWheelQueryResult__1getSuspLineLength(JNIEnv*, jclass, jlong _address) {
+    physx::PxWheelQueryResult* _self = (physx::PxWheelQueryResult*) _address;
+    return (jfloat) _self->suspLineLength;
 }
-JNIEXPORT void JNICALL Java_physx_vehicle_PxWheelQueryResult__1setSuspLineLength(JNIEnv* env, jclass, jlong address, jfloat value) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxWheelQueryResult* self = (physx::PxWheelQueryResult*) address;
-    self->suspLineLength = value;
+JNIEXPORT void JNICALL Java_physx_vehicle_PxWheelQueryResult__1setSuspLineLength(JNIEnv*, jclass, jlong _address, jfloat value) {
+    physx::PxWheelQueryResult* _self = (physx::PxWheelQueryResult*) _address;
+    _self->suspLineLength = value;
 }
-JNIEXPORT jboolean JNICALL Java_physx_vehicle_PxWheelQueryResult__1getIsInAir(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxWheelQueryResult* self = (physx::PxWheelQueryResult*) address;
-    return (jboolean) self->isInAir;
+JNIEXPORT jboolean JNICALL Java_physx_vehicle_PxWheelQueryResult__1getIsInAir(JNIEnv*, jclass, jlong _address) {
+    physx::PxWheelQueryResult* _self = (physx::PxWheelQueryResult*) _address;
+    return (jboolean) _self->isInAir;
 }
-JNIEXPORT void JNICALL Java_physx_vehicle_PxWheelQueryResult__1setIsInAir(JNIEnv* env, jclass, jlong address, jboolean value) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxWheelQueryResult* self = (physx::PxWheelQueryResult*) address;
-    self->isInAir = value;
+JNIEXPORT void JNICALL Java_physx_vehicle_PxWheelQueryResult__1setIsInAir(JNIEnv*, jclass, jlong _address, jboolean value) {
+    physx::PxWheelQueryResult* _self = (physx::PxWheelQueryResult*) _address;
+    _self->isInAir = value;
 }
-JNIEXPORT jlong JNICALL Java_physx_vehicle_PxWheelQueryResult__1getTireContactActor(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxWheelQueryResult* self = (physx::PxWheelQueryResult*) address;
-    return (jlong) self->tireContactActor;
+JNIEXPORT jlong JNICALL Java_physx_vehicle_PxWheelQueryResult__1getTireContactActor(JNIEnv*, jclass, jlong _address) {
+    physx::PxWheelQueryResult* _self = (physx::PxWheelQueryResult*) _address;
+    return (jlong) _self->tireContactActor;
 }
-JNIEXPORT void JNICALL Java_physx_vehicle_PxWheelQueryResult__1setTireContactActor(JNIEnv* env, jclass, jlong address, jlong value) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxWheelQueryResult* self = (physx::PxWheelQueryResult*) address;
-    self->tireContactActor = (physx::PxActor*) value;
+JNIEXPORT void JNICALL Java_physx_vehicle_PxWheelQueryResult__1setTireContactActor(JNIEnv*, jclass, jlong _address, jlong value) {
+    physx::PxWheelQueryResult* _self = (physx::PxWheelQueryResult*) _address;
+    _self->tireContactActor = (physx::PxActor*) value;
 }
-JNIEXPORT jlong JNICALL Java_physx_vehicle_PxWheelQueryResult__1getTireContactShape(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxWheelQueryResult* self = (physx::PxWheelQueryResult*) address;
-    return (jlong) self->tireContactShape;
+JNIEXPORT jlong JNICALL Java_physx_vehicle_PxWheelQueryResult__1getTireContactShape(JNIEnv*, jclass, jlong _address) {
+    physx::PxWheelQueryResult* _self = (physx::PxWheelQueryResult*) _address;
+    return (jlong) _self->tireContactShape;
 }
-JNIEXPORT void JNICALL Java_physx_vehicle_PxWheelQueryResult__1setTireContactShape(JNIEnv* env, jclass, jlong address, jlong value) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxWheelQueryResult* self = (physx::PxWheelQueryResult*) address;
-    self->tireContactShape = (physx::PxShape*) value;
+JNIEXPORT void JNICALL Java_physx_vehicle_PxWheelQueryResult__1setTireContactShape(JNIEnv*, jclass, jlong _address, jlong value) {
+    physx::PxWheelQueryResult* _self = (physx::PxWheelQueryResult*) _address;
+    _self->tireContactShape = (physx::PxShape*) value;
 }
-JNIEXPORT jlong JNICALL Java_physx_vehicle_PxWheelQueryResult__1getTireSurfaceMaterial(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxWheelQueryResult* self = (physx::PxWheelQueryResult*) address;
-    return (jlong) self->tireSurfaceMaterial;
+JNIEXPORT jlong JNICALL Java_physx_vehicle_PxWheelQueryResult__1getTireSurfaceMaterial(JNIEnv*, jclass, jlong _address) {
+    physx::PxWheelQueryResult* _self = (physx::PxWheelQueryResult*) _address;
+    return (jlong) _self->tireSurfaceMaterial;
 }
-JNIEXPORT void JNICALL Java_physx_vehicle_PxWheelQueryResult__1setTireSurfaceMaterial(JNIEnv* env, jclass, jlong address, jlong value) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxWheelQueryResult* self = (physx::PxWheelQueryResult*) address;
-    self->tireSurfaceMaterial = (physx::PxMaterial*) value;
+JNIEXPORT void JNICALL Java_physx_vehicle_PxWheelQueryResult__1setTireSurfaceMaterial(JNIEnv*, jclass, jlong _address, jlong value) {
+    physx::PxWheelQueryResult* _self = (physx::PxWheelQueryResult*) _address;
+    _self->tireSurfaceMaterial = (physx::PxMaterial*) value;
 }
-JNIEXPORT jint JNICALL Java_physx_vehicle_PxWheelQueryResult__1getTireSurfaceType(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxWheelQueryResult* self = (physx::PxWheelQueryResult*) address;
-    return (jint) self->tireSurfaceType;
+JNIEXPORT jint JNICALL Java_physx_vehicle_PxWheelQueryResult__1getTireSurfaceType(JNIEnv*, jclass, jlong _address) {
+    physx::PxWheelQueryResult* _self = (physx::PxWheelQueryResult*) _address;
+    return (jint) _self->tireSurfaceType;
 }
-JNIEXPORT void JNICALL Java_physx_vehicle_PxWheelQueryResult__1setTireSurfaceType(JNIEnv* env, jclass, jlong address, jint value) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxWheelQueryResult* self = (physx::PxWheelQueryResult*) address;
-    self->tireSurfaceType = value;
+JNIEXPORT void JNICALL Java_physx_vehicle_PxWheelQueryResult__1setTireSurfaceType(JNIEnv*, jclass, jlong _address, jint value) {
+    physx::PxWheelQueryResult* _self = (physx::PxWheelQueryResult*) _address;
+    _self->tireSurfaceType = value;
 }
-JNIEXPORT jlong JNICALL Java_physx_vehicle_PxWheelQueryResult__1getTireContactPoint(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxWheelQueryResult* self = (physx::PxWheelQueryResult*) address;
-    return (jlong) &self->tireContactPoint;
+JNIEXPORT jlong JNICALL Java_physx_vehicle_PxWheelQueryResult__1getTireContactPoint(JNIEnv*, jclass, jlong _address) {
+    physx::PxWheelQueryResult* _self = (physx::PxWheelQueryResult*) _address;
+    return (jlong) &_self->tireContactPoint;
 }
-JNIEXPORT void JNICALL Java_physx_vehicle_PxWheelQueryResult__1setTireContactPoint(JNIEnv* env, jclass, jlong address, jlong value) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxWheelQueryResult* self = (physx::PxWheelQueryResult*) address;
-    self->tireContactPoint = *((physx::PxVec3*) value);
+JNIEXPORT void JNICALL Java_physx_vehicle_PxWheelQueryResult__1setTireContactPoint(JNIEnv*, jclass, jlong _address, jlong value) {
+    physx::PxWheelQueryResult* _self = (physx::PxWheelQueryResult*) _address;
+    _self->tireContactPoint = *((physx::PxVec3*) value);
 }
-JNIEXPORT jlong JNICALL Java_physx_vehicle_PxWheelQueryResult__1getTireContactNormal(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxWheelQueryResult* self = (physx::PxWheelQueryResult*) address;
-    return (jlong) &self->tireContactNormal;
+JNIEXPORT jlong JNICALL Java_physx_vehicle_PxWheelQueryResult__1getTireContactNormal(JNIEnv*, jclass, jlong _address) {
+    physx::PxWheelQueryResult* _self = (physx::PxWheelQueryResult*) _address;
+    return (jlong) &_self->tireContactNormal;
 }
-JNIEXPORT void JNICALL Java_physx_vehicle_PxWheelQueryResult__1setTireContactNormal(JNIEnv* env, jclass, jlong address, jlong value) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxWheelQueryResult* self = (physx::PxWheelQueryResult*) address;
-    self->tireContactNormal = *((physx::PxVec3*) value);
+JNIEXPORT void JNICALL Java_physx_vehicle_PxWheelQueryResult__1setTireContactNormal(JNIEnv*, jclass, jlong _address, jlong value) {
+    physx::PxWheelQueryResult* _self = (physx::PxWheelQueryResult*) _address;
+    _self->tireContactNormal = *((physx::PxVec3*) value);
 }
-JNIEXPORT jfloat JNICALL Java_physx_vehicle_PxWheelQueryResult__1getTireFriction(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxWheelQueryResult* self = (physx::PxWheelQueryResult*) address;
-    return (jfloat) self->tireFriction;
+JNIEXPORT jfloat JNICALL Java_physx_vehicle_PxWheelQueryResult__1getTireFriction(JNIEnv*, jclass, jlong _address) {
+    physx::PxWheelQueryResult* _self = (physx::PxWheelQueryResult*) _address;
+    return (jfloat) _self->tireFriction;
 }
-JNIEXPORT void JNICALL Java_physx_vehicle_PxWheelQueryResult__1setTireFriction(JNIEnv* env, jclass, jlong address, jfloat value) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxWheelQueryResult* self = (physx::PxWheelQueryResult*) address;
-    self->tireFriction = value;
+JNIEXPORT void JNICALL Java_physx_vehicle_PxWheelQueryResult__1setTireFriction(JNIEnv*, jclass, jlong _address, jfloat value) {
+    physx::PxWheelQueryResult* _self = (physx::PxWheelQueryResult*) _address;
+    _self->tireFriction = value;
 }
-JNIEXPORT jfloat JNICALL Java_physx_vehicle_PxWheelQueryResult__1getSuspJounce(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxWheelQueryResult* self = (physx::PxWheelQueryResult*) address;
-    return (jfloat) self->suspJounce;
+JNIEXPORT jfloat JNICALL Java_physx_vehicle_PxWheelQueryResult__1getSuspJounce(JNIEnv*, jclass, jlong _address) {
+    physx::PxWheelQueryResult* _self = (physx::PxWheelQueryResult*) _address;
+    return (jfloat) _self->suspJounce;
 }
-JNIEXPORT void JNICALL Java_physx_vehicle_PxWheelQueryResult__1setSuspJounce(JNIEnv* env, jclass, jlong address, jfloat value) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxWheelQueryResult* self = (physx::PxWheelQueryResult*) address;
-    self->suspJounce = value;
+JNIEXPORT void JNICALL Java_physx_vehicle_PxWheelQueryResult__1setSuspJounce(JNIEnv*, jclass, jlong _address, jfloat value) {
+    physx::PxWheelQueryResult* _self = (physx::PxWheelQueryResult*) _address;
+    _self->suspJounce = value;
 }
-JNIEXPORT jfloat JNICALL Java_physx_vehicle_PxWheelQueryResult__1getSuspSpringForce(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxWheelQueryResult* self = (physx::PxWheelQueryResult*) address;
-    return (jfloat) self->suspSpringForce;
+JNIEXPORT jfloat JNICALL Java_physx_vehicle_PxWheelQueryResult__1getSuspSpringForce(JNIEnv*, jclass, jlong _address) {
+    physx::PxWheelQueryResult* _self = (physx::PxWheelQueryResult*) _address;
+    return (jfloat) _self->suspSpringForce;
 }
-JNIEXPORT void JNICALL Java_physx_vehicle_PxWheelQueryResult__1setSuspSpringForce(JNIEnv* env, jclass, jlong address, jfloat value) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxWheelQueryResult* self = (physx::PxWheelQueryResult*) address;
-    self->suspSpringForce = value;
+JNIEXPORT void JNICALL Java_physx_vehicle_PxWheelQueryResult__1setSuspSpringForce(JNIEnv*, jclass, jlong _address, jfloat value) {
+    physx::PxWheelQueryResult* _self = (physx::PxWheelQueryResult*) _address;
+    _self->suspSpringForce = value;
 }
-JNIEXPORT jlong JNICALL Java_physx_vehicle_PxWheelQueryResult__1getTireLongitudinalDir(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxWheelQueryResult* self = (physx::PxWheelQueryResult*) address;
-    return (jlong) &self->tireLongitudinalDir;
+JNIEXPORT jlong JNICALL Java_physx_vehicle_PxWheelQueryResult__1getTireLongitudinalDir(JNIEnv*, jclass, jlong _address) {
+    physx::PxWheelQueryResult* _self = (physx::PxWheelQueryResult*) _address;
+    return (jlong) &_self->tireLongitudinalDir;
 }
-JNIEXPORT void JNICALL Java_physx_vehicle_PxWheelQueryResult__1setTireLongitudinalDir(JNIEnv* env, jclass, jlong address, jlong value) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxWheelQueryResult* self = (physx::PxWheelQueryResult*) address;
-    self->tireLongitudinalDir = *((physx::PxVec3*) value);
+JNIEXPORT void JNICALL Java_physx_vehicle_PxWheelQueryResult__1setTireLongitudinalDir(JNIEnv*, jclass, jlong _address, jlong value) {
+    physx::PxWheelQueryResult* _self = (physx::PxWheelQueryResult*) _address;
+    _self->tireLongitudinalDir = *((physx::PxVec3*) value);
 }
-JNIEXPORT jlong JNICALL Java_physx_vehicle_PxWheelQueryResult__1getTireLateralDir(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxWheelQueryResult* self = (physx::PxWheelQueryResult*) address;
-    return (jlong) &self->tireLateralDir;
+JNIEXPORT jlong JNICALL Java_physx_vehicle_PxWheelQueryResult__1getTireLateralDir(JNIEnv*, jclass, jlong _address) {
+    physx::PxWheelQueryResult* _self = (physx::PxWheelQueryResult*) _address;
+    return (jlong) &_self->tireLateralDir;
 }
-JNIEXPORT void JNICALL Java_physx_vehicle_PxWheelQueryResult__1setTireLateralDir(JNIEnv* env, jclass, jlong address, jlong value) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxWheelQueryResult* self = (physx::PxWheelQueryResult*) address;
-    self->tireLateralDir = *((physx::PxVec3*) value);
+JNIEXPORT void JNICALL Java_physx_vehicle_PxWheelQueryResult__1setTireLateralDir(JNIEnv*, jclass, jlong _address, jlong value) {
+    physx::PxWheelQueryResult* _self = (physx::PxWheelQueryResult*) _address;
+    _self->tireLateralDir = *((physx::PxVec3*) value);
 }
-JNIEXPORT jfloat JNICALL Java_physx_vehicle_PxWheelQueryResult__1getLongitudinalSlip(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxWheelQueryResult* self = (physx::PxWheelQueryResult*) address;
-    return (jfloat) self->longitudinalSlip;
+JNIEXPORT jfloat JNICALL Java_physx_vehicle_PxWheelQueryResult__1getLongitudinalSlip(JNIEnv*, jclass, jlong _address) {
+    physx::PxWheelQueryResult* _self = (physx::PxWheelQueryResult*) _address;
+    return (jfloat) _self->longitudinalSlip;
 }
-JNIEXPORT void JNICALL Java_physx_vehicle_PxWheelQueryResult__1setLongitudinalSlip(JNIEnv* env, jclass, jlong address, jfloat value) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxWheelQueryResult* self = (physx::PxWheelQueryResult*) address;
-    self->longitudinalSlip = value;
+JNIEXPORT void JNICALL Java_physx_vehicle_PxWheelQueryResult__1setLongitudinalSlip(JNIEnv*, jclass, jlong _address, jfloat value) {
+    physx::PxWheelQueryResult* _self = (physx::PxWheelQueryResult*) _address;
+    _self->longitudinalSlip = value;
 }
-JNIEXPORT jfloat JNICALL Java_physx_vehicle_PxWheelQueryResult__1getLateralSlip(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxWheelQueryResult* self = (physx::PxWheelQueryResult*) address;
-    return (jfloat) self->lateralSlip;
+JNIEXPORT jfloat JNICALL Java_physx_vehicle_PxWheelQueryResult__1getLateralSlip(JNIEnv*, jclass, jlong _address) {
+    physx::PxWheelQueryResult* _self = (physx::PxWheelQueryResult*) _address;
+    return (jfloat) _self->lateralSlip;
 }
-JNIEXPORT void JNICALL Java_physx_vehicle_PxWheelQueryResult__1setLateralSlip(JNIEnv* env, jclass, jlong address, jfloat value) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxWheelQueryResult* self = (physx::PxWheelQueryResult*) address;
-    self->lateralSlip = value;
+JNIEXPORT void JNICALL Java_physx_vehicle_PxWheelQueryResult__1setLateralSlip(JNIEnv*, jclass, jlong _address, jfloat value) {
+    physx::PxWheelQueryResult* _self = (physx::PxWheelQueryResult*) _address;
+    _self->lateralSlip = value;
 }
-JNIEXPORT jfloat JNICALL Java_physx_vehicle_PxWheelQueryResult__1getSteerAngle(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxWheelQueryResult* self = (physx::PxWheelQueryResult*) address;
-    return (jfloat) self->steerAngle;
+JNIEXPORT jfloat JNICALL Java_physx_vehicle_PxWheelQueryResult__1getSteerAngle(JNIEnv*, jclass, jlong _address) {
+    physx::PxWheelQueryResult* _self = (physx::PxWheelQueryResult*) _address;
+    return (jfloat) _self->steerAngle;
 }
-JNIEXPORT void JNICALL Java_physx_vehicle_PxWheelQueryResult__1setSteerAngle(JNIEnv* env, jclass, jlong address, jfloat value) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxWheelQueryResult* self = (physx::PxWheelQueryResult*) address;
-    self->steerAngle = value;
+JNIEXPORT void JNICALL Java_physx_vehicle_PxWheelQueryResult__1setSteerAngle(JNIEnv*, jclass, jlong _address, jfloat value) {
+    physx::PxWheelQueryResult* _self = (physx::PxWheelQueryResult*) _address;
+    _self->steerAngle = value;
 }
-JNIEXPORT jlong JNICALL Java_physx_vehicle_PxWheelQueryResult__1getLocalPose(JNIEnv* env, jclass, jlong address) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxWheelQueryResult* self = (physx::PxWheelQueryResult*) address;
-    return (jlong) &self->localPose;
+JNIEXPORT jlong JNICALL Java_physx_vehicle_PxWheelQueryResult__1getLocalPose(JNIEnv*, jclass, jlong _address) {
+    physx::PxWheelQueryResult* _self = (physx::PxWheelQueryResult*) _address;
+    return (jlong) &_self->localPose;
 }
-JNIEXPORT void JNICALL Java_physx_vehicle_PxWheelQueryResult__1setLocalPose(JNIEnv* env, jclass, jlong address, jlong value) {
-    (void) env;    // avoid unused parameter warning / error
-    physx::PxWheelQueryResult* self = (physx::PxWheelQueryResult*) address;
-    self->localPose = *((physx::PxTransform*) value);
+JNIEXPORT void JNICALL Java_physx_vehicle_PxWheelQueryResult__1setLocalPose(JNIEnv*, jclass, jlong _address, jlong value) {
+    physx::PxWheelQueryResult* _self = (physx::PxWheelQueryResult*) _address;
+    _self->localPose = *((physx::PxTransform*) value);
 }
 
 // PxVehicleClutchAccuracyModeEnum

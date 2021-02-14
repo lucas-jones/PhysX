@@ -1,14 +1,17 @@
 #include "PxPhysicsAPI.h"
-#include <stdio.h>
 #include <vector>
 
 // enums within namespaces are not supported by webidl binder, as a hack we can use typedefs
 typedef physx::PxActorFlag::Enum PxActorFlagEnum;
 typedef physx::PxActorType::Enum PxActorTypeEnum;
 typedef physx::PxBaseFlag::Enum PxBaseFlagEnum;
+typedef physx::PxConstraintFlag::Enum PxConstraintFlagEnum;
+typedef physx::PxContactPairFlag::Enum PxContactPairFlagEnum;
+typedef physx::PxContactPairHeaderFlag::Enum PxContactPairHeaderFlagEnum;
 typedef physx::PxConvexFlag::Enum PxConvexFlagEnum;
 typedef physx::PxConvexMeshCookingType::Enum PxConvexMeshCookingTypeEnum;
 typedef physx::PxConvexMeshGeometryFlag::Enum PxConvexMeshGeometryFlagEnum;
+typedef physx::PxErrorCode::Enum PxErrorCodeEnum;
 typedef physx::PxForceMode::Enum PxForceModeEnum;
 typedef physx::PxHitFlag::Enum PxHitFlagEnum;
 typedef physx::PxIDENTITY PxIDENTITYEnum;
@@ -17,12 +20,14 @@ typedef physx::PxMeshFlag::Enum PxMeshFlagEnum;
 typedef physx::PxMeshGeometryFlag::Enum PxMeshGeometryFlagEnum;
 typedef physx::PxMeshMidPhase::Enum PxMeshMidPhaseEnum;
 typedef physx::PxMeshPreprocessingFlag::Enum PxMeshPreprocessingFlagEnum;
+typedef physx::PxPairFlag::Enum PxPairFlagEnum;
 typedef physx::PxRigidBodyFlag::Enum PxRigidBodyFlagEnum;
 typedef physx::PxRigidDynamicLockFlag::Enum PxRigidDynamicLockFlagEnum;
 typedef physx::PxSceneFlag::Enum PxSceneFlagEnum;
 typedef physx::PxShapeFlag::Enum PxShapeFlagEnum;
 typedef physx::PxRevoluteJointFlag::Enum PxRevoluteJointFlagEnum;
 typedef physx::PxTriangleMeshFlag::Enum PxTriangleMeshFlagEnum;
+typedef physx::PxTriggerPairFlag::Enum PxTriggerPairFlagEnum;
 typedef physx::PxVehicleClutchAccuracyMode::Enum PxVehicleClutchAccuracyModeEnum;
 typedef physx::PxVehicleDifferential4WData::Enum PxVehicleDifferential4WDataEnum;
 typedef physx::PxVehicleDrive4WControl::Enum PxVehicleDrive4WControlEnum;
@@ -36,6 +41,7 @@ typedef const physx::PxU16* PxU16Ptr;
 typedef const physx::PxU32* PxU32Ptr;
 typedef const physx::PxMaterial* PxMaterialPtr;
 typedef physx::PxReal* PxRealPtr;
+typedef physx::PxActor* PxActorPtr;
 typedef physx::PxVehicleWheels* PxVehicleWheelsPtr;
 
 // template classes are not supported by webidl binder, as a hack we can use typedefs
@@ -68,11 +74,12 @@ physx::PxFilterFlags defaultFilterShader(physx::PxFilterObjectAttributes attribu
     }
 
     if (physx::PxFilterObjectIsTrigger(attributes0) || physx::PxFilterObjectIsTrigger(attributes1)) {
-        pairFlags = physx::PxPairFlag::eTRIGGER_DEFAULT | physx::PxPairFlag::eDETECT_CCD_CONTACT;
+        pairFlags = physx::PxPairFlag::eTRIGGER_DEFAULT;
     } else {
-        pairFlags = physx::PxPairFlag::eCONTACT_DEFAULT;
-        pairFlags |= physx::PxPairFlags(physx::PxU16(filterData0.word2 | filterData1.word2));
+        pairFlags = physx::PxPairFlag::eCONTACT_DEFAULT | physx::PxPairFlag::eDETECT_CCD_CONTACT;
     }
+    pairFlags |= physx::PxPairFlags(physx::PxU16(filterData0.word2 | filterData1.word2));
+
     return physx::PxFilterFlag::eDEFAULT;
 }
 
@@ -103,18 +110,18 @@ physx::PxQueryHitType::Enum defaultWheelSceneQueryPostFilterBlocking(physx::PxFi
 	return ((static_cast<const physx::PxSweepHit&>(hit)).hadInitialOverlap() ? physx::PxQueryHitType::eNONE : physx::PxQueryHitType::eBLOCK);
 }
 
-// Callbacks with rather exotic function signatures require custom mapping
-class SimplePxSimulationEventCallback : physx::PxSimulationEventCallback {
+// Slightly simplified SimulationEventCallback which can be implemented in non-native code
+class SimpleSimulationEventCallback : physx::PxSimulationEventCallback {
     public:
-        // todo: for now this is only a test callback
-        virtual void cbFun(physx::PxU32 count) = 0;
+        virtual void onConstraintBreak(physx::PxConstraintInfo*, physx::PxU32) = 0;
+        virtual void onWake(physx::PxActor**, physx::PxU32) = 0;
+        virtual void onSleep(physx::PxActor**, physx::PxU32) = 0;
+        virtual void onContact(const physx::PxContactPairHeader&, const physx::PxContactPair*, physx::PxU32 nbPairs) = 0;
+        virtual void onTrigger(physx::PxTriggerPair*, physx::PxU32) = 0;
 
-        void onConstraintBreak(physx::PxConstraintInfo*, physx::PxU32) { }
-        void onWake(physx::PxActor**, physx::PxU32) { }
-        void onSleep(physx::PxActor**, physx::PxU32) { }
-        void onContact(const physx::PxContactPairHeader&, const physx::PxContactPair*, physx::PxU32 nbPairs) { cbFun(nbPairs); }
-        void onTrigger(physx::PxTriggerPair*, physx::PxU32) { }
-        void onAdvance(const physx::PxRigidBody *const *, const physx::PxTransform*, const physx::PxU32) { }
+        // implement onAdvance with empty body so it does not have to be implemented
+        // in non-native code (for the sake of performance)
+        virtual void onAdvance(const physx::PxRigidBody *const *, const physx::PxTransform*, const physx::PxU32) { }
 };
 
 // top-level functions are not supported by webidl binder, we need to wrap them in a class
@@ -178,9 +185,19 @@ class PxTopLevelFunctions {
             return base[index];
         }
 
+        // helper function for array-like access on a raw PxContactPair-pointer
+        static physx::PxContactPair* getContactPairAt(physx::PxContactPair* base, int index) {
+            return &base[index];
+        }
+
+        // helper function for array-like access on a raw PxContactPair-pointer
+        static physx::PxTriggerPair* getTriggerPairAt(physx::PxTriggerPair* base, int index) {
+            return &base[index];
+        }
+
         // helper function for array-like access on a raw PxVec3-pointer
-        static physx::PxVec3 getVec3At(physx::PxVec3* base, int index) {
-            return base[index];
+        static physx::PxVec3* getVec3At(physx::PxVec3* base, int index) {
+            return &base[index];
         }
 };
 

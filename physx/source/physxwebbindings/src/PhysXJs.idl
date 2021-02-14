@@ -21,7 +21,9 @@ interface PxTopLevelFunctions {
     static unsigned short getU16At([Ref] PxU16Ptr base, long index);
     static unsigned long getU32At([Ref] PxU32Ptr base, long index);
     static float getRealAt([Ref] PxRealPtr base, long index);
-    [Value] static PxVec3 getVec3At(PxVec3 base, long index);
+    static PxContactPair getContactPairAt(PxContactPair base, long index);
+    static PxTriggerPair getTriggerPairAt(PxTriggerPair base, long index);
+    static PxVec3 getVec3At(PxVec3 base, long index);
 };
 
 /****************************************
@@ -115,6 +117,105 @@ interface PxBatchQueryPostFilterShader { };
 [Prefix="physx::"]
 interface PxBatchQueryPreFilterShader { };
 
+[Prefix="physx::", NoDelete]
+interface PxConstraint {
+    void release();
+    PxScene getScene();
+    //void getActors();
+    void setActors(PxRigidActor actor0, PxRigidActor actor1);
+    void markDirty();
+    void setFlags([Ref] PxConstraintFlags flags);
+    [Value] PxConstraintFlags getFlags();
+    void setFlag(PxConstraintFlagEnum flag, boolean value);
+    void getForce([Ref] PxVec3 linear, [Ref] PxVec3 angular);
+    boolean isValid();
+    void setBreakForce(float linear, float angular);
+    //void getBreakForce
+    void setMinResponseThreshold(float threshold);
+    float getMinResponseThreshold();
+    //VoidPtr getExternalReference
+    //void setConstraintFunctions
+};
+PxConstraint implements PxBase;
+
+enum PxConstraintFlagEnum {
+    "PxConstraintFlagEnum::eBROKEN",
+    "PxConstraintFlagEnum::ePROJECT_TO_ACTOR0",
+    "PxConstraintFlagEnum::ePROJECT_TO_ACTOR1",
+    "PxConstraintFlagEnum::ePROJECTION",
+    "PxConstraintFlagEnum::eCOLLISION_ENABLED",
+    "PxConstraintFlagEnum::eVISUALIZATION",
+    "PxConstraintFlagEnum::eDRIVE_LIMITS_ARE_FORCES",
+    "PxConstraintFlagEnum::eIMPROVED_SLERP",
+    "PxConstraintFlagEnum::eDISABLE_PREPROCESSING",
+    "PxConstraintFlagEnum::eENABLE_EXTENDED_LIMITS",
+    "PxConstraintFlagEnum::eGPU_COMPATIBLE"
+};
+
+[Prefix="physx::"]
+interface PxConstraintFlags {
+    void PxConstraintFlags(unsigned short flags);
+    boolean isSet(PxConstraintFlagEnum flag);
+    void set(PxConstraintFlagEnum flag);
+    void clear(PxConstraintFlagEnum flag);
+};
+
+[Prefix="physx::"]
+interface PxConstraintInfo {
+    attribute PxConstraint constraint;
+    attribute VoidPtr externalReference;
+    attribute unsigned long type;
+};
+
+enum PxContactPairHeaderFlagEnum {
+    "PxContactPairHeaderFlagEnum::eREMOVED_ACTOR_0",
+    "PxContactPairHeaderFlagEnum::eREMOVED_ACTOR_1"
+};
+
+[Prefix="physx::"]
+interface PxContactPairHeaderFlags {
+    void PxContactPairHeaderFlags(unsigned short flags);
+    boolean isSet(PxContactPairHeaderFlagEnum flag);
+    void set(PxContactPairHeaderFlagEnum flag);
+    void clear(PxContactPairHeaderFlagEnum flag);
+};
+
+[Prefix="physx::"]
+interface PxContactPair {
+    attribute PxShape[] shapes;
+    attribute octet contactCount;
+    attribute octet patchCount;
+    [Value] attribute PxContactPairFlags flags;
+    [Value] attribute PxPairFlags events;
+};
+
+enum PxContactPairFlagEnum {
+    "PxContactPairFlagEnum::eREMOVED_SHAPE_0",
+    "PxContactPairFlagEnum::eREMOVED_SHAPE_1",
+    "PxContactPairFlagEnum::eACTOR_PAIR_HAS_FIRST_TOUCH",
+    "PxContactPairFlagEnum::eACTOR_PAIR_LOST_TOUCH",
+    "PxContactPairFlagEnum::eINTERNAL_HAS_IMPULSES",
+    "PxContactPairFlagEnum::eINTERNAL_CONTACTS_ARE_FLIPPED"
+};
+
+[Prefix="physx::"]
+interface PxContactPairFlags {
+    void PxContactPairFlags(unsigned short flags);
+    boolean isSet(PxContactPairFlagEnum flag);
+    void set(PxContactPairFlagEnum flag);
+    void clear(PxContactPairFlagEnum flag);
+};
+
+[Prefix="physx::"]
+interface PxContactPairHeader {
+    attribute PxRigidActor[] actors;
+    //attribute PxU8Ptr extraDataStream;
+    //attribute short extraDataStreamSize;
+    [Value] attribute PxContactPairHeaderFlags flags;
+    attribute PxContactPair pairs;
+    attribute unsigned long nbPairs;
+};
+
 [Prefix="physx::"]
 interface PxFilterData {
     void PxFilterData();
@@ -155,7 +256,6 @@ interface PxHitFlags {
     void clear(PxHitFlagEnum flag);
 };
 
-
 [Prefix="physx::"]
 interface PxLocationHit {
     [Value] attribute PxHitFlags flags;
@@ -184,6 +284,34 @@ interface PxOverlapQueryResult {
 [Prefix="physx::", NoDelete]
 interface PxMaterial { };
 PxMaterial implements PxBase;
+
+enum PxPairFlagEnum {
+    "PxPairFlagEnum::eSOLVE_CONTACT",
+    "PxPairFlagEnum::eMODIFY_CONTACTS",
+    "PxPairFlagEnum::eNOTIFY_TOUCH_FOUND",
+    "PxPairFlagEnum::eNOTIFY_TOUCH_PERSISTS",
+    "PxPairFlagEnum::eNOTIFY_TOUCH_LOST",
+    "PxPairFlagEnum::eNOTIFY_TOUCH_CCD",
+    "PxPairFlagEnum::eNOTIFY_THRESHOLD_FORCE_FOUND",
+    "PxPairFlagEnum::eNOTIFY_THRESHOLD_FORCE_PERSISTS",
+    "PxPairFlagEnum::eNOTIFY_THRESHOLD_FORCE_LOST",
+    "PxPairFlagEnum::eNOTIFY_CONTACT_POINTS",
+    "PxPairFlagEnum::eDETECT_DISCRETE_CONTACT",
+    "PxPairFlagEnum::eDETECT_CCD_CONTACT",
+    "PxPairFlagEnum::ePRE_SOLVER_VELOCITY",
+    "PxPairFlagEnum::ePOST_SOLVER_VELOCITY",
+    "PxPairFlagEnum::eCONTACT_EVENT_POSE",
+    "PxPairFlagEnum::eNEXT_FREE",
+    "PxPairFlagEnum::eCONTACT_DEFAULT"
+};
+
+[Prefix="physx::"]
+interface PxPairFlags {
+    void PxPairFlags(unsigned short flags);
+    boolean isSet(PxPairFlagEnum flag);
+    void set(PxPairFlagEnum flag);
+    void clear(PxPairFlagEnum flag);
+};
 
 [Prefix="physx::"]
 interface PxPhysics {
@@ -442,16 +570,24 @@ interface PxShapeFlags {
 [Prefix="physx::"]
 interface PxSimulationEventCallback { };
 
-interface SimplePxSimulationEventCallback {
-    void cbFun(unsigned long count);
+interface SimpleSimulationEventCallback {
+    void onConstraintBreak(PxConstraintInfo constraints, unsigned long count);
+    void onWake(PxActorPtr actors, unsigned long count);
+    void onSleep(PxActorPtr actors, unsigned long count);
+    void onContact([Const, Ref] PxContactPairHeader pairHeader, [Const] PxContactPair pairs, unsigned long nbPairs);
+    void onTrigger(PxTriggerPair pairs, unsigned long count);
 };
-SimplePxSimulationEventCallback implements PxSimulationEventCallback;
+SimpleSimulationEventCallback implements PxSimulationEventCallback;
 
-//[JSImplementation="SimplePxSimulationEventCallback"]
-//interface JsPxSimulationEventCallback {
-//    void JsPxSimulationEventCallback();
-//    void cbFun(unsigned long count);
-//};
+[JSImplementation="SimpleSimulationEventCallback"]
+interface JavaSimulationEventCallback {
+    void JavaSimpleSimulationEventCallback();
+    void onConstraintBreak(PxConstraintInfo constraints, unsigned long count);
+    void onWake(PxActorPtr actors, unsigned long count);
+    void onSleep(PxActorPtr actors, unsigned long count);
+    void onContact([Const, Ref] PxContactPairHeader pairHeader, [Const] PxContactPair pairs, unsigned long nbPairs);
+    void onTrigger(PxTriggerPair pairs, unsigned long count);
+};
 
 [Prefix="physx::"]
 interface PxSimulationFilterShader { };
@@ -470,6 +606,30 @@ interface PxSweepQueryResult {
     attribute any userData; 
     attribute octet queryStatus;
     attribute boolean hasBlock;
+};
+
+[Prefix="physx::"]
+interface PxTriggerPair {
+    attribute PxShape triggerShape;
+    attribute PxRigidActor triggerActor;
+    attribute PxShape otherShape;
+    attribute PxRigidActor otherActor;
+    attribute PxPairFlagEnum status;
+    [Value] attribute PxTriggerPairFlags flags;
+};
+
+enum PxTriggerPairFlagEnum {
+    "PxTriggerPairFlagEnum::eREMOVED_SHAPE_TRIGGER",
+    "PxTriggerPairFlagEnum::eREMOVED_SHAPE_OTHER",
+    "PxTriggerPairFlagEnum::eNEXT_FREE"
+};
+
+[Prefix="physx::"]
+interface PxTriggerPairFlags {
+    void PxTriggerPairFlags(octet flags);
+    boolean isSet(PxTriggerPairFlagEnum flag);
+    void set(PxTriggerPairFlagEnum flag);
+    void clear(PxTriggerPairFlagEnum flag);
 };
 
 /****************************************
@@ -1151,6 +1311,7 @@ enum PxConvexMeshCookingTypeEnum {
 
 [Prefix="physx::", NoDelete]
 interface PxCooking {
+    void release();
     PxConvexMesh createConvexMesh([Const, Ref] PxConvexMeshDesc desc, [Ref] PxPhysicsInsertionCallback insertionCallback);
     PxTriangleMesh createTriangleMesh([Const, Ref] PxTriangleMeshDesc desc, [Ref] PxPhysicsInsertionCallback insertionCallback);
 };
@@ -1291,7 +1452,28 @@ interface PxDefaultErrorCallback {
 PxDefaultErrorCallback implements PxErrorCallback;
 
 [Prefix="physx::"]
-interface PxErrorCallback { };
+interface PxErrorCallback {
+    void reportError(PxErrorCodeEnum code, DOMString message, DOMString file, long line);
+};
+
+[JSImplementation="PxErrorCallback"]
+interface JavaErrorCallback {
+    void JavaErrorCallback();
+    void reportError(PxErrorCodeEnum code, DOMString message, DOMString file, long line);
+};
+
+enum PxErrorCodeEnum {
+    "PxErrorCodeEnum::eNO_ERROR",
+    "PxErrorCodeEnum::eDEBUG_INFO",
+    "PxErrorCodeEnum::eDEBUG_WARNING",
+    "PxErrorCodeEnum::eINVALID_PARAMETER",
+    "PxErrorCodeEnum::eINVALID_OPERATION",
+    "PxErrorCodeEnum::eOUT_OF_MEMORY",
+    "PxErrorCodeEnum::eINTERNAL_ERROR",
+    "PxErrorCodeEnum::eABORT",
+    "PxErrorCodeEnum::ePERF_WARNING",
+    "PxErrorCodeEnum::eMASK_ALL"
+};
 
 [Prefix="physx::", NoDelete]
 interface PxFoundation {
@@ -1393,6 +1575,8 @@ interface PxRevoluteJointFlags {
 /****************************************
  * [package=support]
  ****************************************/
+
+interface PxActorPtr { };
 
 interface PxMaterialPtr { };
 
