@@ -164,27 +164,6 @@ JNIEXPORT jboolean JNICALL Java_physx_PxTopLevelFunctions__1InitExtensions(JNIEn
 JNIEXPORT jlong JNICALL Java_physx_PxTopLevelFunctions__1RevoluteJointCreate(JNIEnv*, jclass, jlong physics, jlong actor0, jlong localFrame0, jlong actor1, jlong localFrame1) {
     return (jlong) PxTopLevelFunctions::RevoluteJointCreate(*((physx::PxPhysics*) physics), (physx::PxRigidActor*) actor0, *((physx::PxTransform*) localFrame0), (physx::PxRigidActor*) actor1, *((physx::PxTransform*) localFrame1));
 }
-JNIEXPORT jbyte JNICALL Java_physx_PxTopLevelFunctions__1getU8At(JNIEnv*, jclass, jlong base, jint index) {
-    return (jbyte) PxTopLevelFunctions::getU8At(*((PxU8Ptr*) base), index);
-}
-JNIEXPORT jshort JNICALL Java_physx_PxTopLevelFunctions__1getU16At(JNIEnv*, jclass, jlong base, jint index) {
-    return (jshort) PxTopLevelFunctions::getU16At(*((PxU16Ptr*) base), index);
-}
-JNIEXPORT jint JNICALL Java_physx_PxTopLevelFunctions__1getU32At(JNIEnv*, jclass, jlong base, jint index) {
-    return (jint) PxTopLevelFunctions::getU32At(*((PxU32Ptr*) base), index);
-}
-JNIEXPORT jfloat JNICALL Java_physx_PxTopLevelFunctions__1getRealAt(JNIEnv*, jclass, jlong base, jint index) {
-    return (jfloat) PxTopLevelFunctions::getRealAt(*((PxRealPtr*) base), index);
-}
-JNIEXPORT jlong JNICALL Java_physx_PxTopLevelFunctions__1getContactPairAt(JNIEnv*, jclass, jlong base, jint index) {
-    return (jlong) PxTopLevelFunctions::getContactPairAt((physx::PxContactPair*) base, index);
-}
-JNIEXPORT jlong JNICALL Java_physx_PxTopLevelFunctions__1getTriggerPairAt(JNIEnv*, jclass, jlong base, jint index) {
-    return (jlong) PxTopLevelFunctions::getTriggerPairAt((physx::PxTriggerPair*) base, index);
-}
-JNIEXPORT jlong JNICALL Java_physx_PxTopLevelFunctions__1getVec3At(JNIEnv*, jclass, jlong base, jint index) {
-    return (jlong) PxTopLevelFunctions::getVec3At((physx::PxVec3*) base, index);
-}
 JNIEXPORT void JNICALL Java_physx_PxTopLevelFunctions__1delete_1native_1instance(JNIEnv*, jclass, jlong _address) {
     delete (PxTopLevelFunctions*) _address;
 }
@@ -1435,8 +1414,10 @@ JNIEXPORT jlong JNICALL Java_physx_geomutils_PxTriangleMesh__1getTriangleMeshFla
     return (jlong) &_cache;
 }
 JNIEXPORT jlong JNICALL Java_physx_geomutils_PxTriangleMesh__1getTrianglesRemap(JNIEnv*, jclass, jlong _address) {
+    static thread_local PxU32Ptr _cache;
     physx::PxTriangleMesh* self = (physx::PxTriangleMesh*) _address;
-    return (jlong) self->getTrianglesRemap();
+    _cache = self->getTrianglesRemap();
+    return (jlong) &_cache;
 }
 JNIEXPORT jshort JNICALL Java_physx_geomutils_PxTriangleMesh__1getTriangleMaterialIndex(JNIEnv*, jclass, jlong _address, jint triangleIndex) {
     physx::PxTriangleMesh* self = (physx::PxTriangleMesh*) _address;
@@ -3461,6 +3442,11 @@ JNIEXPORT void JNICALL Java_physx_support_PxMaterialPtr__1delete_1native_1instan
     delete (PxMaterialPtr*) _address;
 }
 
+// PxVehicleWheelsPtr
+JNIEXPORT void JNICALL Java_physx_support_PxVehicleWheelsPtr__1delete_1native_1instance(JNIEnv*, jclass, jlong _address) {
+    delete (PxVehicleWheelsPtr*) _address;
+}
+
 // PxRealPtr
 JNIEXPORT void JNICALL Java_physx_support_PxRealPtr__1delete_1native_1instance(JNIEnv*, jclass, jlong _address) {
     delete (PxRealPtr*) _address;
@@ -3479,6 +3465,52 @@ JNIEXPORT void JNICALL Java_physx_support_PxU16Ptr__1delete_1native_1instance(JN
 // PxU32Ptr
 JNIEXPORT void JNICALL Java_physx_support_PxU32Ptr__1delete_1native_1instance(JNIEnv*, jclass, jlong _address) {
     delete (PxU32Ptr*) _address;
+}
+
+// TypeHelpers
+JNIEXPORT jbyte JNICALL Java_physx_support_TypeHelpers__1getU8At(JNIEnv*, jclass, jlong base, jint index) {
+    return (jbyte) TypeHelpers::getU8At(*((PxU8Ptr*) base), index);
+}
+JNIEXPORT jshort JNICALL Java_physx_support_TypeHelpers__1getU16At(JNIEnv*, jclass, jlong base, jint index) {
+    return (jshort) TypeHelpers::getU16At(*((PxU16Ptr*) base), index);
+}
+JNIEXPORT jint JNICALL Java_physx_support_TypeHelpers__1getU32At(JNIEnv*, jclass, jlong base, jint index) {
+    return (jint) TypeHelpers::getU32At(*((PxU32Ptr*) base), index);
+}
+JNIEXPORT jfloat JNICALL Java_physx_support_TypeHelpers__1getRealAt(JNIEnv*, jclass, jlong base, jint index) {
+    return (jfloat) TypeHelpers::getRealAt(*((PxRealPtr*) base), index);
+}
+JNIEXPORT jlong JNICALL Java_physx_support_TypeHelpers__1getContactPairAt(JNIEnv*, jclass, jlong base, jint index) {
+    return (jlong) TypeHelpers::getContactPairAt((physx::PxContactPair*) base, index);
+}
+JNIEXPORT jlong JNICALL Java_physx_support_TypeHelpers__1getTriggerPairAt(JNIEnv*, jclass, jlong base, jint index) {
+    return (jlong) TypeHelpers::getTriggerPairAt((physx::PxTriggerPair*) base, index);
+}
+JNIEXPORT jlong JNICALL Java_physx_support_TypeHelpers__1getVec3At(JNIEnv*, jclass, jlong base, jint index) {
+    return (jlong) TypeHelpers::getVec3At((physx::PxVec3*) base, index);
+}
+JNIEXPORT jlong JNICALL Java_physx_support_TypeHelpers__1voidToU8Ptr(JNIEnv*, jclass, jlong voidPtr) {
+    static thread_local PxU8Ptr _cache;
+    _cache = TypeHelpers::voidToU8Ptr((void*) voidPtr);
+    return (jlong) &_cache;
+}
+JNIEXPORT jlong JNICALL Java_physx_support_TypeHelpers__1voidToU16Ptr(JNIEnv*, jclass, jlong voidPtr) {
+    static thread_local PxU16Ptr _cache;
+    _cache = TypeHelpers::voidToU16Ptr((void*) voidPtr);
+    return (jlong) &_cache;
+}
+JNIEXPORT jlong JNICALL Java_physx_support_TypeHelpers__1voidToU32Ptr(JNIEnv*, jclass, jlong voidPtr) {
+    static thread_local PxU32Ptr _cache;
+    _cache = TypeHelpers::voidToU32Ptr((void*) voidPtr);
+    return (jlong) &_cache;
+}
+JNIEXPORT jlong JNICALL Java_physx_support_TypeHelpers__1voidToRealPtr(JNIEnv*, jclass, jlong voidPtr) {
+    static thread_local PxRealPtr _cache;
+    _cache = TypeHelpers::voidToRealPtr((void*) voidPtr);
+    return (jlong) &_cache;
+}
+JNIEXPORT void JNICALL Java_physx_support_TypeHelpers__1delete_1native_1instance(JNIEnv*, jclass, jlong _address) {
+    delete (TypeHelpers*) _address;
 }
 
 // Vector_PxMaterial
@@ -3776,11 +3808,6 @@ JNIEXPORT void JNICALL Java_physx_support_Vector_1PxWheelQueryResult__1push_1bac
 }
 JNIEXPORT void JNICALL Java_physx_support_Vector_1PxWheelQueryResult__1delete_1native_1instance(JNIEnv*, jclass, jlong _address) {
     delete (Vector_PxWheelQueryResult*) _address;
-}
-
-// PxVehicleWheelsPtr
-JNIEXPORT void JNICALL Java_physx_support_PxVehicleWheelsPtr__1delete_1native_1instance(JNIEnv*, jclass, jlong _address) {
-    delete (PxVehicleWheelsPtr*) _address;
 }
 
 // Vector_PxVehicleWheels

@@ -164,41 +164,6 @@ class PxTopLevelFunctions {
         static physx::PxRevoluteJoint* RevoluteJointCreate(physx::PxPhysics& physics, physx::PxRigidActor* actor0, physx::PxTransform& localFrame0, physx::PxRigidActor* actor1, physx::PxTransform& localFrame1) {
             return physx::PxRevoluteJointCreate(physics, actor0, localFrame0, actor1, localFrame1);
         }
-
-        // helper function for array-like access on a raw PxU8-pointer
-        static physx::PxU8 getU8At(const physx::PxU8* base, int index) {
-            return base[index];
-        }
-
-        // helper function for array-like access on a raw PxU16-pointer
-        static physx::PxU16 getU16At(const physx::PxU16* base, int index) {
-            return base[index];
-        }
-
-        // helper function for array-like access on a raw PxU32-pointer
-        static physx::PxU32 getU32At(const physx::PxU32* base, int index) {
-            return base[index];
-        }
-
-        // helper function for array-like access on a raw PxReal-pointer
-        static physx::PxReal getRealAt(physx::PxReal* base, int index) {
-            return base[index];
-        }
-
-        // helper function for array-like access on a raw PxContactPair-pointer
-        static physx::PxContactPair* getContactPairAt(physx::PxContactPair* base, int index) {
-            return &base[index];
-        }
-
-        // helper function for array-like access on a raw PxContactPair-pointer
-        static physx::PxTriggerPair* getTriggerPairAt(physx::PxTriggerPair* base, int index) {
-            return &base[index];
-        }
-
-        // helper function for array-like access on a raw PxVec3-pointer
-        static physx::PxVec3* getVec3At(physx::PxVec3* base, int index) {
-            return &base[index];
-        }
 };
 
 class PxVehicleTopLevelFunctions {
@@ -234,5 +199,53 @@ class PxVehicleTopLevelFunctions {
 
         static void PxVehicleTireData_setFrictionVsSlipGraph(physx::PxVehicleTireData* tireData, physx::PxU32 m, physx::PxU32 n, float value) {
             tireData->mFrictionVsSlipGraph[m][n] = value;
+        }
+};
+
+// Various helper functions for pointer access and conversion
+class TypeHelpers {
+    public:
+        static physx::PxU8 getU8At(const physx::PxU8* base, int index) {
+            return base[index];
+        }
+
+        static physx::PxU16 getU16At(const physx::PxU16* base, int index) {
+            return base[index];
+        }
+
+        static physx::PxU32 getU32At(const physx::PxU32* base, int index) {
+            return base[index];
+        }
+
+        static physx::PxReal getRealAt(physx::PxReal* base, int index) {
+            return base[index];
+        }
+
+        static physx::PxContactPair* getContactPairAt(physx::PxContactPair* base, int index) {
+            return &base[index];
+        }
+
+        static physx::PxTriggerPair* getTriggerPairAt(physx::PxTriggerPair* base, int index) {
+            return &base[index];
+        }
+
+        static physx::PxVec3* getVec3At(physx::PxVec3* base, int index) {
+            return &base[index];
+        }
+
+        static PxU8Ptr voidToU8Ptr(void* voidPtr) {
+            return (PxU8Ptr) voidPtr;
+        }
+
+        static PxU16Ptr voidToU16Ptr(void* voidPtr) {
+            return (PxU16Ptr) voidPtr;
+        }
+
+        static PxU32Ptr voidToU32Ptr(void* voidPtr) {
+            return (PxU32Ptr) voidPtr;
+        }
+
+        static PxRealPtr voidToRealPtr(void* voidPtr) {
+            return (PxRealPtr) voidPtr;
         }
 };
