@@ -1221,6 +1221,12 @@ JNIEXPORT void JNICALL Java_physx_geomutils_PxGeometry__1delete_1native_1instanc
 }
 
 // PxHullPolygon
+JNIEXPORT jint JNICALL Java_physx_geomutils_PxHullPolygon__1_1sizeOf(JNIEnv*, jclass) {
+    return sizeof(physx::PxHullPolygon);
+}
+JNIEXPORT jlong JNICALL Java_physx_geomutils_PxHullPolygon__1_1placement_1new_1PxHullPolygon(JNIEnv*, jclass, jlong _placement_address) {
+    return (jlong) new((void*)_placement_address) physx::PxHullPolygon();
+}
 JNIEXPORT jlong JNICALL Java_physx_geomutils_PxHullPolygon__1PxHullPolygon(JNIEnv*, jclass) {
     return (jlong) new physx::PxHullPolygon();
 }
@@ -1299,6 +1305,18 @@ JNIEXPORT void JNICALL Java_physx_geomutils_PxMeshGeometryFlags__1delete_1native
 }
 
 // PxMeshScale
+JNIEXPORT jint JNICALL Java_physx_geomutils_PxMeshScale__1_1sizeOf(JNIEnv*, jclass) {
+    return sizeof(physx::PxMeshScale);
+}
+JNIEXPORT jlong JNICALL Java_physx_geomutils_PxMeshScale__1_1placement_1new_1PxMeshScale__J(JNIEnv*, jclass, jlong _placement_address) {
+    return (jlong) new((void*)_placement_address) physx::PxMeshScale();
+}
+JNIEXPORT jlong JNICALL Java_physx_geomutils_PxMeshScale__1_1placement_1new_1PxMeshScale__JF(JNIEnv*, jclass, jlong _placement_address, jfloat r) {
+    return (jlong) new((void*)_placement_address) physx::PxMeshScale(r);
+}
+JNIEXPORT jlong JNICALL Java_physx_geomutils_PxMeshScale__1_1placement_1new_1PxMeshScale__JJJ(JNIEnv*, jclass, jlong _placement_address, jlong s, jlong r) {
+    return (jlong) new((void*)_placement_address) physx::PxMeshScale(*((physx::PxVec3*) s), *((physx::PxQuat*) r));
+}
 JNIEXPORT jlong JNICALL Java_physx_geomutils_PxMeshScale__1PxMeshScale__(JNIEnv*, jclass) {
     return (jlong) new physx::PxMeshScale();
 }
@@ -1662,6 +1680,12 @@ JNIEXPORT void JNICALL Java_physx_physics_PxBatchQuery__1release(JNIEnv*, jclass
 }
 
 // PxBatchQueryDesc
+JNIEXPORT jint JNICALL Java_physx_physics_PxBatchQueryDesc__1_1sizeOf(JNIEnv*, jclass) {
+    return sizeof(physx::PxBatchQueryDesc);
+}
+JNIEXPORT jlong JNICALL Java_physx_physics_PxBatchQueryDesc__1_1placement_1new_1PxBatchQueryDesc(JNIEnv*, jclass, jlong _placement_address, jint maxRaycastsPerExecute, jint maxSweepsPerExecute, jint maxOverlapsPerExecute) {
+    return (jlong) new((void*)_placement_address) physx::PxBatchQueryDesc(maxRaycastsPerExecute, maxSweepsPerExecute, maxOverlapsPerExecute);
+}
 JNIEXPORT jlong JNICALL Java_physx_physics_PxBatchQueryDesc__1PxBatchQueryDesc(JNIEnv*, jclass, jint maxRaycastsPerExecute, jint maxSweepsPerExecute, jint maxOverlapsPerExecute) {
     return (jlong) new physx::PxBatchQueryDesc(maxRaycastsPerExecute, maxSweepsPerExecute, maxOverlapsPerExecute);
 }
@@ -3907,6 +3931,12 @@ JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleAckermannGeometryData__1setMA
 }
 
 // PxVehicleAntiRollBarData
+JNIEXPORT jint JNICALL Java_physx_vehicle_PxVehicleAntiRollBarData__1_1sizeOf(JNIEnv*, jclass) {
+    return sizeof(physx::PxVehicleAntiRollBarData);
+}
+JNIEXPORT jlong JNICALL Java_physx_vehicle_PxVehicleAntiRollBarData__1_1placement_1new_1PxVehicleAntiRollBarData(JNIEnv*, jclass, jlong _placement_address) {
+    return (jlong) new((void*)_placement_address) physx::PxVehicleAntiRollBarData();
+}
 JNIEXPORT jlong JNICALL Java_physx_vehicle_PxVehicleAntiRollBarData__1PxVehicleAntiRollBarData(JNIEnv*, jclass) {
     return (jlong) new physx::PxVehicleAntiRollBarData();
 }
@@ -4412,6 +4442,12 @@ JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleDriveSimData__1delete_1native
 }
 
 // PxVehicleDriveSimData4W
+JNIEXPORT jint JNICALL Java_physx_vehicle_PxVehicleDriveSimData4W__1_1sizeOf(JNIEnv*, jclass) {
+    return sizeof(physx::PxVehicleDriveSimData4W);
+}
+JNIEXPORT jlong JNICALL Java_physx_vehicle_PxVehicleDriveSimData4W__1_1placement_1new_1PxVehicleDriveSimData4W(JNIEnv*, jclass, jlong _placement_address) {
+    return (jlong) new((void*)_placement_address) physx::PxVehicleDriveSimData4W();
+}
 JNIEXPORT jlong JNICALL Java_physx_vehicle_PxVehicleDriveSimData4W__1PxVehicleDriveSimData4W(JNIEnv*, jclass) {
     return (jlong) new physx::PxVehicleDriveSimData4W();
 }
@@ -4596,6 +4632,12 @@ JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleGearsData__1setMSwitchTime(JN
 }
 
 // PxVehicleSuspensionData
+JNIEXPORT jint JNICALL Java_physx_vehicle_PxVehicleSuspensionData__1_1sizeOf(JNIEnv*, jclass) {
+    return sizeof(physx::PxVehicleSuspensionData);
+}
+JNIEXPORT jlong JNICALL Java_physx_vehicle_PxVehicleSuspensionData__1_1placement_1new_1PxVehicleSuspensionData(JNIEnv*, jclass, jlong _placement_address) {
+    return (jlong) new((void*)_placement_address) physx::PxVehicleSuspensionData();
+}
 JNIEXPORT jlong JNICALL Java_physx_vehicle_PxVehicleSuspensionData__1PxVehicleSuspensionData(JNIEnv*, jclass) {
     return (jlong) new physx::PxVehicleSuspensionData();
 }
@@ -4672,6 +4714,12 @@ JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleSuspensionData__1setMCamberAt
 }
 
 // PxVehicleTireData
+JNIEXPORT jint JNICALL Java_physx_vehicle_PxVehicleTireData__1_1sizeOf(JNIEnv*, jclass) {
+    return sizeof(physx::PxVehicleTireData);
+}
+JNIEXPORT jlong JNICALL Java_physx_vehicle_PxVehicleTireData__1_1placement_1new_1PxVehicleTireData(JNIEnv*, jclass, jlong _placement_address) {
+    return (jlong) new((void*)_placement_address) physx::PxVehicleTireData();
+}
 JNIEXPORT jlong JNICALL Java_physx_vehicle_PxVehicleTireData__1PxVehicleTireData(JNIEnv*, jclass) {
     return (jlong) new physx::PxVehicleTireData();
 }
@@ -4764,6 +4812,12 @@ JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleTireLoadFilterData__1setMMaxF
 }
 
 // PxVehicleWheelData
+JNIEXPORT jint JNICALL Java_physx_vehicle_PxVehicleWheelData__1_1sizeOf(JNIEnv*, jclass) {
+    return sizeof(physx::PxVehicleWheelData);
+}
+JNIEXPORT jlong JNICALL Java_physx_vehicle_PxVehicleWheelData__1_1placement_1new_1PxVehicleWheelData(JNIEnv*, jclass, jlong _placement_address) {
+    return (jlong) new((void*)_placement_address) physx::PxVehicleWheelData();
+}
 JNIEXPORT jlong JNICALL Java_physx_vehicle_PxVehicleWheelData__1PxVehicleWheelData(JNIEnv*, jclass) {
     return (jlong) new physx::PxVehicleWheelData();
 }
@@ -4846,6 +4900,9 @@ JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleWheelData__1setMToeAngle(JNIE
 // PxVehicleWheelQueryResult
 JNIEXPORT jlong JNICALL Java_physx_vehicle_PxVehicleWheelQueryResult__1PxVehicleWheelQueryResult(JNIEnv*, jclass) {
     return (jlong) new physx::PxVehicleWheelQueryResult();
+}
+JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleWheelQueryResult__1delete_1native_1instance(JNIEnv*, jclass, jlong _address) {
+    delete (physx::PxVehicleWheelQueryResult*) _address;
 }
 JNIEXPORT jlong JNICALL Java_physx_vehicle_PxVehicleWheelQueryResult__1getWheelQueryResults(JNIEnv*, jclass, jlong _address) {
     physx::PxVehicleWheelQueryResult* _self = (physx::PxVehicleWheelQueryResult*) _address;
