@@ -1356,13 +1356,7 @@ JNIEXPORT jlong JNICALL Java_physx_extensions_PxJoint__1getScene(JNIEnv*, jclass
 }
 
 // PxJointAngularLimitPair
-JNIEXPORT jlong JNICALL Java_physx_extensions_PxJointAngularLimitPair__1PxJointAngularLimitPair__FF(JNIEnv*, jclass, jfloat lowerLimit, jfloat upperLimit) {
-    return (jlong) new physx::PxJointAngularLimitPair(lowerLimit, upperLimit);
-}
-JNIEXPORT jlong JNICALL Java_physx_extensions_PxJointAngularLimitPair__1PxJointAngularLimitPair__FFF(JNIEnv*, jclass, jfloat lowerLimit, jfloat upperLimit, jfloat contactDist) {
-    return (jlong) new physx::PxJointAngularLimitPair(lowerLimit, upperLimit, contactDist);
-}
-JNIEXPORT jlong JNICALL Java_physx_extensions_PxJointAngularLimitPair__1PxJointAngularLimitPair__FFJ(JNIEnv*, jclass, jfloat lowerLimit, jfloat upperLimit, jlong spring) {
+JNIEXPORT jlong JNICALL Java_physx_extensions_PxJointAngularLimitPair__1PxJointAngularLimitPair(JNIEnv*, jclass, jfloat lowerLimit, jfloat upperLimit, jlong spring) {
     return (jlong) new physx::PxJointAngularLimitPair(lowerLimit, upperLimit, *((physx::PxSpring*) spring));
 }
 JNIEXPORT void JNICALL Java_physx_extensions_PxJointAngularLimitPair__1delete_1native_1instance(JNIEnv*, jclass, jlong _address) {
@@ -1386,13 +1380,7 @@ JNIEXPORT void JNICALL Java_physx_extensions_PxJointAngularLimitPair__1setLower(
 }
 
 // PxJointLimitCone
-JNIEXPORT jlong JNICALL Java_physx_extensions_PxJointLimitCone__1PxJointLimitCone__FF(JNIEnv*, jclass, jfloat yLimitAngle, jfloat zLimitAngle) {
-    return (jlong) new physx::PxJointLimitCone(yLimitAngle, zLimitAngle);
-}
-JNIEXPORT jlong JNICALL Java_physx_extensions_PxJointLimitCone__1PxJointLimitCone__FFF(JNIEnv*, jclass, jfloat yLimitAngle, jfloat zLimitAngle, jfloat contactDist) {
-    return (jlong) new physx::PxJointLimitCone(yLimitAngle, zLimitAngle, contactDist);
-}
-JNIEXPORT jlong JNICALL Java_physx_extensions_PxJointLimitCone__1PxJointLimitCone__FFJ(JNIEnv*, jclass, jfloat yLimitAngle, jfloat zLimitAngle, jlong spring) {
+JNIEXPORT jlong JNICALL Java_physx_extensions_PxJointLimitCone__1PxJointLimitCone(JNIEnv*, jclass, jfloat yLimitAngle, jfloat zLimitAngle, jlong spring) {
     return (jlong) new physx::PxJointLimitCone(yLimitAngle, zLimitAngle, *((physx::PxSpring*) spring));
 }
 JNIEXPORT void JNICALL Java_physx_extensions_PxJointLimitCone__1delete_1native_1instance(JNIEnv*, jclass, jlong _address) {
@@ -1466,13 +1454,7 @@ JNIEXPORT void JNICALL Java_physx_extensions_PxJointLimitParameters__1setContact
 }
 
 // PxJointLimitPyramid
-JNIEXPORT jlong JNICALL Java_physx_extensions_PxJointLimitPyramid__1PxJointLimitPyramid__FFFF(JNIEnv*, jclass, jfloat yLimitAngleMin, jfloat yLimitAngleMax, jfloat zLimitAngleMin, jfloat zLimitAngleMax) {
-    return (jlong) new physx::PxJointLimitPyramid(yLimitAngleMin, yLimitAngleMax, zLimitAngleMin, zLimitAngleMax);
-}
-JNIEXPORT jlong JNICALL Java_physx_extensions_PxJointLimitPyramid__1PxJointLimitPyramid__FFFFF(JNIEnv*, jclass, jfloat yLimitAngleMin, jfloat yLimitAngleMax, jfloat zLimitAngleMin, jfloat zLimitAngleMax, jfloat contactDist) {
-    return (jlong) new physx::PxJointLimitPyramid(yLimitAngleMin, yLimitAngleMax, zLimitAngleMin, zLimitAngleMax, contactDist);
-}
-JNIEXPORT jlong JNICALL Java_physx_extensions_PxJointLimitPyramid__1PxJointLimitPyramid__FFFFJ(JNIEnv*, jclass, jfloat yLimitAngleMin, jfloat yLimitAngleMax, jfloat zLimitAngleMin, jfloat zLimitAngleMax, jlong spring) {
+JNIEXPORT jlong JNICALL Java_physx_extensions_PxJointLimitPyramid__1PxJointLimitPyramid(JNIEnv*, jclass, jfloat yLimitAngleMin, jfloat yLimitAngleMax, jfloat zLimitAngleMin, jfloat zLimitAngleMax, jlong spring) {
     return (jlong) new physx::PxJointLimitPyramid(yLimitAngleMin, yLimitAngleMax, zLimitAngleMin, zLimitAngleMax, *((physx::PxSpring*) spring));
 }
 JNIEXPORT void JNICALL Java_physx_extensions_PxJointLimitPyramid__1delete_1native_1instance(JNIEnv*, jclass, jlong _address) {
@@ -1512,13 +1494,7 @@ JNIEXPORT void JNICALL Java_physx_extensions_PxJointLimitPyramid__1setZAngleMax(
 }
 
 // PxJointLinearLimit
-JNIEXPORT jlong JNICALL Java_physx_extensions_PxJointLinearLimit__1PxJointLinearLimit__JF(JNIEnv*, jclass, jlong scale, jfloat extent) {
-    return (jlong) new physx::PxJointLinearLimit(*((physx::PxTolerancesScale*) scale), extent);
-}
-JNIEXPORT jlong JNICALL Java_physx_extensions_PxJointLinearLimit__1PxJointLinearLimit__JFF(JNIEnv*, jclass, jlong scale, jfloat extent, jfloat contactDist) {
-    return (jlong) new physx::PxJointLinearLimit(*((physx::PxTolerancesScale*) scale), extent, contactDist);
-}
-JNIEXPORT jlong JNICALL Java_physx_extensions_PxJointLinearLimit__1PxJointLinearLimit__FJ(JNIEnv*, jclass, jfloat extent, jlong spring) {
+JNIEXPORT jlong JNICALL Java_physx_extensions_PxJointLinearLimit__1PxJointLinearLimit(JNIEnv*, jclass, jfloat extent, jlong spring) {
     return (jlong) new physx::PxJointLinearLimit(extent, *((physx::PxSpring*) spring));
 }
 JNIEXPORT void JNICALL Java_physx_extensions_PxJointLinearLimit__1delete_1native_1instance(JNIEnv*, jclass, jlong _address) {
@@ -1534,19 +1510,7 @@ JNIEXPORT void JNICALL Java_physx_extensions_PxJointLinearLimit__1setValue(JNIEn
 }
 
 // PxJointLinearLimitPair
-JNIEXPORT jlong JNICALL Java_physx_extensions_PxJointLinearLimitPair__1PxJointLinearLimitPair__J(JNIEnv*, jclass, jlong scale) {
-    return (jlong) new physx::PxJointLinearLimitPair(*((physx::PxTolerancesScale*) scale));
-}
-JNIEXPORT jlong JNICALL Java_physx_extensions_PxJointLinearLimitPair__1PxJointLinearLimitPair__JF(JNIEnv*, jclass, jlong scale, jfloat lowerLimit) {
-    return (jlong) new physx::PxJointLinearLimitPair(*((physx::PxTolerancesScale*) scale), lowerLimit);
-}
-JNIEXPORT jlong JNICALL Java_physx_extensions_PxJointLinearLimitPair__1PxJointLinearLimitPair__JFF(JNIEnv*, jclass, jlong scale, jfloat lowerLimit, jfloat upperLimit) {
-    return (jlong) new physx::PxJointLinearLimitPair(*((physx::PxTolerancesScale*) scale), lowerLimit, upperLimit);
-}
-JNIEXPORT jlong JNICALL Java_physx_extensions_PxJointLinearLimitPair__1PxJointLinearLimitPair__JFFF(JNIEnv*, jclass, jlong scale, jfloat lowerLimit, jfloat upperLimit, jfloat contactDist) {
-    return (jlong) new physx::PxJointLinearLimitPair(*((physx::PxTolerancesScale*) scale), lowerLimit, upperLimit, contactDist);
-}
-JNIEXPORT jlong JNICALL Java_physx_extensions_PxJointLinearLimitPair__1PxJointLinearLimitPair__FFJ(JNIEnv*, jclass, jfloat lowerLimit, jfloat upperLimit, jlong spring) {
+JNIEXPORT jlong JNICALL Java_physx_extensions_PxJointLinearLimitPair__1PxJointLinearLimitPair(JNIEnv*, jclass, jfloat lowerLimit, jfloat upperLimit, jlong spring) {
     return (jlong) new physx::PxJointLinearLimitPair(lowerLimit, upperLimit, *((physx::PxSpring*) spring));
 }
 JNIEXPORT void JNICALL Java_physx_extensions_PxJointLinearLimitPair__1delete_1native_1instance(JNIEnv*, jclass, jlong _address) {
@@ -1634,6 +1598,100 @@ JNIEXPORT void JNICALL Java_physx_extensions_PxPrismaticJointFlags__1clear(JNIEn
 }
 JNIEXPORT void JNICALL Java_physx_extensions_PxPrismaticJointFlags__1delete_1native_1instance(JNIEnv*, jclass, jlong _address) {
     delete (physx::PxPrismaticJointFlags*) _address;
+}
+
+// PxRigidActorExt
+JNIEXPORT jlong JNICALL Java_physx_extensions_PxRigidActorExt__1createExclusiveShape__JJJ(JNIEnv*, jclass, jlong actor, jlong geometry, jlong material) {
+    return (jlong) physx::PxRigidActorExt::createExclusiveShape(*((physx::PxRigidActor*) actor), *((physx::PxGeometry*) geometry), *((physx::PxMaterial*) material));
+}
+JNIEXPORT jlong JNICALL Java_physx_extensions_PxRigidActorExt__1createExclusiveShape__JJJJ(JNIEnv*, jclass, jlong actor, jlong geometry, jlong material, jlong flags) {
+    return (jlong) physx::PxRigidActorExt::createExclusiveShape(*((physx::PxRigidActor*) actor), *((physx::PxGeometry*) geometry), *((physx::PxMaterial*) material), *((physx::PxShapeFlags*) flags));
+}
+JNIEXPORT void JNICALL Java_physx_extensions_PxRigidActorExt__1delete_1native_1instance(JNIEnv*, jclass, jlong _address) {
+    delete (physx::PxRigidActorExt*) _address;
+}
+
+// PxRigidBodyExt
+JNIEXPORT jboolean JNICALL Java_physx_extensions_PxRigidBodyExt__1updateMassAndInertia__JF(JNIEnv*, jclass, jlong body, jfloat density) {
+    return (jboolean) physx::PxRigidBodyExt::updateMassAndInertia(*((physx::PxRigidBody*) body), density);
+}
+JNIEXPORT jboolean JNICALL Java_physx_extensions_PxRigidBodyExt__1updateMassAndInertia__JFJ(JNIEnv*, jclass, jlong body, jfloat density, jlong massLocalPose) {
+    return (jboolean) physx::PxRigidBodyExt::updateMassAndInertia(*((physx::PxRigidBody*) body), density, (physx::PxVec3*) massLocalPose);
+}
+JNIEXPORT jboolean JNICALL Java_physx_extensions_PxRigidBodyExt__1updateMassAndInertia__JFJZ(JNIEnv*, jclass, jlong body, jfloat density, jlong massLocalPose, jboolean includeNonSimShapes) {
+    return (jboolean) physx::PxRigidBodyExt::updateMassAndInertia(*((physx::PxRigidBody*) body), density, (physx::PxVec3*) massLocalPose, includeNonSimShapes);
+}
+JNIEXPORT jboolean JNICALL Java_physx_extensions_PxRigidBodyExt__1setMassAndUpdateInertia__JF(JNIEnv*, jclass, jlong body, jfloat mass) {
+    return (jboolean) physx::PxRigidBodyExt::setMassAndUpdateInertia(*((physx::PxRigidBody*) body), mass);
+}
+JNIEXPORT jboolean JNICALL Java_physx_extensions_PxRigidBodyExt__1setMassAndUpdateInertia__JFJ(JNIEnv*, jclass, jlong body, jfloat mass, jlong massLocalPose) {
+    return (jboolean) physx::PxRigidBodyExt::setMassAndUpdateInertia(*((physx::PxRigidBody*) body), mass, (physx::PxVec3*) massLocalPose);
+}
+JNIEXPORT jboolean JNICALL Java_physx_extensions_PxRigidBodyExt__1setMassAndUpdateInertia__JFJZ(JNIEnv*, jclass, jlong body, jfloat mass, jlong massLocalPose, jboolean includeNonSimShapes) {
+    return (jboolean) physx::PxRigidBodyExt::setMassAndUpdateInertia(*((physx::PxRigidBody*) body), mass, (physx::PxVec3*) massLocalPose, includeNonSimShapes);
+}
+JNIEXPORT void JNICALL Java_physx_extensions_PxRigidBodyExt__1addForceAtPos__JJJ(JNIEnv*, jclass, jlong body, jlong force, jlong pos) {
+    physx::PxRigidBodyExt::addForceAtPos(*((physx::PxRigidBody*) body), *((physx::PxVec3*) force), *((physx::PxVec3*) pos));
+}
+JNIEXPORT void JNICALL Java_physx_extensions_PxRigidBodyExt__1addForceAtPos__JJJI(JNIEnv*, jclass, jlong body, jlong force, jlong pos, jint mode) {
+    physx::PxRigidBodyExt::addForceAtPos(*((physx::PxRigidBody*) body), *((physx::PxVec3*) force), *((physx::PxVec3*) pos), (PxForceModeEnum) mode);
+}
+JNIEXPORT void JNICALL Java_physx_extensions_PxRigidBodyExt__1addForceAtPos__JJJIZ(JNIEnv*, jclass, jlong body, jlong force, jlong pos, jint mode, jboolean wakeup) {
+    physx::PxRigidBodyExt::addForceAtPos(*((physx::PxRigidBody*) body), *((physx::PxVec3*) force), *((physx::PxVec3*) pos), (PxForceModeEnum) mode, wakeup);
+}
+JNIEXPORT void JNICALL Java_physx_extensions_PxRigidBodyExt__1addForceAtLocalPos__JJJ(JNIEnv*, jclass, jlong body, jlong force, jlong pos) {
+    physx::PxRigidBodyExt::addForceAtLocalPos(*((physx::PxRigidBody*) body), *((physx::PxVec3*) force), *((physx::PxVec3*) pos));
+}
+JNIEXPORT void JNICALL Java_physx_extensions_PxRigidBodyExt__1addForceAtLocalPos__JJJI(JNIEnv*, jclass, jlong body, jlong force, jlong pos, jint mode) {
+    physx::PxRigidBodyExt::addForceAtLocalPos(*((physx::PxRigidBody*) body), *((physx::PxVec3*) force), *((physx::PxVec3*) pos), (PxForceModeEnum) mode);
+}
+JNIEXPORT void JNICALL Java_physx_extensions_PxRigidBodyExt__1addForceAtLocalPos__JJJIZ(JNIEnv*, jclass, jlong body, jlong force, jlong pos, jint mode, jboolean wakeup) {
+    physx::PxRigidBodyExt::addForceAtLocalPos(*((physx::PxRigidBody*) body), *((physx::PxVec3*) force), *((physx::PxVec3*) pos), (PxForceModeEnum) mode, wakeup);
+}
+JNIEXPORT void JNICALL Java_physx_extensions_PxRigidBodyExt__1addLocalForceAtPos__JJJ(JNIEnv*, jclass, jlong body, jlong force, jlong pos) {
+    physx::PxRigidBodyExt::addLocalForceAtPos(*((physx::PxRigidBody*) body), *((physx::PxVec3*) force), *((physx::PxVec3*) pos));
+}
+JNIEXPORT void JNICALL Java_physx_extensions_PxRigidBodyExt__1addLocalForceAtPos__JJJI(JNIEnv*, jclass, jlong body, jlong force, jlong pos, jint mode) {
+    physx::PxRigidBodyExt::addLocalForceAtPos(*((physx::PxRigidBody*) body), *((physx::PxVec3*) force), *((physx::PxVec3*) pos), (PxForceModeEnum) mode);
+}
+JNIEXPORT void JNICALL Java_physx_extensions_PxRigidBodyExt__1addLocalForceAtPos__JJJIZ(JNIEnv*, jclass, jlong body, jlong force, jlong pos, jint mode, jboolean wakeup) {
+    physx::PxRigidBodyExt::addLocalForceAtPos(*((physx::PxRigidBody*) body), *((physx::PxVec3*) force), *((physx::PxVec3*) pos), (PxForceModeEnum) mode, wakeup);
+}
+JNIEXPORT void JNICALL Java_physx_extensions_PxRigidBodyExt__1addLocalForceAtLocalPos__JJJ(JNIEnv*, jclass, jlong body, jlong force, jlong pos) {
+    physx::PxRigidBodyExt::addLocalForceAtLocalPos(*((physx::PxRigidBody*) body), *((physx::PxVec3*) force), *((physx::PxVec3*) pos));
+}
+JNIEXPORT void JNICALL Java_physx_extensions_PxRigidBodyExt__1addLocalForceAtLocalPos__JJJI(JNIEnv*, jclass, jlong body, jlong force, jlong pos, jint mode) {
+    physx::PxRigidBodyExt::addLocalForceAtLocalPos(*((physx::PxRigidBody*) body), *((physx::PxVec3*) force), *((physx::PxVec3*) pos), (PxForceModeEnum) mode);
+}
+JNIEXPORT void JNICALL Java_physx_extensions_PxRigidBodyExt__1addLocalForceAtLocalPos__JJJIZ(JNIEnv*, jclass, jlong body, jlong force, jlong pos, jint mode, jboolean wakeup) {
+    physx::PxRigidBodyExt::addLocalForceAtLocalPos(*((physx::PxRigidBody*) body), *((physx::PxVec3*) force), *((physx::PxVec3*) pos), (PxForceModeEnum) mode, wakeup);
+}
+JNIEXPORT jlong JNICALL Java_physx_extensions_PxRigidBodyExt__1getVelocityAtPos(JNIEnv*, jclass, jlong body, jlong pos) {
+    static thread_local physx::PxVec3 _cache;
+    _cache = physx::PxRigidBodyExt::getVelocityAtPos(*((physx::PxRigidBody*) body), *((physx::PxVec3*) pos));
+    return (jlong) &_cache;
+}
+JNIEXPORT jlong JNICALL Java_physx_extensions_PxRigidBodyExt__1getLocalVelocityAtLocalPos(JNIEnv*, jclass, jlong body, jlong pos) {
+    static thread_local physx::PxVec3 _cache;
+    _cache = physx::PxRigidBodyExt::getLocalVelocityAtLocalPos(*((physx::PxRigidBody*) body), *((physx::PxVec3*) pos));
+    return (jlong) &_cache;
+}
+JNIEXPORT jlong JNICALL Java_physx_extensions_PxRigidBodyExt__1getVelocityAtOffset(JNIEnv*, jclass, jlong body, jlong pos) {
+    static thread_local physx::PxVec3 _cache;
+    _cache = physx::PxRigidBodyExt::getVelocityAtOffset(*((physx::PxRigidBody*) body), *((physx::PxVec3*) pos));
+    return (jlong) &_cache;
+}
+JNIEXPORT void JNICALL Java_physx_extensions_PxRigidBodyExt__1computeVelocityDeltaFromImpulse__JJJJJ(JNIEnv*, jclass, jlong body, jlong impulsiveForce, jlong impulsiveTorque, jlong deltaLinearVelocity, jlong deltaAngularVelocity) {
+    physx::PxRigidBodyExt::computeVelocityDeltaFromImpulse(*((physx::PxRigidBody*) body), *((physx::PxVec3*) impulsiveForce), *((physx::PxVec3*) impulsiveTorque), *((physx::PxVec3*) deltaLinearVelocity), *((physx::PxVec3*) deltaAngularVelocity));
+}
+JNIEXPORT void JNICALL Java_physx_extensions_PxRigidBodyExt__1computeVelocityDeltaFromImpulse__JJJJFFJJ(JNIEnv*, jclass, jlong body, jlong globalPose, jlong point, jlong impulse, jfloat invMassScale, jfloat invInertiaScale, jlong deltaLinearVelocity, jlong deltaAngularVelocity) {
+    physx::PxRigidBodyExt::computeVelocityDeltaFromImpulse(*((physx::PxRigidBody*) body), *((physx::PxTransform*) globalPose), *((physx::PxVec3*) point), *((physx::PxVec3*) impulse), invMassScale, invInertiaScale, *((physx::PxVec3*) deltaLinearVelocity), *((physx::PxVec3*) deltaAngularVelocity));
+}
+JNIEXPORT void JNICALL Java_physx_extensions_PxRigidBodyExt__1computeLinearAngularImpulse(JNIEnv*, jclass, jlong body, jlong globalPose, jlong point, jlong impulse, jfloat invMassScale, jfloat invInertiaScale, jlong linearImpulse, jlong angularImpulse) {
+    physx::PxRigidBodyExt::computeLinearAngularImpulse(*((physx::PxRigidBody*) body), *((physx::PxTransform*) globalPose), *((physx::PxVec3*) point), *((physx::PxVec3*) impulse), invMassScale, invInertiaScale, *((physx::PxVec3*) linearImpulse), *((physx::PxVec3*) angularImpulse));
+}
+JNIEXPORT void JNICALL Java_physx_extensions_PxRigidBodyExt__1delete_1native_1instance(JNIEnv*, jclass, jlong _address) {
+    delete (physx::PxRigidBodyExt*) _address;
 }
 
 // PxRevoluteJoint
@@ -2475,6 +2533,570 @@ JNIEXPORT void JNICALL Java_physx_physics_PxActorShape__1setShape(JNIEnv*, jclas
     _self->shape = (physx::PxShape*) value;
 }
 
+// PxAggregate
+JNIEXPORT jboolean JNICALL Java_physx_physics_PxAggregate__1addActor__JJ(JNIEnv*, jclass, jlong _address, jlong actor) {
+    physx::PxAggregate* self = (physx::PxAggregate*) _address;
+    return (jboolean) self->addActor(*((physx::PxActor*) actor));
+}
+JNIEXPORT jboolean JNICALL Java_physx_physics_PxAggregate__1addActor__JJJ(JNIEnv*, jclass, jlong _address, jlong actor, jlong bvhStructure) {
+    physx::PxAggregate* self = (physx::PxAggregate*) _address;
+    return (jboolean) self->addActor(*((physx::PxActor*) actor), (physx::PxBVHStructure*) bvhStructure);
+}
+JNIEXPORT jboolean JNICALL Java_physx_physics_PxAggregate__1removeActor(JNIEnv*, jclass, jlong _address, jlong actor) {
+    physx::PxAggregate* self = (physx::PxAggregate*) _address;
+    return (jboolean) self->removeActor(*((physx::PxActor*) actor));
+}
+JNIEXPORT jboolean JNICALL Java_physx_physics_PxAggregate__1addArticulation(JNIEnv*, jclass, jlong _address, jlong articulation) {
+    physx::PxAggregate* self = (physx::PxAggregate*) _address;
+    return (jboolean) self->addArticulation(*((physx::PxArticulationBase*) articulation));
+}
+JNIEXPORT jboolean JNICALL Java_physx_physics_PxAggregate__1removeArticulation(JNIEnv*, jclass, jlong _address, jlong articulation) {
+    physx::PxAggregate* self = (physx::PxAggregate*) _address;
+    return (jboolean) self->removeArticulation(*((physx::PxArticulationBase*) articulation));
+}
+JNIEXPORT jint JNICALL Java_physx_physics_PxAggregate__1getNbActors(JNIEnv*, jclass, jlong _address) {
+    physx::PxAggregate* self = (physx::PxAggregate*) _address;
+    return (jint) self->getNbActors();
+}
+JNIEXPORT jint JNICALL Java_physx_physics_PxAggregate__1getMaxNbActors(JNIEnv*, jclass, jlong _address) {
+    physx::PxAggregate* self = (physx::PxAggregate*) _address;
+    return (jint) self->getMaxNbActors();
+}
+JNIEXPORT jlong JNICALL Java_physx_physics_PxAggregate__1getScene(JNIEnv*, jclass, jlong _address) {
+    physx::PxAggregate* self = (physx::PxAggregate*) _address;
+    return (jlong) self->getScene();
+}
+JNIEXPORT jboolean JNICALL Java_physx_physics_PxAggregate__1getSelfCollision(JNIEnv*, jclass, jlong _address) {
+    physx::PxAggregate* self = (physx::PxAggregate*) _address;
+    return (jboolean) self->getSelfCollision();
+}
+
+// PxArticulation
+JNIEXPORT void JNICALL Java_physx_physics_PxArticulation__1setMaxProjectionIterations(JNIEnv*, jclass, jlong _address, jint iterations) {
+    physx::PxArticulation* self = (physx::PxArticulation*) _address;
+    self->setMaxProjectionIterations(iterations);
+}
+JNIEXPORT jint JNICALL Java_physx_physics_PxArticulation__1getMaxProjectionIterations(JNIEnv*, jclass, jlong _address) {
+    physx::PxArticulation* self = (physx::PxArticulation*) _address;
+    return (jint) self->getMaxProjectionIterations();
+}
+JNIEXPORT void JNICALL Java_physx_physics_PxArticulation__1setSeparationTolerance(JNIEnv*, jclass, jlong _address, jfloat tolerance) {
+    physx::PxArticulation* self = (physx::PxArticulation*) _address;
+    self->setSeparationTolerance(tolerance);
+}
+JNIEXPORT jfloat JNICALL Java_physx_physics_PxArticulation__1getSeparationTolerance(JNIEnv*, jclass, jlong _address) {
+    physx::PxArticulation* self = (physx::PxArticulation*) _address;
+    return (jfloat) self->getSeparationTolerance();
+}
+JNIEXPORT void JNICALL Java_physx_physics_PxArticulation__1setInternalDriveIterations(JNIEnv*, jclass, jlong _address, jint iterations) {
+    physx::PxArticulation* self = (physx::PxArticulation*) _address;
+    self->setInternalDriveIterations(iterations);
+}
+JNIEXPORT jint JNICALL Java_physx_physics_PxArticulation__1getInternalDriveIterations(JNIEnv*, jclass, jlong _address) {
+    physx::PxArticulation* self = (physx::PxArticulation*) _address;
+    return (jint) self->getInternalDriveIterations();
+}
+JNIEXPORT void JNICALL Java_physx_physics_PxArticulation__1setExternalDriveIterations(JNIEnv*, jclass, jlong _address, jint iterations) {
+    physx::PxArticulation* self = (physx::PxArticulation*) _address;
+    self->setExternalDriveIterations(iterations);
+}
+JNIEXPORT jint JNICALL Java_physx_physics_PxArticulation__1getExternalDriveIterations(JNIEnv*, jclass, jlong _address) {
+    physx::PxArticulation* self = (physx::PxArticulation*) _address;
+    return (jint) self->getExternalDriveIterations();
+}
+JNIEXPORT jlong JNICALL Java_physx_physics_PxArticulation__1createDriveCache(JNIEnv*, jclass, jlong _address, jfloat compliance, jint driveIterations) {
+    physx::PxArticulation* self = (physx::PxArticulation*) _address;
+    return (jlong) self->createDriveCache(compliance, driveIterations);
+}
+JNIEXPORT void JNICALL Java_physx_physics_PxArticulation__1updateDriveCache(JNIEnv*, jclass, jlong _address, jlong driveCache, jfloat compliance, jint driveIterations) {
+    physx::PxArticulation* self = (physx::PxArticulation*) _address;
+    self->updateDriveCache(*((physx::PxArticulationDriveCache*) driveCache), compliance, driveIterations);
+}
+JNIEXPORT void JNICALL Java_physx_physics_PxArticulation__1releaseDriveCache(JNIEnv*, jclass, jlong _address, jlong driveCache) {
+    physx::PxArticulation* self = (physx::PxArticulation*) _address;
+    self->releaseDriveCache(*((physx::PxArticulationDriveCache*) driveCache));
+}
+JNIEXPORT void JNICALL Java_physx_physics_PxArticulation__1applyImpulse(JNIEnv*, jclass, jlong _address, jlong link, jlong driveCache, jlong linearImpulse, jlong angularImpulse) {
+    physx::PxArticulation* self = (physx::PxArticulation*) _address;
+    self->applyImpulse((physx::PxArticulationLink*) link, *((physx::PxArticulationDriveCache*) driveCache), *((physx::PxVec3*) linearImpulse), *((physx::PxVec3*) angularImpulse));
+}
+JNIEXPORT void JNICALL Java_physx_physics_PxArticulation__1computeImpulseResponse(JNIEnv*, jclass, jlong _address, jlong link, jlong linearResponse, jlong angularResponse, jlong driveCache, jlong linearImpulse, jlong angularImpulse) {
+    physx::PxArticulation* self = (physx::PxArticulation*) _address;
+    self->computeImpulseResponse((physx::PxArticulationLink*) link, *((physx::PxVec3*) linearResponse), *((physx::PxVec3*) angularResponse), *((physx::PxArticulationDriveCache*) driveCache), *((physx::PxVec3*) linearImpulse), *((physx::PxVec3*) angularImpulse));
+}
+
+// PxArticulationBase
+JNIEXPORT jlong JNICALL Java_physx_physics_PxArticulationBase__1getScene(JNIEnv*, jclass, jlong _address) {
+    physx::PxArticulationBase* self = (physx::PxArticulationBase*) _address;
+    return (jlong) self->getScene();
+}
+JNIEXPORT void JNICALL Java_physx_physics_PxArticulationBase__1setSolverIterationCounts(JNIEnv*, jclass, jlong _address, jint minPositionIters, jint minVelocityIters) {
+    physx::PxArticulationBase* self = (physx::PxArticulationBase*) _address;
+    self->setSolverIterationCounts(minPositionIters, minVelocityIters);
+}
+JNIEXPORT jboolean JNICALL Java_physx_physics_PxArticulationBase__1isSleeping(JNIEnv*, jclass, jlong _address) {
+    physx::PxArticulationBase* self = (physx::PxArticulationBase*) _address;
+    return (jboolean) self->isSleeping();
+}
+JNIEXPORT void JNICALL Java_physx_physics_PxArticulationBase__1setSleepThreshold(JNIEnv*, jclass, jlong _address, jfloat threshold) {
+    physx::PxArticulationBase* self = (physx::PxArticulationBase*) _address;
+    self->setSleepThreshold(threshold);
+}
+JNIEXPORT jfloat JNICALL Java_physx_physics_PxArticulationBase__1getSleepThreshold(JNIEnv*, jclass, jlong _address) {
+    physx::PxArticulationBase* self = (physx::PxArticulationBase*) _address;
+    return (jfloat) self->getSleepThreshold();
+}
+JNIEXPORT void JNICALL Java_physx_physics_PxArticulationBase__1setStabilizationThreshold(JNIEnv*, jclass, jlong _address, jfloat threshold) {
+    physx::PxArticulationBase* self = (physx::PxArticulationBase*) _address;
+    self->setStabilizationThreshold(threshold);
+}
+JNIEXPORT jfloat JNICALL Java_physx_physics_PxArticulationBase__1getStabilizationThreshold(JNIEnv*, jclass, jlong _address) {
+    physx::PxArticulationBase* self = (physx::PxArticulationBase*) _address;
+    return (jfloat) self->getStabilizationThreshold();
+}
+JNIEXPORT void JNICALL Java_physx_physics_PxArticulationBase__1setWakeCounter(JNIEnv*, jclass, jlong _address, jfloat wakeCounterValue) {
+    physx::PxArticulationBase* self = (physx::PxArticulationBase*) _address;
+    self->setWakeCounter(wakeCounterValue);
+}
+JNIEXPORT jfloat JNICALL Java_physx_physics_PxArticulationBase__1getWakeCounter(JNIEnv*, jclass, jlong _address) {
+    physx::PxArticulationBase* self = (physx::PxArticulationBase*) _address;
+    return (jfloat) self->getWakeCounter();
+}
+JNIEXPORT void JNICALL Java_physx_physics_PxArticulationBase__1wakeUp(JNIEnv*, jclass, jlong _address) {
+    physx::PxArticulationBase* self = (physx::PxArticulationBase*) _address;
+    self->wakeUp();
+}
+JNIEXPORT void JNICALL Java_physx_physics_PxArticulationBase__1putToSleep(JNIEnv*, jclass, jlong _address) {
+    physx::PxArticulationBase* self = (physx::PxArticulationBase*) _address;
+    self->putToSleep();
+}
+JNIEXPORT jlong JNICALL Java_physx_physics_PxArticulationBase__1createLink(JNIEnv*, jclass, jlong _address, jlong parent, jlong pose) {
+    physx::PxArticulationBase* self = (physx::PxArticulationBase*) _address;
+    return (jlong) self->createLink((physx::PxArticulationLink*) parent, *((physx::PxTransform*) pose));
+}
+JNIEXPORT jint JNICALL Java_physx_physics_PxArticulationBase__1getNbLinks(JNIEnv*, jclass, jlong _address) {
+    physx::PxArticulationBase* self = (physx::PxArticulationBase*) _address;
+    return (jint) self->getNbLinks();
+}
+JNIEXPORT void JNICALL Java_physx_physics_PxArticulationBase__1setName(JNIEnv* _env, jclass, jlong _address, jstring name) {
+    physx::PxArticulationBase* self = (physx::PxArticulationBase*) _address;
+    self->setName(_env->GetStringUTFChars(name, 0));
+}
+JNIEXPORT jstring JNICALL Java_physx_physics_PxArticulationBase__1getName(JNIEnv* _env, jclass, jlong _address) {
+    physx::PxArticulationBase* self = (physx::PxArticulationBase*) _address;
+    return _env->NewStringUTF(self->getName());
+}
+JNIEXPORT jlong JNICALL Java_physx_physics_PxArticulationBase__1getWorldBounds(JNIEnv*, jclass, jlong _address) {
+    static thread_local physx::PxBounds3 _cache;
+    physx::PxArticulationBase* self = (physx::PxArticulationBase*) _address;
+    _cache = self->getWorldBounds();
+    return (jlong) &_cache;
+}
+JNIEXPORT jlong JNICALL Java_physx_physics_PxArticulationBase__1getAggregate(JNIEnv*, jclass, jlong _address) {
+    physx::PxArticulationBase* self = (physx::PxArticulationBase*) _address;
+    return (jlong) self->getAggregate();
+}
+
+// PxArticulationCache
+
+// PxArticulationCacheFlags
+JNIEXPORT jlong JNICALL Java_physx_physics_PxArticulationCacheFlags__1PxArticulationCacheFlags(JNIEnv*, jclass, jbyte flags) {
+    return (jlong) new physx::PxArticulationCacheFlags(flags);
+}
+JNIEXPORT jboolean JNICALL Java_physx_physics_PxArticulationCacheFlags__1isSet(JNIEnv*, jclass, jlong _address, jint flag) {
+    physx::PxArticulationCacheFlags* self = (physx::PxArticulationCacheFlags*) _address;
+    return (jboolean) self->isSet((PxArticulationCacheEnum) flag);
+}
+JNIEXPORT void JNICALL Java_physx_physics_PxArticulationCacheFlags__1set(JNIEnv*, jclass, jlong _address, jint flag) {
+    physx::PxArticulationCacheFlags* self = (physx::PxArticulationCacheFlags*) _address;
+    self->set((PxArticulationCacheEnum) flag);
+}
+JNIEXPORT void JNICALL Java_physx_physics_PxArticulationCacheFlags__1clear(JNIEnv*, jclass, jlong _address, jint flag) {
+    physx::PxArticulationCacheFlags* self = (physx::PxArticulationCacheFlags*) _address;
+    self->clear((PxArticulationCacheEnum) flag);
+}
+JNIEXPORT void JNICALL Java_physx_physics_PxArticulationCacheFlags__1delete_1native_1instance(JNIEnv*, jclass, jlong _address) {
+    delete (physx::PxArticulationCacheFlags*) _address;
+}
+
+// PxArticulationDriveCache
+
+// PxArticulationFlags
+JNIEXPORT jlong JNICALL Java_physx_physics_PxArticulationFlags__1PxArticulationFlags(JNIEnv*, jclass, jbyte flags) {
+    return (jlong) new physx::PxArticulationFlags(flags);
+}
+JNIEXPORT jboolean JNICALL Java_physx_physics_PxArticulationFlags__1isSet(JNIEnv*, jclass, jlong _address, jint flag) {
+    physx::PxArticulationFlags* self = (physx::PxArticulationFlags*) _address;
+    return (jboolean) self->isSet((PxArticulationFlagEnum) flag);
+}
+JNIEXPORT void JNICALL Java_physx_physics_PxArticulationFlags__1set(JNIEnv*, jclass, jlong _address, jint flag) {
+    physx::PxArticulationFlags* self = (physx::PxArticulationFlags*) _address;
+    self->set((PxArticulationFlagEnum) flag);
+}
+JNIEXPORT void JNICALL Java_physx_physics_PxArticulationFlags__1clear(JNIEnv*, jclass, jlong _address, jint flag) {
+    physx::PxArticulationFlags* self = (physx::PxArticulationFlags*) _address;
+    self->clear((PxArticulationFlagEnum) flag);
+}
+JNIEXPORT void JNICALL Java_physx_physics_PxArticulationFlags__1delete_1native_1instance(JNIEnv*, jclass, jlong _address) {
+    delete (physx::PxArticulationFlags*) _address;
+}
+
+// PxArticulationJoint
+JNIEXPORT void JNICALL Java_physx_physics_PxArticulationJoint__1setTargetOrientation(JNIEnv*, jclass, jlong _address, jlong orientation) {
+    physx::PxArticulationJoint* self = (physx::PxArticulationJoint*) _address;
+    self->setTargetOrientation(*((physx::PxQuat*) orientation));
+}
+JNIEXPORT jlong JNICALL Java_physx_physics_PxArticulationJoint__1getTargetOrientation(JNIEnv*, jclass, jlong _address) {
+    static thread_local physx::PxQuat _cache;
+    physx::PxArticulationJoint* self = (physx::PxArticulationJoint*) _address;
+    _cache = self->getTargetOrientation();
+    return (jlong) &_cache;
+}
+JNIEXPORT void JNICALL Java_physx_physics_PxArticulationJoint__1setTargetVelocity(JNIEnv*, jclass, jlong _address, jlong velocity) {
+    physx::PxArticulationJoint* self = (physx::PxArticulationJoint*) _address;
+    self->setTargetVelocity(*((physx::PxVec3*) velocity));
+}
+JNIEXPORT jlong JNICALL Java_physx_physics_PxArticulationJoint__1getTargetVelocity(JNIEnv*, jclass, jlong _address) {
+    static thread_local physx::PxVec3 _cache;
+    physx::PxArticulationJoint* self = (physx::PxArticulationJoint*) _address;
+    _cache = self->getTargetVelocity();
+    return (jlong) &_cache;
+}
+JNIEXPORT void JNICALL Java_physx_physics_PxArticulationJoint__1setDriveType(JNIEnv*, jclass, jlong _address, jint driveType) {
+    physx::PxArticulationJoint* self = (physx::PxArticulationJoint*) _address;
+    self->setDriveType((PxArticulationJointDriveTypeEnum) driveType);
+}
+JNIEXPORT jint JNICALL Java_physx_physics_PxArticulationJoint__1getDriveType(JNIEnv*, jclass, jlong _address) {
+    physx::PxArticulationJoint* self = (physx::PxArticulationJoint*) _address;
+    return (jint) self->getDriveType();
+}
+JNIEXPORT void JNICALL Java_physx_physics_PxArticulationJoint__1setStiffness(JNIEnv*, jclass, jlong _address, jfloat spring) {
+    physx::PxArticulationJoint* self = (physx::PxArticulationJoint*) _address;
+    self->setStiffness(spring);
+}
+JNIEXPORT jfloat JNICALL Java_physx_physics_PxArticulationJoint__1getStiffness(JNIEnv*, jclass, jlong _address) {
+    physx::PxArticulationJoint* self = (physx::PxArticulationJoint*) _address;
+    return (jfloat) self->getStiffness();
+}
+JNIEXPORT void JNICALL Java_physx_physics_PxArticulationJoint__1setDamping(JNIEnv*, jclass, jlong _address, jfloat damping) {
+    physx::PxArticulationJoint* self = (physx::PxArticulationJoint*) _address;
+    self->setDamping(damping);
+}
+JNIEXPORT jfloat JNICALL Java_physx_physics_PxArticulationJoint__1getDamping(JNIEnv*, jclass, jlong _address) {
+    physx::PxArticulationJoint* self = (physx::PxArticulationJoint*) _address;
+    return (jfloat) self->getDamping();
+}
+JNIEXPORT void JNICALL Java_physx_physics_PxArticulationJoint__1setInternalCompliance(JNIEnv*, jclass, jlong _address, jfloat compliance) {
+    physx::PxArticulationJoint* self = (physx::PxArticulationJoint*) _address;
+    self->setInternalCompliance(compliance);
+}
+JNIEXPORT jfloat JNICALL Java_physx_physics_PxArticulationJoint__1getInternalCompliance(JNIEnv*, jclass, jlong _address) {
+    physx::PxArticulationJoint* self = (physx::PxArticulationJoint*) _address;
+    return (jfloat) self->getInternalCompliance();
+}
+JNIEXPORT void JNICALL Java_physx_physics_PxArticulationJoint__1setExternalCompliance(JNIEnv*, jclass, jlong _address, jfloat compliance) {
+    physx::PxArticulationJoint* self = (physx::PxArticulationJoint*) _address;
+    self->setExternalCompliance(compliance);
+}
+JNIEXPORT jfloat JNICALL Java_physx_physics_PxArticulationJoint__1getExternalCompliance(JNIEnv*, jclass, jlong _address) {
+    physx::PxArticulationJoint* self = (physx::PxArticulationJoint*) _address;
+    return (jfloat) self->getExternalCompliance();
+}
+JNIEXPORT void JNICALL Java_physx_physics_PxArticulationJoint__1setSwingLimit(JNIEnv*, jclass, jlong _address, jfloat zLimit, jfloat yLimit) {
+    physx::PxArticulationJoint* self = (physx::PxArticulationJoint*) _address;
+    self->setSwingLimit(zLimit, yLimit);
+}
+JNIEXPORT void JNICALL Java_physx_physics_PxArticulationJoint__1setTangentialStiffness(JNIEnv*, jclass, jlong _address, jfloat spring) {
+    physx::PxArticulationJoint* self = (physx::PxArticulationJoint*) _address;
+    self->setTangentialStiffness(spring);
+}
+JNIEXPORT jfloat JNICALL Java_physx_physics_PxArticulationJoint__1getTangentialStiffness(JNIEnv*, jclass, jlong _address) {
+    physx::PxArticulationJoint* self = (physx::PxArticulationJoint*) _address;
+    return (jfloat) self->getTangentialStiffness();
+}
+JNIEXPORT void JNICALL Java_physx_physics_PxArticulationJoint__1setTangentialDamping(JNIEnv*, jclass, jlong _address, jfloat damping) {
+    physx::PxArticulationJoint* self = (physx::PxArticulationJoint*) _address;
+    self->setTangentialDamping(damping);
+}
+JNIEXPORT jfloat JNICALL Java_physx_physics_PxArticulationJoint__1getTangentialDamping(JNIEnv*, jclass, jlong _address) {
+    physx::PxArticulationJoint* self = (physx::PxArticulationJoint*) _address;
+    return (jfloat) self->getTangentialDamping();
+}
+JNIEXPORT void JNICALL Java_physx_physics_PxArticulationJoint__1setSwingLimitContactDistance(JNIEnv*, jclass, jlong _address, jfloat contactDistance) {
+    physx::PxArticulationJoint* self = (physx::PxArticulationJoint*) _address;
+    self->setSwingLimitContactDistance(contactDistance);
+}
+JNIEXPORT jfloat JNICALL Java_physx_physics_PxArticulationJoint__1getSwingLimitContactDistance(JNIEnv*, jclass, jlong _address) {
+    physx::PxArticulationJoint* self = (physx::PxArticulationJoint*) _address;
+    return (jfloat) self->getSwingLimitContactDistance();
+}
+JNIEXPORT void JNICALL Java_physx_physics_PxArticulationJoint__1setSwingLimitEnabled(JNIEnv*, jclass, jlong _address, jboolean enabled) {
+    physx::PxArticulationJoint* self = (physx::PxArticulationJoint*) _address;
+    self->setSwingLimitEnabled(enabled);
+}
+JNIEXPORT jboolean JNICALL Java_physx_physics_PxArticulationJoint__1getSwingLimitEnabled(JNIEnv*, jclass, jlong _address) {
+    physx::PxArticulationJoint* self = (physx::PxArticulationJoint*) _address;
+    return (jboolean) self->getSwingLimitEnabled();
+}
+JNIEXPORT void JNICALL Java_physx_physics_PxArticulationJoint__1setTwistLimit(JNIEnv*, jclass, jlong _address, jfloat lower, jfloat upper) {
+    physx::PxArticulationJoint* self = (physx::PxArticulationJoint*) _address;
+    self->setTwistLimit(lower, upper);
+}
+JNIEXPORT void JNICALL Java_physx_physics_PxArticulationJoint__1setTwistLimitEnabled(JNIEnv*, jclass, jlong _address, jboolean enabled) {
+    physx::PxArticulationJoint* self = (physx::PxArticulationJoint*) _address;
+    self->setTwistLimitEnabled(enabled);
+}
+JNIEXPORT jboolean JNICALL Java_physx_physics_PxArticulationJoint__1getTwistLimitEnabled(JNIEnv*, jclass, jlong _address) {
+    physx::PxArticulationJoint* self = (physx::PxArticulationJoint*) _address;
+    return (jboolean) self->getTwistLimitEnabled();
+}
+JNIEXPORT void JNICALL Java_physx_physics_PxArticulationJoint__1setTwistLimitContactDistance(JNIEnv*, jclass, jlong _address, jfloat contactDistance) {
+    physx::PxArticulationJoint* self = (physx::PxArticulationJoint*) _address;
+    self->setTwistLimitContactDistance(contactDistance);
+}
+JNIEXPORT jfloat JNICALL Java_physx_physics_PxArticulationJoint__1getTwistLimitContactDistance(JNIEnv*, jclass, jlong _address) {
+    physx::PxArticulationJoint* self = (physx::PxArticulationJoint*) _address;
+    return (jfloat) self->getTwistLimitContactDistance();
+}
+
+// PxArticulationJointBase
+JNIEXPORT jlong JNICALL Java_physx_physics_PxArticulationJointBase__1getParentArticulationLink(JNIEnv*, jclass, jlong _address) {
+    physx::PxArticulationJointBase* self = (physx::PxArticulationJointBase*) _address;
+    return (jlong) &self->getParentArticulationLink();
+}
+JNIEXPORT void JNICALL Java_physx_physics_PxArticulationJointBase__1setParentPose(JNIEnv*, jclass, jlong _address, jlong pose) {
+    physx::PxArticulationJointBase* self = (physx::PxArticulationJointBase*) _address;
+    self->setParentPose(*((physx::PxTransform*) pose));
+}
+JNIEXPORT jlong JNICALL Java_physx_physics_PxArticulationJointBase__1getParentPose(JNIEnv*, jclass, jlong _address) {
+    static thread_local physx::PxTransform _cache;
+    physx::PxArticulationJointBase* self = (physx::PxArticulationJointBase*) _address;
+    _cache = self->getParentPose();
+    return (jlong) &_cache;
+}
+JNIEXPORT jlong JNICALL Java_physx_physics_PxArticulationJointBase__1getChildArticulationLink(JNIEnv*, jclass, jlong _address) {
+    physx::PxArticulationJointBase* self = (physx::PxArticulationJointBase*) _address;
+    return (jlong) &self->getChildArticulationLink();
+}
+JNIEXPORT void JNICALL Java_physx_physics_PxArticulationJointBase__1setChildPose(JNIEnv*, jclass, jlong _address, jlong pose) {
+    physx::PxArticulationJointBase* self = (physx::PxArticulationJointBase*) _address;
+    self->setChildPose(*((physx::PxTransform*) pose));
+}
+JNIEXPORT jlong JNICALL Java_physx_physics_PxArticulationJointBase__1getChildPose(JNIEnv*, jclass, jlong _address) {
+    static thread_local physx::PxTransform _cache;
+    physx::PxArticulationJointBase* self = (physx::PxArticulationJointBase*) _address;
+    _cache = self->getChildPose();
+    return (jlong) &_cache;
+}
+
+// PxArticulationJointReducedCoordinate
+JNIEXPORT void JNICALL Java_physx_physics_PxArticulationJointReducedCoordinate__1setJointType(JNIEnv*, jclass, jlong _address, jint jointType) {
+    physx::PxArticulationJointReducedCoordinate* self = (physx::PxArticulationJointReducedCoordinate*) _address;
+    self->setJointType((PxArticulationJointTypeEnum) jointType);
+}
+JNIEXPORT jint JNICALL Java_physx_physics_PxArticulationJointReducedCoordinate__1getJointType(JNIEnv*, jclass, jlong _address) {
+    physx::PxArticulationJointReducedCoordinate* self = (physx::PxArticulationJointReducedCoordinate*) _address;
+    return (jint) self->getJointType();
+}
+JNIEXPORT void JNICALL Java_physx_physics_PxArticulationJointReducedCoordinate__1setMotion(JNIEnv*, jclass, jlong _address, jint axis, jint motion) {
+    physx::PxArticulationJointReducedCoordinate* self = (physx::PxArticulationJointReducedCoordinate*) _address;
+    self->setMotion((PxArticulationAxisEnum) axis, (PxArticulationMotionEnum) motion);
+}
+JNIEXPORT jint JNICALL Java_physx_physics_PxArticulationJointReducedCoordinate__1getMotion(JNIEnv*, jclass, jlong _address, jint axis) {
+    physx::PxArticulationJointReducedCoordinate* self = (physx::PxArticulationJointReducedCoordinate*) _address;
+    return (jint) self->getMotion((PxArticulationAxisEnum) axis);
+}
+JNIEXPORT void JNICALL Java_physx_physics_PxArticulationJointReducedCoordinate__1setLimit(JNIEnv*, jclass, jlong _address, jint axis, jfloat lowLimit, jfloat highLimit) {
+    physx::PxArticulationJointReducedCoordinate* self = (physx::PxArticulationJointReducedCoordinate*) _address;
+    self->setLimit((PxArticulationAxisEnum) axis, lowLimit, highLimit);
+}
+JNIEXPORT void JNICALL Java_physx_physics_PxArticulationJointReducedCoordinate__1setDrive__JIFFF(JNIEnv*, jclass, jlong _address, jint axis, jfloat stiffness, jfloat damping, jfloat maxForce) {
+    physx::PxArticulationJointReducedCoordinate* self = (physx::PxArticulationJointReducedCoordinate*) _address;
+    self->setDrive((PxArticulationAxisEnum) axis, stiffness, damping, maxForce);
+}
+JNIEXPORT void JNICALL Java_physx_physics_PxArticulationJointReducedCoordinate__1setDrive__JIFFFI(JNIEnv*, jclass, jlong _address, jint axis, jfloat stiffness, jfloat damping, jfloat maxForce, jint driveType) {
+    physx::PxArticulationJointReducedCoordinate* self = (physx::PxArticulationJointReducedCoordinate*) _address;
+    self->setDrive((PxArticulationAxisEnum) axis, stiffness, damping, maxForce, (PxArticulationDriveTypeEnum) driveType);
+}
+JNIEXPORT void JNICALL Java_physx_physics_PxArticulationJointReducedCoordinate__1setDriveTarget(JNIEnv*, jclass, jlong _address, jint axis, jfloat target) {
+    physx::PxArticulationJointReducedCoordinate* self = (physx::PxArticulationJointReducedCoordinate*) _address;
+    self->setDriveTarget((PxArticulationAxisEnum) axis, target);
+}
+JNIEXPORT void JNICALL Java_physx_physics_PxArticulationJointReducedCoordinate__1setDriveVelocity(JNIEnv*, jclass, jlong _address, jint axis, jfloat targetVel) {
+    physx::PxArticulationJointReducedCoordinate* self = (physx::PxArticulationJointReducedCoordinate*) _address;
+    self->setDriveVelocity((PxArticulationAxisEnum) axis, targetVel);
+}
+JNIEXPORT jfloat JNICALL Java_physx_physics_PxArticulationJointReducedCoordinate__1getDriveTarget(JNIEnv*, jclass, jlong _address, jint axis) {
+    physx::PxArticulationJointReducedCoordinate* self = (physx::PxArticulationJointReducedCoordinate*) _address;
+    return (jfloat) self->getDriveTarget((PxArticulationAxisEnum) axis);
+}
+JNIEXPORT jfloat JNICALL Java_physx_physics_PxArticulationJointReducedCoordinate__1getDriveVelocity(JNIEnv*, jclass, jlong _address, jint axis) {
+    physx::PxArticulationJointReducedCoordinate* self = (physx::PxArticulationJointReducedCoordinate*) _address;
+    return (jfloat) self->getDriveVelocity((PxArticulationAxisEnum) axis);
+}
+JNIEXPORT void JNICALL Java_physx_physics_PxArticulationJointReducedCoordinate__1setFrictionCoefficient(JNIEnv*, jclass, jlong _address, jfloat coefficient) {
+    physx::PxArticulationJointReducedCoordinate* self = (physx::PxArticulationJointReducedCoordinate*) _address;
+    self->setFrictionCoefficient(coefficient);
+}
+JNIEXPORT jfloat JNICALL Java_physx_physics_PxArticulationJointReducedCoordinate__1getFrictionCoefficient(JNIEnv*, jclass, jlong _address) {
+    physx::PxArticulationJointReducedCoordinate* self = (physx::PxArticulationJointReducedCoordinate*) _address;
+    return (jfloat) self->getFrictionCoefficient();
+}
+JNIEXPORT void JNICALL Java_physx_physics_PxArticulationJointReducedCoordinate__1setMaxJointVelocity(JNIEnv*, jclass, jlong _address, jfloat maxJointV) {
+    physx::PxArticulationJointReducedCoordinate* self = (physx::PxArticulationJointReducedCoordinate*) _address;
+    self->setMaxJointVelocity(maxJointV);
+}
+JNIEXPORT jfloat JNICALL Java_physx_physics_PxArticulationJointReducedCoordinate__1getMaxJointVelocity(JNIEnv*, jclass, jlong _address) {
+    physx::PxArticulationJointReducedCoordinate* self = (physx::PxArticulationJointReducedCoordinate*) _address;
+    return (jfloat) self->getMaxJointVelocity();
+}
+
+// PxArticulationLink
+JNIEXPORT jlong JNICALL Java_physx_physics_PxArticulationLink__1getArticulation(JNIEnv*, jclass, jlong _address) {
+    physx::PxArticulationLink* self = (physx::PxArticulationLink*) _address;
+    return (jlong) &self->getArticulation();
+}
+JNIEXPORT jlong JNICALL Java_physx_physics_PxArticulationLink__1getInboundJoint(JNIEnv*, jclass, jlong _address) {
+    physx::PxArticulationLink* self = (physx::PxArticulationLink*) _address;
+    return (jlong) self->getInboundJoint();
+}
+JNIEXPORT jint JNICALL Java_physx_physics_PxArticulationLink__1getInboundJointDof(JNIEnv*, jclass, jlong _address) {
+    physx::PxArticulationLink* self = (physx::PxArticulationLink*) _address;
+    return (jint) self->getInboundJointDof();
+}
+JNIEXPORT jint JNICALL Java_physx_physics_PxArticulationLink__1getNbChildren(JNIEnv*, jclass, jlong _address) {
+    physx::PxArticulationLink* self = (physx::PxArticulationLink*) _address;
+    return (jint) self->getNbChildren();
+}
+JNIEXPORT jint JNICALL Java_physx_physics_PxArticulationLink__1getLinkIndex(JNIEnv*, jclass, jlong _address) {
+    physx::PxArticulationLink* self = (physx::PxArticulationLink*) _address;
+    return (jint) self->getLinkIndex();
+}
+
+// PxArticulationReducedCoordinate
+JNIEXPORT void JNICALL Java_physx_physics_PxArticulationReducedCoordinate__1setArticulationFlags(JNIEnv*, jclass, jlong _address, jlong flags) {
+    physx::PxArticulationReducedCoordinate* self = (physx::PxArticulationReducedCoordinate*) _address;
+    self->setArticulationFlags(*((physx::PxArticulationFlags*) flags));
+}
+JNIEXPORT void JNICALL Java_physx_physics_PxArticulationReducedCoordinate__1setArticulationFlag(JNIEnv*, jclass, jlong _address, jint flag, jboolean value) {
+    physx::PxArticulationReducedCoordinate* self = (physx::PxArticulationReducedCoordinate*) _address;
+    self->setArticulationFlag((PxArticulationFlagEnum) flag, value);
+}
+JNIEXPORT jlong JNICALL Java_physx_physics_PxArticulationReducedCoordinate__1getArticulationFlags(JNIEnv*, jclass, jlong _address) {
+    static thread_local physx::PxArticulationFlags _cache;
+    physx::PxArticulationReducedCoordinate* self = (physx::PxArticulationReducedCoordinate*) _address;
+    _cache = self->getArticulationFlags();
+    return (jlong) &_cache;
+}
+JNIEXPORT jint JNICALL Java_physx_physics_PxArticulationReducedCoordinate__1getDofs(JNIEnv*, jclass, jlong _address) {
+    physx::PxArticulationReducedCoordinate* self = (physx::PxArticulationReducedCoordinate*) _address;
+    return (jint) self->getDofs();
+}
+JNIEXPORT jlong JNICALL Java_physx_physics_PxArticulationReducedCoordinate__1createCache(JNIEnv*, jclass, jlong _address) {
+    physx::PxArticulationReducedCoordinate* self = (physx::PxArticulationReducedCoordinate*) _address;
+    return (jlong) self->createCache();
+}
+JNIEXPORT jint JNICALL Java_physx_physics_PxArticulationReducedCoordinate__1getCacheDataSize(JNIEnv*, jclass, jlong _address) {
+    physx::PxArticulationReducedCoordinate* self = (physx::PxArticulationReducedCoordinate*) _address;
+    return (jint) self->getCacheDataSize();
+}
+JNIEXPORT void JNICALL Java_physx_physics_PxArticulationReducedCoordinate__1zeroCache(JNIEnv*, jclass, jlong _address, jlong cache) {
+    physx::PxArticulationReducedCoordinate* self = (physx::PxArticulationReducedCoordinate*) _address;
+    self->zeroCache(*((physx::PxArticulationCache*) cache));
+}
+JNIEXPORT void JNICALL Java_physx_physics_PxArticulationReducedCoordinate__1applyCache__JJJ(JNIEnv*, jclass, jlong _address, jlong cache, jlong flag) {
+    physx::PxArticulationReducedCoordinate* self = (physx::PxArticulationReducedCoordinate*) _address;
+    self->applyCache(*((physx::PxArticulationCache*) cache), *((physx::PxArticulationCacheFlags*) flag));
+}
+JNIEXPORT void JNICALL Java_physx_physics_PxArticulationReducedCoordinate__1applyCache__JJJZ(JNIEnv*, jclass, jlong _address, jlong cache, jlong flag, jboolean autowake) {
+    physx::PxArticulationReducedCoordinate* self = (physx::PxArticulationReducedCoordinate*) _address;
+    self->applyCache(*((physx::PxArticulationCache*) cache), *((physx::PxArticulationCacheFlags*) flag), autowake);
+}
+JNIEXPORT void JNICALL Java_physx_physics_PxArticulationReducedCoordinate__1copyInternalStateToCache(JNIEnv*, jclass, jlong _address, jlong cache, jlong flag) {
+    physx::PxArticulationReducedCoordinate* self = (physx::PxArticulationReducedCoordinate*) _address;
+    self->copyInternalStateToCache(*((physx::PxArticulationCache*) cache), *((physx::PxArticulationCacheFlags*) flag));
+}
+JNIEXPORT void JNICALL Java_physx_physics_PxArticulationReducedCoordinate__1releaseCache(JNIEnv*, jclass, jlong _address, jlong cache) {
+    physx::PxArticulationReducedCoordinate* self = (physx::PxArticulationReducedCoordinate*) _address;
+    self->releaseCache(*((physx::PxArticulationCache*) cache));
+}
+JNIEXPORT void JNICALL Java_physx_physics_PxArticulationReducedCoordinate__1packJointData(JNIEnv*, jclass, jlong _address, jlong maximum, jlong reduced) {
+    physx::PxArticulationReducedCoordinate* self = (physx::PxArticulationReducedCoordinate*) _address;
+    self->packJointData(*((PxRealPtr*) maximum), *((PxRealPtr*) reduced));
+}
+JNIEXPORT void JNICALL Java_physx_physics_PxArticulationReducedCoordinate__1unpackJointData(JNIEnv*, jclass, jlong _address, jlong reduced, jlong maximum) {
+    physx::PxArticulationReducedCoordinate* self = (physx::PxArticulationReducedCoordinate*) _address;
+    self->unpackJointData(*((PxRealPtr*) reduced), *((PxRealPtr*) maximum));
+}
+JNIEXPORT void JNICALL Java_physx_physics_PxArticulationReducedCoordinate__1commonInit(JNIEnv*, jclass, jlong _address) {
+    physx::PxArticulationReducedCoordinate* self = (physx::PxArticulationReducedCoordinate*) _address;
+    self->commonInit();
+}
+JNIEXPORT void JNICALL Java_physx_physics_PxArticulationReducedCoordinate__1computeGeneralizedGravityForce(JNIEnv*, jclass, jlong _address, jlong cache) {
+    physx::PxArticulationReducedCoordinate* self = (physx::PxArticulationReducedCoordinate*) _address;
+    self->computeGeneralizedGravityForce(*((physx::PxArticulationCache*) cache));
+}
+JNIEXPORT void JNICALL Java_physx_physics_PxArticulationReducedCoordinate__1computeCoriolisAndCentrifugalForce(JNIEnv*, jclass, jlong _address, jlong cache) {
+    physx::PxArticulationReducedCoordinate* self = (physx::PxArticulationReducedCoordinate*) _address;
+    self->computeCoriolisAndCentrifugalForce(*((physx::PxArticulationCache*) cache));
+}
+JNIEXPORT void JNICALL Java_physx_physics_PxArticulationReducedCoordinate__1computeGeneralizedExternalForce(JNIEnv*, jclass, jlong _address, jlong cache) {
+    physx::PxArticulationReducedCoordinate* self = (physx::PxArticulationReducedCoordinate*) _address;
+    self->computeGeneralizedExternalForce(*((physx::PxArticulationCache*) cache));
+}
+JNIEXPORT void JNICALL Java_physx_physics_PxArticulationReducedCoordinate__1computeJointAcceleration(JNIEnv*, jclass, jlong _address, jlong cache) {
+    physx::PxArticulationReducedCoordinate* self = (physx::PxArticulationReducedCoordinate*) _address;
+    self->computeJointAcceleration(*((physx::PxArticulationCache*) cache));
+}
+JNIEXPORT void JNICALL Java_physx_physics_PxArticulationReducedCoordinate__1computeJointForce(JNIEnv*, jclass, jlong _address, jlong cache) {
+    physx::PxArticulationReducedCoordinate* self = (physx::PxArticulationReducedCoordinate*) _address;
+    self->computeJointForce(*((physx::PxArticulationCache*) cache));
+}
+JNIEXPORT void JNICALL Java_physx_physics_PxArticulationReducedCoordinate__1computeCoefficientMatrix(JNIEnv*, jclass, jlong _address, jlong cache) {
+    physx::PxArticulationReducedCoordinate* self = (physx::PxArticulationReducedCoordinate*) _address;
+    self->computeCoefficientMatrix(*((physx::PxArticulationCache*) cache));
+}
+JNIEXPORT void JNICALL Java_physx_physics_PxArticulationReducedCoordinate__1computeLambda(JNIEnv*, jclass, jlong _address, jlong cache, jlong initialState, jlong jointTorque, jint maxIter) {
+    physx::PxArticulationReducedCoordinate* self = (physx::PxArticulationReducedCoordinate*) _address;
+    self->computeLambda(*((physx::PxArticulationCache*) cache), *((physx::PxArticulationCache*) initialState), *((PxRealPtr*) jointTorque), maxIter);
+}
+JNIEXPORT void JNICALL Java_physx_physics_PxArticulationReducedCoordinate__1computeGeneralizedMassMatrix(JNIEnv*, jclass, jlong _address, jlong cache) {
+    physx::PxArticulationReducedCoordinate* self = (physx::PxArticulationReducedCoordinate*) _address;
+    self->computeGeneralizedMassMatrix(*((physx::PxArticulationCache*) cache));
+}
+JNIEXPORT void JNICALL Java_physx_physics_PxArticulationReducedCoordinate__1addLoopJoint(JNIEnv*, jclass, jlong _address, jlong joint) {
+    physx::PxArticulationReducedCoordinate* self = (physx::PxArticulationReducedCoordinate*) _address;
+    self->addLoopJoint((physx::PxJoint*) joint);
+}
+JNIEXPORT void JNICALL Java_physx_physics_PxArticulationReducedCoordinate__1removeLoopJoint(JNIEnv*, jclass, jlong _address, jlong joint) {
+    physx::PxArticulationReducedCoordinate* self = (physx::PxArticulationReducedCoordinate*) _address;
+    self->removeLoopJoint((physx::PxJoint*) joint);
+}
+JNIEXPORT jint JNICALL Java_physx_physics_PxArticulationReducedCoordinate__1getNbLoopJoints(JNIEnv*, jclass, jlong _address) {
+    physx::PxArticulationReducedCoordinate* self = (physx::PxArticulationReducedCoordinate*) _address;
+    return (jint) self->getNbLoopJoints();
+}
+JNIEXPORT jint JNICALL Java_physx_physics_PxArticulationReducedCoordinate__1getCoefficientMatrixSize(JNIEnv*, jclass, jlong _address) {
+    physx::PxArticulationReducedCoordinate* self = (physx::PxArticulationReducedCoordinate*) _address;
+    return (jint) self->getCoefficientMatrixSize();
+}
+JNIEXPORT void JNICALL Java_physx_physics_PxArticulationReducedCoordinate__1teleportRootLink(JNIEnv*, jclass, jlong _address, jlong pose, jboolean autowake) {
+    physx::PxArticulationReducedCoordinate* self = (physx::PxArticulationReducedCoordinate*) _address;
+    self->teleportRootLink(*((physx::PxTransform*) pose), autowake);
+}
+JNIEXPORT jlong JNICALL Java_physx_physics_PxArticulationReducedCoordinate__1getLinkVelocity(JNIEnv*, jclass, jlong _address, jint linkId) {
+    static thread_local physx::PxSpatialVelocity _cache;
+    physx::PxArticulationReducedCoordinate* self = (physx::PxArticulationReducedCoordinate*) _address;
+    _cache = self->getLinkVelocity(linkId);
+    return (jlong) &_cache;
+}
+JNIEXPORT jlong JNICALL Java_physx_physics_PxArticulationReducedCoordinate__1getLinkAcceleration(JNIEnv*, jclass, jlong _address, jint linkId) {
+    static thread_local physx::PxSpatialVelocity _cache;
+    physx::PxArticulationReducedCoordinate* self = (physx::PxArticulationReducedCoordinate*) _address;
+    _cache = self->getLinkAcceleration(linkId);
+    return (jlong) &_cache;
+}
+
 // PxBatchQuery
 JNIEXPORT void JNICALL Java_physx_physics_PxBatchQuery__1execute(JNIEnv*, jclass, jlong _address) {
     physx::PxBatchQuery* self = (physx::PxBatchQuery*) _address;
@@ -3124,6 +3746,14 @@ JNIEXPORT jlong JNICALL Java_physx_physics_PxPhysics__1createShape__JJJZJ(JNIEnv
 JNIEXPORT jint JNICALL Java_physx_physics_PxPhysics__1getNbShapes(JNIEnv*, jclass, jlong _address) {
     physx::PxPhysics* self = (physx::PxPhysics*) _address;
     return (jint) self->getNbShapes();
+}
+JNIEXPORT jlong JNICALL Java_physx_physics_PxPhysics__1createArticulation(JNIEnv*, jclass, jlong _address) {
+    physx::PxPhysics* self = (physx::PxPhysics*) _address;
+    return (jlong) self->createArticulation();
+}
+JNIEXPORT jlong JNICALL Java_physx_physics_PxPhysics__1createArticulationReducedCoordinate(JNIEnv*, jclass, jlong _address) {
+    physx::PxPhysics* self = (physx::PxPhysics*) _address;
+    return (jlong) self->createArticulationReducedCoordinate();
 }
 JNIEXPORT jlong JNICALL Java_physx_physics_PxPhysics__1createMaterial(JNIEnv*, jclass, jlong _address, jfloat staticFriction, jfloat dynamicFriction, jfloat restitution) {
     physx::PxPhysics* self = (physx::PxPhysics*) _address;
@@ -3834,6 +4464,27 @@ JNIEXPORT void JNICALL Java_physx_physics_PxSimulationFilterShader__1delete_1nat
     delete (physx::PxSimulationFilterShader*) _address;
 }
 
+// PxSpatialVelocity
+JNIEXPORT void JNICALL Java_physx_physics_PxSpatialVelocity__1delete_1native_1instance(JNIEnv*, jclass, jlong _address) {
+    delete (physx::PxSpatialVelocity*) _address;
+}
+JNIEXPORT jlong JNICALL Java_physx_physics_PxSpatialVelocity__1getLinear(JNIEnv*, jclass, jlong _address) {
+    physx::PxSpatialVelocity* _self = (physx::PxSpatialVelocity*) _address;
+    return (jlong) &_self->linear;
+}
+JNIEXPORT void JNICALL Java_physx_physics_PxSpatialVelocity__1setLinear(JNIEnv*, jclass, jlong _address, jlong value) {
+    physx::PxSpatialVelocity* _self = (physx::PxSpatialVelocity*) _address;
+    _self->linear = *((physx::PxVec3*) value);
+}
+JNIEXPORT jlong JNICALL Java_physx_physics_PxSpatialVelocity__1getAngular(JNIEnv*, jclass, jlong _address) {
+    physx::PxSpatialVelocity* _self = (physx::PxSpatialVelocity*) _address;
+    return (jlong) &_self->angular;
+}
+JNIEXPORT void JNICALL Java_physx_physics_PxSpatialVelocity__1setAngular(JNIEnv*, jclass, jlong _address, jlong value) {
+    physx::PxSpatialVelocity* _self = (physx::PxSpatialVelocity*) _address;
+    _self->angular = *((physx::PxVec3*) value);
+}
+
 // PxSweepHit
 JNIEXPORT void JNICALL Java_physx_physics_PxSweepHit__1delete_1native_1instance(JNIEnv*, jclass, jlong _address) {
     delete (physx::PxSweepHit*) _address;
@@ -4002,6 +4653,116 @@ JNIEXPORT jint JNICALL Java_physx_physics_PxActorTypeEnum__1geteACTOR_1COUNT(JNI
 }
 JNIEXPORT jint JNICALL Java_physx_physics_PxActorTypeEnum__1geteACTOR_1FORCE_1DWORD(JNIEnv*, jclass) {
     return PxActorTypeEnum::eACTOR_FORCE_DWORD;
+}
+
+// PxArticulationAxisEnum
+JNIEXPORT jint JNICALL Java_physx_physics_PxArticulationAxisEnum__1geteTWIST(JNIEnv*, jclass) {
+    return PxArticulationAxisEnum::eTWIST;
+}
+JNIEXPORT jint JNICALL Java_physx_physics_PxArticulationAxisEnum__1geteSWING1(JNIEnv*, jclass) {
+    return PxArticulationAxisEnum::eSWING1;
+}
+JNIEXPORT jint JNICALL Java_physx_physics_PxArticulationAxisEnum__1geteSWING2(JNIEnv*, jclass) {
+    return PxArticulationAxisEnum::eSWING2;
+}
+JNIEXPORT jint JNICALL Java_physx_physics_PxArticulationAxisEnum__1geteX(JNIEnv*, jclass) {
+    return PxArticulationAxisEnum::eX;
+}
+JNIEXPORT jint JNICALL Java_physx_physics_PxArticulationAxisEnum__1geteY(JNIEnv*, jclass) {
+    return PxArticulationAxisEnum::eY;
+}
+JNIEXPORT jint JNICALL Java_physx_physics_PxArticulationAxisEnum__1geteZ(JNIEnv*, jclass) {
+    return PxArticulationAxisEnum::eZ;
+}
+JNIEXPORT jint JNICALL Java_physx_physics_PxArticulationAxisEnum__1geteCOUNT(JNIEnv*, jclass) {
+    return PxArticulationAxisEnum::eCOUNT;
+}
+
+// PxArticulationCacheEnum
+JNIEXPORT jint JNICALL Java_physx_physics_PxArticulationCacheEnum__1geteVELOCITY(JNIEnv*, jclass) {
+    return PxArticulationCacheEnum::eVELOCITY;
+}
+JNIEXPORT jint JNICALL Java_physx_physics_PxArticulationCacheEnum__1geteACCELERATION(JNIEnv*, jclass) {
+    return PxArticulationCacheEnum::eACCELERATION;
+}
+JNIEXPORT jint JNICALL Java_physx_physics_PxArticulationCacheEnum__1getePOSITION(JNIEnv*, jclass) {
+    return PxArticulationCacheEnum::ePOSITION;
+}
+JNIEXPORT jint JNICALL Java_physx_physics_PxArticulationCacheEnum__1geteFORCE(JNIEnv*, jclass) {
+    return PxArticulationCacheEnum::eFORCE;
+}
+JNIEXPORT jint JNICALL Java_physx_physics_PxArticulationCacheEnum__1geteLINKVELOCITY(JNIEnv*, jclass) {
+    return PxArticulationCacheEnum::eLINKVELOCITY;
+}
+JNIEXPORT jint JNICALL Java_physx_physics_PxArticulationCacheEnum__1geteLINKACCELERATION(JNIEnv*, jclass) {
+    return PxArticulationCacheEnum::eLINKACCELERATION;
+}
+JNIEXPORT jint JNICALL Java_physx_physics_PxArticulationCacheEnum__1geteROOT(JNIEnv*, jclass) {
+    return PxArticulationCacheEnum::eROOT;
+}
+JNIEXPORT jint JNICALL Java_physx_physics_PxArticulationCacheEnum__1geteALL(JNIEnv*, jclass) {
+    return PxArticulationCacheEnum::eALL;
+}
+
+// PxArticulationDriveTypeEnum
+JNIEXPORT jint JNICALL Java_physx_physics_PxArticulationDriveTypeEnum__1geteFORCE(JNIEnv*, jclass) {
+    return PxArticulationDriveTypeEnum::eFORCE;
+}
+JNIEXPORT jint JNICALL Java_physx_physics_PxArticulationDriveTypeEnum__1geteACCELERATION(JNIEnv*, jclass) {
+    return PxArticulationDriveTypeEnum::eACCELERATION;
+}
+JNIEXPORT jint JNICALL Java_physx_physics_PxArticulationDriveTypeEnum__1geteTARGET(JNIEnv*, jclass) {
+    return PxArticulationDriveTypeEnum::eTARGET;
+}
+JNIEXPORT jint JNICALL Java_physx_physics_PxArticulationDriveTypeEnum__1geteVELOCITY(JNIEnv*, jclass) {
+    return PxArticulationDriveTypeEnum::eVELOCITY;
+}
+JNIEXPORT jint JNICALL Java_physx_physics_PxArticulationDriveTypeEnum__1geteNONE(JNIEnv*, jclass) {
+    return PxArticulationDriveTypeEnum::eNONE;
+}
+
+// PxArticulationFlagEnum
+JNIEXPORT jint JNICALL Java_physx_physics_PxArticulationFlagEnum__1geteFIX_1BASE(JNIEnv*, jclass) {
+    return PxArticulationFlagEnum::eFIX_BASE;
+}
+JNIEXPORT jint JNICALL Java_physx_physics_PxArticulationFlagEnum__1geteDRIVE_1LIMITS_1ARE_1FORCES(JNIEnv*, jclass) {
+    return PxArticulationFlagEnum::eDRIVE_LIMITS_ARE_FORCES;
+}
+
+// PxArticulationJointDriveTypeEnum
+JNIEXPORT jint JNICALL Java_physx_physics_PxArticulationJointDriveTypeEnum__1geteTARGET(JNIEnv*, jclass) {
+    return PxArticulationJointDriveTypeEnum::eTARGET;
+}
+JNIEXPORT jint JNICALL Java_physx_physics_PxArticulationJointDriveTypeEnum__1geteERROR(JNIEnv*, jclass) {
+    return PxArticulationJointDriveTypeEnum::eERROR;
+}
+
+// PxArticulationMotionEnum
+JNIEXPORT jint JNICALL Java_physx_physics_PxArticulationMotionEnum__1geteLOCKED(JNIEnv*, jclass) {
+    return PxArticulationMotionEnum::eLOCKED;
+}
+JNIEXPORT jint JNICALL Java_physx_physics_PxArticulationMotionEnum__1geteLIMITED(JNIEnv*, jclass) {
+    return PxArticulationMotionEnum::eLIMITED;
+}
+JNIEXPORT jint JNICALL Java_physx_physics_PxArticulationMotionEnum__1geteFREE(JNIEnv*, jclass) {
+    return PxArticulationMotionEnum::eFREE;
+}
+
+// PxArticulationJointTypeEnum
+JNIEXPORT jint JNICALL Java_physx_physics_PxArticulationJointTypeEnum__1getePRISMATIC(JNIEnv*, jclass) {
+    return PxArticulationJointTypeEnum::ePRISMATIC;
+}
+JNIEXPORT jint JNICALL Java_physx_physics_PxArticulationJointTypeEnum__1geteREVOLUTE(JNIEnv*, jclass) {
+    return PxArticulationJointTypeEnum::eREVOLUTE;
+}
+JNIEXPORT jint JNICALL Java_physx_physics_PxArticulationJointTypeEnum__1geteSPHERICAL(JNIEnv*, jclass) {
+    return PxArticulationJointTypeEnum::eSPHERICAL;
+}
+JNIEXPORT jint JNICALL Java_physx_physics_PxArticulationJointTypeEnum__1geteFIX(JNIEnv*, jclass) {
+    return PxArticulationJointTypeEnum::eFIX;
+}
+JNIEXPORT jint JNICALL Java_physx_physics_PxArticulationJointTypeEnum__1geteUNDEFINED(JNIEnv*, jclass) {
+    return PxArticulationJointTypeEnum::eUNDEFINED;
 }
 
 // PxConstraintFlagEnum

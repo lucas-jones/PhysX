@@ -4,6 +4,13 @@
 // enums within namespaces are not supported by webidl binder, as a hack we can use typedefs
 typedef physx::PxActorFlag::Enum PxActorFlagEnum;
 typedef physx::PxActorType::Enum PxActorTypeEnum;
+typedef physx::PxArticulationAxis::Enum PxArticulationAxisEnum;
+typedef physx::PxArticulationCache::Enum PxArticulationCacheEnum;
+typedef physx::PxArticulationDriveType::Enum PxArticulationDriveTypeEnum;
+typedef physx::PxArticulationFlag::Enum PxArticulationFlagEnum;
+typedef physx::PxArticulationJointDriveType::Enum PxArticulationJointDriveTypeEnum;
+typedef physx::PxArticulationJointType::Enum PxArticulationJointTypeEnum;
+typedef physx::PxArticulationMotion::Enum PxArticulationMotionEnum;
 typedef physx::PxBaseFlag::Enum PxBaseFlagEnum;
 typedef physx::PxConstraintFlag::Enum PxConstraintFlagEnum;
 typedef physx::PxContactPairFlag::Enum PxContactPairFlagEnum;
