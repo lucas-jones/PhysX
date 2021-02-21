@@ -11,20 +11,28 @@ typedef physx::PxContactPairHeaderFlag::Enum PxContactPairHeaderFlagEnum;
 typedef physx::PxConvexFlag::Enum PxConvexFlagEnum;
 typedef physx::PxConvexMeshCookingType::Enum PxConvexMeshCookingTypeEnum;
 typedef physx::PxConvexMeshGeometryFlag::Enum PxConvexMeshGeometryFlagEnum;
+typedef physx::PxD6Axis::Enum PxD6AxisEnum;
+typedef physx::PxD6Drive::Enum PxD6DriveEnum;
+typedef physx::PxD6Motion::Enum PxD6MotionEnum;
+typedef physx::PxD6JointDriveFlag::Enum PxD6JointDriveFlagEnum;
+typedef physx::PxDistanceJointFlag::Enum PxDistanceJointFlagEnum;
 typedef physx::PxErrorCode::Enum PxErrorCodeEnum;
 typedef physx::PxForceMode::Enum PxForceModeEnum;
 typedef physx::PxHitFlag::Enum PxHitFlagEnum;
 typedef physx::PxIDENTITY PxIDENTITYEnum;
+typedef physx::PxJointActorIndex::Enum PxJointActorIndexEnum;
 typedef physx::PxMeshCookingHint::Enum PxMeshCookingHintEnum;
 typedef physx::PxMeshFlag::Enum PxMeshFlagEnum;
 typedef physx::PxMeshGeometryFlag::Enum PxMeshGeometryFlagEnum;
 typedef physx::PxMeshMidPhase::Enum PxMeshMidPhaseEnum;
 typedef physx::PxMeshPreprocessingFlag::Enum PxMeshPreprocessingFlagEnum;
 typedef physx::PxPairFlag::Enum PxPairFlagEnum;
+typedef physx::PxPrismaticJointFlag::Enum PxPrismaticJointFlagEnum;
 typedef physx::PxRigidBodyFlag::Enum PxRigidBodyFlagEnum;
 typedef physx::PxRigidDynamicLockFlag::Enum PxRigidDynamicLockFlagEnum;
 typedef physx::PxSceneFlag::Enum PxSceneFlagEnum;
 typedef physx::PxShapeFlag::Enum PxShapeFlagEnum;
+typedef physx::PxSphericalJointFlag::Enum PxSphericalJointFlagEnum;
 typedef physx::PxRevoluteJointFlag::Enum PxRevoluteJointFlagEnum;
 typedef physx::PxTriangleMeshFlag::Enum PxTriangleMeshFlagEnum;
 typedef physx::PxTriggerPairFlag::Enum PxTriggerPairFlagEnum;
@@ -160,9 +168,29 @@ class PxTopLevelFunctions {
         static bool InitExtensions(physx::PxPhysics& physics) {
             return PxInitExtensions(physics, NULL);
         }
+
+        static physx::PxD6Joint* D6JointCreate(physx::PxPhysics& physics, physx::PxRigidActor* actor0, physx::PxTransform& localFrame0, physx::PxRigidActor* actor1, physx::PxTransform& localFrame1) {
+            return physx::PxD6JointCreate(physics, actor0, localFrame0, actor1, localFrame1);
+        }
+
+        static physx::PxDistanceJoint* DistanceJointCreate(physx::PxPhysics& physics, physx::PxRigidActor* actor0, physx::PxTransform& localFrame0, physx::PxRigidActor* actor1, physx::PxTransform& localFrame1) {
+            return physx::PxDistanceJointCreate(physics, actor0, localFrame0, actor1, localFrame1);
+        }
+
+        static physx::PxFixedJoint* FixedJointCreate(physx::PxPhysics& physics, physx::PxRigidActor* actor0, physx::PxTransform& localFrame0, physx::PxRigidActor* actor1, physx::PxTransform& localFrame1) {
+            return physx::PxFixedJointCreate(physics, actor0, localFrame0, actor1, localFrame1);
+        }
+
+        static physx::PxPrismaticJoint* PrismaticJointCreate(physx::PxPhysics& physics, physx::PxRigidActor* actor0, physx::PxTransform& localFrame0, physx::PxRigidActor* actor1, physx::PxTransform& localFrame1) {
+            return physx::PxPrismaticJointCreate(physics, actor0, localFrame0, actor1, localFrame1);
+        }
         
         static physx::PxRevoluteJoint* RevoluteJointCreate(physx::PxPhysics& physics, physx::PxRigidActor* actor0, physx::PxTransform& localFrame0, physx::PxRigidActor* actor1, physx::PxTransform& localFrame1) {
             return physx::PxRevoluteJointCreate(physics, actor0, localFrame0, actor1, localFrame1);
+        }
+
+        static physx::PxSphericalJoint* SphericalJointCreate(physx::PxPhysics& physics, physx::PxRigidActor* actor0, physx::PxTransform& localFrame0, physx::PxRigidActor* actor1, physx::PxTransform& localFrame1) {
+            return physx::PxSphericalJointCreate(physics, actor0, localFrame0, actor1, localFrame1);
         }
 };
 
