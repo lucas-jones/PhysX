@@ -99,6 +99,7 @@ TARGET_LINK_LIBRARIES(PhysXJniBindings
 	PUBLIC PhysXExtensions
 	PUBLIC PhysXCooking
 	PUBLIC PhysXVehicle
+	PUBLIC PhysXCharacterKinematic
 )
 
 # Use generator expressions to set config specific preprocessor definitions
