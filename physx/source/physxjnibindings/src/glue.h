@@ -8109,6 +8109,9 @@ JNIEXPORT jlong JNICALL Java_physx_support_TypeHelpers__1voidToRealPtr(JNIEnv*, 
     _cache = TypeHelpers::voidToRealPtr((void*) voidPtr);
     return (jlong) &_cache;
 }
+JNIEXPORT jlong JNICALL Java_physx_support_TypeHelpers__1articulationBaseJointToJoint(JNIEnv*, jclass, jlong baseJoint) {
+    return (jlong) TypeHelpers::articulationBaseJointToJoint((physx::PxArticulationJointBase*) baseJoint);
+}
 JNIEXPORT jlong JNICALL Java_physx_support_TypeHelpers__1voidToAny(JNIEnv*, jclass, jlong voidPtr) {
     return (jlong) TypeHelpers::voidToAny((void*) voidPtr);
 }

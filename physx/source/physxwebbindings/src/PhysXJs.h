@@ -313,6 +313,10 @@ class TypeHelpers {
             return (PxRealPtr) voidPtr;
         }
 
+        static physx::PxArticulationJoint* articulationBaseJointToJoint(physx::PxArticulationJointBase* baseJoint) {
+            return static_cast<physx::PxArticulationJoint*>(baseJoint);
+        }
+
         // looks a bit ridiculous, but we need this as a work-around to get the native address of an object in js
         static void* voidToAny(void* voidPtr) {
             return voidPtr;
