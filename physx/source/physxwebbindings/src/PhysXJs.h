@@ -25,6 +25,8 @@ typedef physx::PxControllerShapeType::Enum PxControllerShapeTypeEnum;
 typedef physx::PxConvexFlag::Enum PxConvexFlagEnum;
 typedef physx::PxConvexMeshCookingType::Enum PxConvexMeshCookingTypeEnum;
 typedef physx::PxConvexMeshGeometryFlag::Enum PxConvexMeshGeometryFlagEnum;
+typedef physx::PxCudaBufferMemorySpace::Enum PxCudaBufferMemorySpaceEnum;
+typedef physx::PxCudaInteropMode::Enum PxCudaInteropModeEnum;
 typedef physx::PxD6Axis::Enum PxD6AxisEnum;
 typedef physx::PxD6Drive::Enum PxD6DriveEnum;
 typedef physx::PxD6Motion::Enum PxD6MotionEnum;
@@ -62,6 +64,7 @@ typedef physx::PxTriggerPairFlag::Enum PxTriggerPairFlagEnum;
 typedef physx::PxVehicleClutchAccuracyMode::Enum PxVehicleClutchAccuracyModeEnum;
 typedef physx::PxVehicleDifferential4WData::Enum PxVehicleDifferential4WDataEnum;
 typedef physx::PxVehicleDrive4WControl::Enum PxVehicleDrive4WControlEnum;
+typedef physx::PxVehicleDriveTankControlModel::Enum PxVehicleDriveTankControlModelEnum;
 typedef physx::PxVehicleGearsData::Enum PxVehicleGearEnum;
 typedef physx::PxVehicleUpdateMode::Enum PxVehicleUpdateModeEnum;
 typedef physx::PxVehicleWheelsSimFlag::Enum PxVehicleWheelsSimFlagEnum;
@@ -203,6 +206,10 @@ class PxTopLevelFunctions {
 
         static bool InitExtensions(physx::PxPhysics& physics) {
             return PxInitExtensions(physics, NULL);
+        }
+
+        static physx::PxCudaContextManager* CreateCudaContextManager(physx::PxFoundation& foundation, const physx::PxCudaContextManagerDesc& desc) {
+            return PxCreateCudaContextManager(foundation, desc);
         }
 
         static physx::PxD6Joint* D6JointCreate(physx::PxPhysics& physics, physx::PxRigidActor* actor0, physx::PxTransform& localFrame0, physx::PxRigidActor* actor1, physx::PxTransform& localFrame1) {

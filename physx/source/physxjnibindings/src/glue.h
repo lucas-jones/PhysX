@@ -196,6 +196,9 @@ JNIEXPORT jlong JNICALL Java_physx_PxTopLevelFunctions__1DefaultCpuDispatcherCre
 JNIEXPORT jboolean JNICALL Java_physx_PxTopLevelFunctions__1InitExtensions(JNIEnv*, jclass, jlong physics) {
     return (jboolean) PxTopLevelFunctions::InitExtensions(*((physx::PxPhysics*) physics));
 }
+JNIEXPORT jlong JNICALL Java_physx_PxTopLevelFunctions__1CreateCudaContextManager(JNIEnv*, jclass, jlong foundation, jlong desc) {
+    return (jlong) PxTopLevelFunctions::CreateCudaContextManager(*((physx::PxFoundation*) foundation), *((physx::PxCudaContextManagerDesc*) desc));
+}
 JNIEXPORT jlong JNICALL Java_physx_PxTopLevelFunctions__1D6JointCreate(JNIEnv*, jclass, jlong physics, jlong actor0, jlong localFrame0, jlong actor1, jlong localFrame1) {
     return (jlong) PxTopLevelFunctions::D6JointCreate(*((physx::PxPhysics*) physics), (physx::PxRigidActor*) actor0, *((physx::PxTransform*) localFrame0), (physx::PxRigidActor*) actor1, *((physx::PxTransform*) localFrame1));
 }
@@ -1331,6 +1334,156 @@ JNIEXPORT void JNICALL Java_physx_common_PxCpuDispatcher__1delete_1native_1insta
 }
 
 // PxCudaContextManager
+JNIEXPORT jboolean JNICALL Java_physx_common_PxCudaContextManager__1contextIsValid(JNIEnv*, jclass, jlong _address) {
+    physx::PxCudaContextManager* self = (physx::PxCudaContextManager*) _address;
+    return (jboolean) self->contextIsValid();
+}
+JNIEXPORT jboolean JNICALL Java_physx_common_PxCudaContextManager__1supportsArchSM10(JNIEnv*, jclass, jlong _address) {
+    physx::PxCudaContextManager* self = (physx::PxCudaContextManager*) _address;
+    return (jboolean) self->supportsArchSM10();
+}
+JNIEXPORT jboolean JNICALL Java_physx_common_PxCudaContextManager__1supportsArchSM11(JNIEnv*, jclass, jlong _address) {
+    physx::PxCudaContextManager* self = (physx::PxCudaContextManager*) _address;
+    return (jboolean) self->supportsArchSM11();
+}
+JNIEXPORT jboolean JNICALL Java_physx_common_PxCudaContextManager__1supportsArchSM12(JNIEnv*, jclass, jlong _address) {
+    physx::PxCudaContextManager* self = (physx::PxCudaContextManager*) _address;
+    return (jboolean) self->supportsArchSM12();
+}
+JNIEXPORT jboolean JNICALL Java_physx_common_PxCudaContextManager__1supportsArchSM13(JNIEnv*, jclass, jlong _address) {
+    physx::PxCudaContextManager* self = (physx::PxCudaContextManager*) _address;
+    return (jboolean) self->supportsArchSM13();
+}
+JNIEXPORT jboolean JNICALL Java_physx_common_PxCudaContextManager__1supportsArchSM20(JNIEnv*, jclass, jlong _address) {
+    physx::PxCudaContextManager* self = (physx::PxCudaContextManager*) _address;
+    return (jboolean) self->supportsArchSM20();
+}
+JNIEXPORT jboolean JNICALL Java_physx_common_PxCudaContextManager__1supportsArchSM30(JNIEnv*, jclass, jlong _address) {
+    physx::PxCudaContextManager* self = (physx::PxCudaContextManager*) _address;
+    return (jboolean) self->supportsArchSM30();
+}
+JNIEXPORT jboolean JNICALL Java_physx_common_PxCudaContextManager__1supportsArchSM35(JNIEnv*, jclass, jlong _address) {
+    physx::PxCudaContextManager* self = (physx::PxCudaContextManager*) _address;
+    return (jboolean) self->supportsArchSM35();
+}
+JNIEXPORT jboolean JNICALL Java_physx_common_PxCudaContextManager__1supportsArchSM50(JNIEnv*, jclass, jlong _address) {
+    physx::PxCudaContextManager* self = (physx::PxCudaContextManager*) _address;
+    return (jboolean) self->supportsArchSM50();
+}
+JNIEXPORT jboolean JNICALL Java_physx_common_PxCudaContextManager__1supportsArchSM52(JNIEnv*, jclass, jlong _address) {
+    physx::PxCudaContextManager* self = (physx::PxCudaContextManager*) _address;
+    return (jboolean) self->supportsArchSM52();
+}
+JNIEXPORT jboolean JNICALL Java_physx_common_PxCudaContextManager__1isIntegrated(JNIEnv*, jclass, jlong _address) {
+    physx::PxCudaContextManager* self = (physx::PxCudaContextManager*) _address;
+    return (jboolean) self->isIntegrated();
+}
+JNIEXPORT jboolean JNICALL Java_physx_common_PxCudaContextManager__1canMapHostMemory(JNIEnv*, jclass, jlong _address) {
+    physx::PxCudaContextManager* self = (physx::PxCudaContextManager*) _address;
+    return (jboolean) self->canMapHostMemory();
+}
+JNIEXPORT jint JNICALL Java_physx_common_PxCudaContextManager__1getDriverVersion(JNIEnv*, jclass, jlong _address) {
+    physx::PxCudaContextManager* self = (physx::PxCudaContextManager*) _address;
+    return (jint) self->getDriverVersion();
+}
+JNIEXPORT jlong JNICALL Java_physx_common_PxCudaContextManager__1getDeviceTotalMemBytes(JNIEnv*, jclass, jlong _address) {
+    physx::PxCudaContextManager* self = (physx::PxCudaContextManager*) _address;
+    return (jlong) self->getDeviceTotalMemBytes();
+}
+JNIEXPORT jint JNICALL Java_physx_common_PxCudaContextManager__1getMultiprocessorCount(JNIEnv*, jclass, jlong _address) {
+    physx::PxCudaContextManager* self = (physx::PxCudaContextManager*) _address;
+    return (jint) self->getMultiprocessorCount();
+}
+JNIEXPORT jint JNICALL Java_physx_common_PxCudaContextManager__1getClockRate(JNIEnv*, jclass, jlong _address) {
+    physx::PxCudaContextManager* self = (physx::PxCudaContextManager*) _address;
+    return (jint) self->getClockRate();
+}
+JNIEXPORT jint JNICALL Java_physx_common_PxCudaContextManager__1getSharedMemPerBlock(JNIEnv*, jclass, jlong _address) {
+    physx::PxCudaContextManager* self = (physx::PxCudaContextManager*) _address;
+    return (jint) self->getSharedMemPerBlock();
+}
+JNIEXPORT jint JNICALL Java_physx_common_PxCudaContextManager__1getMaxThreadsPerBlock(JNIEnv*, jclass, jlong _address) {
+    physx::PxCudaContextManager* self = (physx::PxCudaContextManager*) _address;
+    return (jint) self->getMaxThreadsPerBlock();
+}
+JNIEXPORT jstring JNICALL Java_physx_common_PxCudaContextManager__1getDeviceName(JNIEnv* _env, jclass, jlong _address) {
+    physx::PxCudaContextManager* self = (physx::PxCudaContextManager*) _address;
+    return _env->NewStringUTF(self->getDeviceName());
+}
+JNIEXPORT jint JNICALL Java_physx_common_PxCudaContextManager__1getInteropMode(JNIEnv*, jclass, jlong _address) {
+    physx::PxCudaContextManager* self = (physx::PxCudaContextManager*) _address;
+    return (jint) self->getInteropMode();
+}
+JNIEXPORT void JNICALL Java_physx_common_PxCudaContextManager__1setUsingConcurrentStreams(JNIEnv*, jclass, jlong _address, jboolean flag) {
+    physx::PxCudaContextManager* self = (physx::PxCudaContextManager*) _address;
+    self->setUsingConcurrentStreams(flag);
+}
+JNIEXPORT jboolean JNICALL Java_physx_common_PxCudaContextManager__1getUsingConcurrentStreams(JNIEnv*, jclass, jlong _address) {
+    physx::PxCudaContextManager* self = (physx::PxCudaContextManager*) _address;
+    return (jboolean) self->getUsingConcurrentStreams();
+}
+JNIEXPORT jint JNICALL Java_physx_common_PxCudaContextManager__1usingDedicatedGPU(JNIEnv*, jclass, jlong _address) {
+    physx::PxCudaContextManager* self = (physx::PxCudaContextManager*) _address;
+    return (jint) self->usingDedicatedGPU();
+}
+JNIEXPORT void JNICALL Java_physx_common_PxCudaContextManager__1release(JNIEnv*, jclass, jlong _address) {
+    physx::PxCudaContextManager* self = (physx::PxCudaContextManager*) _address;
+    self->release();
+}
+
+// PxCudaContextManagerDesc
+JNIEXPORT jint JNICALL Java_physx_common_PxCudaContextManagerDesc__1_1sizeOf(JNIEnv*, jclass) {
+    return sizeof(physx::PxCudaContextManagerDesc);
+}
+JNIEXPORT jlong JNICALL Java_physx_common_PxCudaContextManagerDesc__1_1placement_1new_1PxCudaContextManagerDesc(JNIEnv*, jclass, jlong _placement_address) {
+    return (jlong) new((void*)_placement_address) physx::PxCudaContextManagerDesc();
+}
+JNIEXPORT jlong JNICALL Java_physx_common_PxCudaContextManagerDesc__1PxCudaContextManagerDesc(JNIEnv*, jclass) {
+    return (jlong) new physx::PxCudaContextManagerDesc();
+}
+JNIEXPORT void JNICALL Java_physx_common_PxCudaContextManagerDesc__1delete_1native_1instance(JNIEnv*, jclass, jlong _address) {
+    delete (physx::PxCudaContextManagerDesc*) _address;
+}
+JNIEXPORT jlong JNICALL Java_physx_common_PxCudaContextManagerDesc__1getGraphicsDevice(JNIEnv*, jclass, jlong _address) {
+    physx::PxCudaContextManagerDesc* _self = (physx::PxCudaContextManagerDesc*) _address;
+    return (jlong) _self->graphicsDevice;
+}
+JNIEXPORT void JNICALL Java_physx_common_PxCudaContextManagerDesc__1setGraphicsDevice(JNIEnv*, jclass, jlong _address, jlong value) {
+    physx::PxCudaContextManagerDesc* _self = (physx::PxCudaContextManagerDesc*) _address;
+    _self->graphicsDevice = (void*) value;
+}
+JNIEXPORT jint JNICALL Java_physx_common_PxCudaContextManagerDesc__1getInteropMode(JNIEnv*, jclass, jlong _address) {
+    physx::PxCudaContextManagerDesc* _self = (physx::PxCudaContextManagerDesc*) _address;
+    return (jint) _self->interopMode;
+}
+JNIEXPORT void JNICALL Java_physx_common_PxCudaContextManagerDesc__1setInteropMode(JNIEnv*, jclass, jlong _address, jint value) {
+    physx::PxCudaContextManagerDesc* _self = (physx::PxCudaContextManagerDesc*) _address;
+    _self->interopMode = (PxCudaInteropModeEnum) value;
+}
+JNIEXPORT jint JNICALL Java_physx_common_PxCudaContextManagerDesc__1getMaxMemorySize(JNIEnv*, jclass, jlong _address, jint _index) {
+    physx::PxCudaContextManagerDesc* _self = (physx::PxCudaContextManagerDesc*) _address;
+    return (jint) _self->maxMemorySize[_index];
+}
+JNIEXPORT void JNICALL Java_physx_common_PxCudaContextManagerDesc__1setMaxMemorySize(JNIEnv*, jclass, jlong _address, jint _index, jint value) {
+    physx::PxCudaContextManagerDesc* _self = (physx::PxCudaContextManagerDesc*) _address;
+    _self->maxMemorySize[_index] = value;
+}
+JNIEXPORT jint JNICALL Java_physx_common_PxCudaContextManagerDesc__1getMemoryBaseSize(JNIEnv*, jclass, jlong _address, jint _index) {
+    physx::PxCudaContextManagerDesc* _self = (physx::PxCudaContextManagerDesc*) _address;
+    return (jint) _self->memoryBaseSize[_index];
+}
+JNIEXPORT void JNICALL Java_physx_common_PxCudaContextManagerDesc__1setMemoryBaseSize(JNIEnv*, jclass, jlong _address, jint _index, jint value) {
+    physx::PxCudaContextManagerDesc* _self = (physx::PxCudaContextManagerDesc*) _address;
+    _self->memoryBaseSize[_index] = value;
+}
+JNIEXPORT jint JNICALL Java_physx_common_PxCudaContextManagerDesc__1getMemoryPageSize(JNIEnv*, jclass, jlong _address, jint _index) {
+    physx::PxCudaContextManagerDesc* _self = (physx::PxCudaContextManagerDesc*) _address;
+    return (jint) _self->memoryPageSize[_index];
+}
+JNIEXPORT void JNICALL Java_physx_common_PxCudaContextManagerDesc__1setMemoryPageSize(JNIEnv*, jclass, jlong _address, jint _index, jint value) {
+    physx::PxCudaContextManagerDesc* _self = (physx::PxCudaContextManagerDesc*) _address;
+    _self->memoryPageSize[_index] = value;
+}
 
 // PxDefaultErrorCallback
 JNIEXPORT jlong JNICALL Java_physx_common_PxDefaultErrorCallback__1PxDefaultErrorCallback(JNIEnv*, jclass) {
@@ -1553,6 +1706,34 @@ JNIEXPORT jint JNICALL Java_physx_common_PxBaseFlagEnum__1geteOWNS_1MEMORY(JNIEn
 }
 JNIEXPORT jint JNICALL Java_physx_common_PxBaseFlagEnum__1geteIS_1RELEASABLE(JNIEnv*, jclass) {
     return PxBaseFlagEnum::eIS_RELEASABLE;
+}
+
+// PxCudaBufferMemorySpaceEnum
+JNIEXPORT jint JNICALL Java_physx_common_PxCudaBufferMemorySpaceEnum__1getT_1GPU(JNIEnv*, jclass) {
+    return PxCudaBufferMemorySpaceEnum::T_GPU;
+}
+JNIEXPORT jint JNICALL Java_physx_common_PxCudaBufferMemorySpaceEnum__1getT_1PINNED_1HOST(JNIEnv*, jclass) {
+    return PxCudaBufferMemorySpaceEnum::T_PINNED_HOST;
+}
+JNIEXPORT jint JNICALL Java_physx_common_PxCudaBufferMemorySpaceEnum__1getT_1WRITE_1COMBINED(JNIEnv*, jclass) {
+    return PxCudaBufferMemorySpaceEnum::T_WRITE_COMBINED;
+}
+JNIEXPORT jint JNICALL Java_physx_common_PxCudaBufferMemorySpaceEnum__1getT_1HOST(JNIEnv*, jclass) {
+    return PxCudaBufferMemorySpaceEnum::T_HOST;
+}
+
+// PxCudaInteropModeEnum
+JNIEXPORT jint JNICALL Java_physx_common_PxCudaInteropModeEnum__1getNO_1INTEROP(JNIEnv*, jclass) {
+    return PxCudaInteropModeEnum::NO_INTEROP;
+}
+JNIEXPORT jint JNICALL Java_physx_common_PxCudaInteropModeEnum__1getD3D10_1INTEROP(JNIEnv*, jclass) {
+    return PxCudaInteropModeEnum::D3D10_INTEROP;
+}
+JNIEXPORT jint JNICALL Java_physx_common_PxCudaInteropModeEnum__1getD3D11_1INTEROP(JNIEnv*, jclass) {
+    return PxCudaInteropModeEnum::D3D11_INTEROP;
+}
+JNIEXPORT jint JNICALL Java_physx_common_PxCudaInteropModeEnum__1getOGL_1INTEROP(JNIEnv*, jclass) {
+    return PxCudaInteropModeEnum::OGL_INTEROP;
 }
 
 // PxErrorCodeEnum
@@ -3836,6 +4017,14 @@ JNIEXPORT jbyte JNICALL Java_physx_physics_PxActor__1getOwnerClient(JNIEnv*, jcl
     physx::PxActor* self = (physx::PxActor*) _address;
     return (jbyte) self->getOwnerClient();
 }
+JNIEXPORT jlong JNICALL Java_physx_physics_PxActor__1getUserData(JNIEnv*, jclass, jlong _address) {
+    physx::PxActor* _self = (physx::PxActor*) _address;
+    return (jlong) _self->userData;
+}
+JNIEXPORT void JNICALL Java_physx_physics_PxActor__1setUserData(JNIEnv*, jclass, jlong _address, jlong value) {
+    physx::PxActor* _self = (physx::PxActor*) _address;
+    _self->userData = (void*) value;
+}
 
 // PxActorFlags
 JNIEXPORT jint JNICALL Java_physx_physics_PxActorFlags__1_1sizeOf(JNIEnv*, jclass) {
@@ -5313,6 +5502,14 @@ JNIEXPORT void JNICALL Java_physx_physics_PxOverlapQueryResult__1setHasBlock(JNI
 }
 
 // PxMaterial
+JNIEXPORT jlong JNICALL Java_physx_physics_PxMaterial__1getUserData(JNIEnv*, jclass, jlong _address) {
+    physx::PxMaterial* _self = (physx::PxMaterial*) _address;
+    return (jlong) _self->userData;
+}
+JNIEXPORT void JNICALL Java_physx_physics_PxMaterial__1setUserData(JNIEnv*, jclass, jlong _address, jlong value) {
+    physx::PxMaterial* _self = (physx::PxMaterial*) _address;
+    _self->userData = (void*) value;
+}
 
 // PxPairFlags
 JNIEXPORT jlong JNICALL Java_physx_physics_PxPairFlags__1PxPairFlags(JNIEnv*, jclass, jshort flags) {
@@ -8753,6 +8950,30 @@ JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleDifferential4WData__1setMType
     _self->mType = (PxVehicleDifferential4WDataEnum) value;
 }
 
+// PxVehicleDifferentialNWData
+JNIEXPORT jlong JNICALL Java_physx_vehicle_PxVehicleDifferentialNWData__1PxVehicleDifferentialNWData(JNIEnv*, jclass) {
+    return (jlong) new physx::PxVehicleDifferentialNWData();
+}
+JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleDifferentialNWData__1setDrivenWheel(JNIEnv*, jclass, jlong _address, jint wheelId, jboolean drivenState) {
+    physx::PxVehicleDifferentialNWData* self = (physx::PxVehicleDifferentialNWData*) _address;
+    self->setDrivenWheel(wheelId, drivenState);
+}
+JNIEXPORT jboolean JNICALL Java_physx_vehicle_PxVehicleDifferentialNWData__1getIsDrivenWheel(JNIEnv*, jclass, jlong _address, jint wheelId) {
+    physx::PxVehicleDifferentialNWData* self = (physx::PxVehicleDifferentialNWData*) _address;
+    return (jboolean) self->getIsDrivenWheel(wheelId);
+}
+JNIEXPORT jint JNICALL Java_physx_vehicle_PxVehicleDifferentialNWData__1getDrivenWheelStatus(JNIEnv*, jclass, jlong _address) {
+    physx::PxVehicleDifferentialNWData* self = (physx::PxVehicleDifferentialNWData*) _address;
+    return (jint) self->getDrivenWheelStatus();
+}
+JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleDifferentialNWData__1setDrivenWheelStatus(JNIEnv*, jclass, jlong _address, jint status) {
+    physx::PxVehicleDifferentialNWData* self = (physx::PxVehicleDifferentialNWData*) _address;
+    self->setDrivenWheelStatus(status);
+}
+JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleDifferentialNWData__1delete_1native_1instance(JNIEnv*, jclass, jlong _address) {
+    delete (physx::PxVehicleDifferentialNWData*) _address;
+}
+
 // PxVehicleDrivableSurfaceToTireFrictionPairs
 JNIEXPORT jlong JNICALL Java_physx_vehicle_PxVehicleDrivableSurfaceToTireFrictionPairs__1allocate(JNIEnv*, jclass, jint maxNbTireTypes, jint maxNbSurfaceTypes) {
     return (jlong) physx::PxVehicleDrivableSurfaceToTireFrictionPairs::allocate(maxNbTireTypes, maxNbSurfaceTypes);
@@ -9010,6 +9231,31 @@ JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleDriveDynData__1setMAutoBoxSwi
     _self->mAutoBoxSwitchTime = value;
 }
 
+// PxVehicleDriveNW
+JNIEXPORT jlong JNICALL Java_physx_vehicle_PxVehicleDriveNW__1allocate(JNIEnv*, jclass, jint nbWheels) {
+    return (jlong) physx::PxVehicleDriveNW::allocate(nbWheels);
+}
+JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleDriveNW__1free(JNIEnv*, jclass, jlong _address) {
+    physx::PxVehicleDriveNW* self = (physx::PxVehicleDriveNW*) _address;
+    self->free();
+}
+JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleDriveNW__1setup(JNIEnv*, jclass, jlong _address, jlong physics, jlong vehActor, jlong wheelsData, jlong driveData, jint nbWheels) {
+    physx::PxVehicleDriveNW* self = (physx::PxVehicleDriveNW*) _address;
+    self->setup((physx::PxPhysics*) physics, (physx::PxRigidDynamic*) vehActor, *((physx::PxVehicleWheelsSimData*) wheelsData), *((physx::PxVehicleDriveSimDataNW*) driveData), nbWheels);
+}
+JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleDriveNW__1setToRestState(JNIEnv*, jclass, jlong _address) {
+    physx::PxVehicleDriveNW* self = (physx::PxVehicleDriveNW*) _address;
+    self->setToRestState();
+}
+JNIEXPORT jlong JNICALL Java_physx_vehicle_PxVehicleDriveNW__1getMDriveSimData(JNIEnv*, jclass, jlong _address) {
+    physx::PxVehicleDriveNW* _self = (physx::PxVehicleDriveNW*) _address;
+    return (jlong) &_self->mDriveSimData;
+}
+JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleDriveNW__1setMDriveSimData(JNIEnv*, jclass, jlong _address, jlong value) {
+    physx::PxVehicleDriveNW* _self = (physx::PxVehicleDriveNW*) _address;
+    _self->mDriveSimData = *((physx::PxVehicleDriveSimDataNW*) value);
+}
+
 // PxVehicleDriveSimData
 JNIEXPORT jlong JNICALL Java_physx_vehicle_PxVehicleDriveSimData__1PxVehicleDriveSimData(JNIEnv*, jclass) {
     return (jlong) new physx::PxVehicleDriveSimData();
@@ -9078,6 +9324,55 @@ JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleDriveSimData4W__1setAckermann
 }
 JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleDriveSimData4W__1delete_1native_1instance(JNIEnv*, jclass, jlong _address) {
     delete (physx::PxVehicleDriveSimData4W*) _address;
+}
+
+// PxVehicleDriveSimDataNW
+JNIEXPORT jlong JNICALL Java_physx_vehicle_PxVehicleDriveSimDataNW__1PxVehicleDriveSimDataNW(JNIEnv*, jclass) {
+    return (jlong) new physx::PxVehicleDriveSimDataNW();
+}
+JNIEXPORT jlong JNICALL Java_physx_vehicle_PxVehicleDriveSimDataNW__1getDiffData(JNIEnv*, jclass, jlong _address) {
+    physx::PxVehicleDriveSimDataNW* self = (physx::PxVehicleDriveSimDataNW*) _address;
+    return (jlong) &self->getDiffData();
+}
+JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleDriveSimDataNW__1setDiffData(JNIEnv*, jclass, jlong _address, jlong diff) {
+    physx::PxVehicleDriveSimDataNW* self = (physx::PxVehicleDriveSimDataNW*) _address;
+    self->setDiffData(*((physx::PxVehicleDifferentialNWData*) diff));
+}
+JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleDriveSimDataNW__1delete_1native_1instance(JNIEnv*, jclass, jlong _address) {
+    delete (physx::PxVehicleDriveSimDataNW*) _address;
+}
+
+// PxVehicleDriveTank
+JNIEXPORT jlong JNICALL Java_physx_vehicle_PxVehicleDriveTank__1allocate(JNIEnv*, jclass, jint nbWheels) {
+    return (jlong) physx::PxVehicleDriveTank::allocate(nbWheels);
+}
+JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleDriveTank__1free(JNIEnv*, jclass, jlong _address) {
+    physx::PxVehicleDriveTank* self = (physx::PxVehicleDriveTank*) _address;
+    self->free();
+}
+JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleDriveTank__1setup(JNIEnv*, jclass, jlong _address, jlong physics, jlong vehActor, jlong wheelsData, jlong driveData, jint nbDrivenWheels) {
+    physx::PxVehicleDriveTank* self = (physx::PxVehicleDriveTank*) _address;
+    self->setup((physx::PxPhysics*) physics, (physx::PxRigidDynamic*) vehActor, *((physx::PxVehicleWheelsSimData*) wheelsData), *((physx::PxVehicleDriveSimData*) driveData), nbDrivenWheels);
+}
+JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleDriveTank__1setDriveModel(JNIEnv*, jclass, jlong _address, jint driveModel) {
+    physx::PxVehicleDriveTank* self = (physx::PxVehicleDriveTank*) _address;
+    self->setDriveModel((PxVehicleDriveTankControlModelEnum) driveModel);
+}
+JNIEXPORT jint JNICALL Java_physx_vehicle_PxVehicleDriveTank__1getDriveModel(JNIEnv*, jclass, jlong _address) {
+    physx::PxVehicleDriveTank* self = (physx::PxVehicleDriveTank*) _address;
+    return (jint) self->getDriveModel();
+}
+JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleDriveTank__1setToRestState(JNIEnv*, jclass, jlong _address) {
+    physx::PxVehicleDriveTank* self = (physx::PxVehicleDriveTank*) _address;
+    self->setToRestState();
+}
+JNIEXPORT jlong JNICALL Java_physx_vehicle_PxVehicleDriveTank__1getMDriveSimData(JNIEnv*, jclass, jlong _address) {
+    physx::PxVehicleDriveTank* _self = (physx::PxVehicleDriveTank*) _address;
+    return (jlong) &_self->mDriveSimData;
+}
+JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleDriveTank__1setMDriveSimData(JNIEnv*, jclass, jlong _address, jlong value) {
+    physx::PxVehicleDriveTank* _self = (physx::PxVehicleDriveTank*) _address;
+    _self->mDriveSimData = *((physx::PxVehicleDriveSimData*) value);
 }
 
 // PxVehicleEngineData
@@ -9238,6 +9533,59 @@ JNIEXPORT jfloat JNICALL Java_physx_vehicle_PxVehicleGearsData__1getMSwitchTime(
 JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleGearsData__1setMSwitchTime(JNIEnv*, jclass, jlong _address, jfloat value) {
     physx::PxVehicleGearsData* _self = (physx::PxVehicleGearsData*) _address;
     _self->mSwitchTime = value;
+}
+
+// PxVehicleNoDrive
+JNIEXPORT jlong JNICALL Java_physx_vehicle_PxVehicleNoDrive__1allocate(JNIEnv*, jclass, jint nbWheels) {
+    return (jlong) physx::PxVehicleNoDrive::allocate(nbWheels);
+}
+JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleNoDrive__1free(JNIEnv*, jclass, jlong _address) {
+    physx::PxVehicleNoDrive* self = (physx::PxVehicleNoDrive*) _address;
+    self->free();
+}
+JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleNoDrive__1setup(JNIEnv*, jclass, jlong _address, jlong physics, jlong vehActor, jlong wheelsData) {
+    physx::PxVehicleNoDrive* self = (physx::PxVehicleNoDrive*) _address;
+    self->setup((physx::PxPhysics*) physics, (physx::PxRigidDynamic*) vehActor, *((physx::PxVehicleWheelsSimData*) wheelsData));
+}
+JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleNoDrive__1setToRestState(JNIEnv*, jclass, jlong _address) {
+    physx::PxVehicleNoDrive* self = (physx::PxVehicleNoDrive*) _address;
+    self->setToRestState();
+}
+JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleNoDrive__1setBrakeTorque(JNIEnv*, jclass, jlong _address, jint id, jfloat brakeTorque) {
+    physx::PxVehicleNoDrive* self = (physx::PxVehicleNoDrive*) _address;
+    self->setBrakeTorque(id, brakeTorque);
+}
+JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleNoDrive__1setDriveTorque(JNIEnv*, jclass, jlong _address, jint id, jfloat driveTorque) {
+    physx::PxVehicleNoDrive* self = (physx::PxVehicleNoDrive*) _address;
+    self->setDriveTorque(id, driveTorque);
+}
+JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleNoDrive__1setSteerAngle(JNIEnv*, jclass, jlong _address, jint id, jfloat steerAngle) {
+    physx::PxVehicleNoDrive* self = (physx::PxVehicleNoDrive*) _address;
+    self->setSteerAngle(id, steerAngle);
+}
+JNIEXPORT jfloat JNICALL Java_physx_vehicle_PxVehicleNoDrive__1getBrakeTorque(JNIEnv*, jclass, jlong _address, jint id) {
+    physx::PxVehicleNoDrive* self = (physx::PxVehicleNoDrive*) _address;
+    return (jfloat) self->getBrakeTorque(id);
+}
+JNIEXPORT jfloat JNICALL Java_physx_vehicle_PxVehicleNoDrive__1getDriveTorque(JNIEnv*, jclass, jlong _address, jint id) {
+    physx::PxVehicleNoDrive* self = (physx::PxVehicleNoDrive*) _address;
+    return (jfloat) self->getDriveTorque(id);
+}
+JNIEXPORT jfloat JNICALL Java_physx_vehicle_PxVehicleNoDrive__1getSteerAngle(JNIEnv*, jclass, jlong _address, jint id) {
+    physx::PxVehicleNoDrive* self = (physx::PxVehicleNoDrive*) _address;
+    return (jfloat) self->getSteerAngle(id);
+}
+JNIEXPORT jint JNICALL Java_physx_vehicle_PxVehicleNoDrive__1getNbSteerAngle(JNIEnv*, jclass, jlong _address) {
+    physx::PxVehicleNoDrive* self = (physx::PxVehicleNoDrive*) _address;
+    return (jint) self->getNbSteerAngle();
+}
+JNIEXPORT jint JNICALL Java_physx_vehicle_PxVehicleNoDrive__1getNbDriveTorque(JNIEnv*, jclass, jlong _address) {
+    physx::PxVehicleNoDrive* self = (physx::PxVehicleNoDrive*) _address;
+    return (jint) self->getNbDriveTorque();
+}
+JNIEXPORT jint JNICALL Java_physx_vehicle_PxVehicleNoDrive__1getNbBrakeTorque(JNIEnv*, jclass, jlong _address) {
+    physx::PxVehicleNoDrive* self = (physx::PxVehicleNoDrive*) _address;
+    return (jint) self->getNbBrakeTorque();
 }
 
 // PxVehicleSuspensionData
@@ -10078,6 +10426,14 @@ JNIEXPORT jint JNICALL Java_physx_vehicle_PxVehicleDrive4WControlEnum__1geteANAL
 }
 JNIEXPORT jint JNICALL Java_physx_vehicle_PxVehicleDrive4WControlEnum__1geteMAX_1NB_1DRIVE4W_1ANALOG_1INPUTS(JNIEnv*, jclass) {
     return PxVehicleDrive4WControlEnum::eMAX_NB_DRIVE4W_ANALOG_INPUTS;
+}
+
+// PxVehicleDriveTankControlModelEnum
+JNIEXPORT jint JNICALL Java_physx_vehicle_PxVehicleDriveTankControlModelEnum__1geteSTANDARD(JNIEnv*, jclass) {
+    return PxVehicleDriveTankControlModelEnum::eSTANDARD;
+}
+JNIEXPORT jint JNICALL Java_physx_vehicle_PxVehicleDriveTankControlModelEnum__1geteSPECIAL(JNIEnv*, jclass) {
+    return PxVehicleDriveTankControlModelEnum::eSPECIAL;
 }
 
 // PxVehicleGearEnum
