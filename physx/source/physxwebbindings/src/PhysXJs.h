@@ -211,7 +211,11 @@ class PxTopLevelFunctions {
         }
 
         static physx::PxCudaContextManager* CreateCudaContextManager(physx::PxFoundation& foundation, const physx::PxCudaContextManagerDesc& desc) {
-            return PxCreateCudaContextManager(foundation, desc);
+            #ifdef __EMSCRIPTEN__
+                return NULL;
+            #else
+                return PxCreateCudaContextManager(foundation, desc);
+            #endif
         }
 
         static physx::PxD6Joint* D6JointCreate(physx::PxPhysics& physics, physx::PxRigidActor* actor0, physx::PxTransform& localFrame0, physx::PxRigidActor* actor1, physx::PxTransform& localFrame1) {

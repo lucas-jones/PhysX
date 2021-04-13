@@ -2314,7 +2314,7 @@ interface PxCudaContextManager {
     unsigned long getClockRate();
     long getSharedMemPerBlock();
     long getMaxThreadsPerBlock();
-    DOMString getDeviceName();
+    [Const] DOMString getDeviceName();
     PxCudaInteropModeEnum getInteropMode();
     void setUsingConcurrentStreams(boolean flag);
     boolean getUsingConcurrentStreams();
