@@ -3014,6 +3014,132 @@ JNIEXPORT void JNICALL Java_physx_extensions_PxSpring__1setDamping(JNIEnv*, jcla
     _self->damping = value;
 }
 
+// BatchVehicleUpdateDesc
+JNIEXPORT jint JNICALL Java_physx_extensions_BatchVehicleUpdateDesc__1_1sizeOf(JNIEnv*, jclass) {
+    return sizeof(BatchVehicleUpdateDesc);
+}
+JNIEXPORT jlong JNICALL Java_physx_extensions_BatchVehicleUpdateDesc__1_1placement_1new_1BatchVehicleUpdateDesc(JNIEnv*, jclass, jlong _placement_address) {
+    return (jlong) new((void*)_placement_address) BatchVehicleUpdateDesc();
+}
+JNIEXPORT jlong JNICALL Java_physx_extensions_BatchVehicleUpdateDesc__1BatchVehicleUpdateDesc(JNIEnv*, jclass) {
+    return (jlong) new BatchVehicleUpdateDesc();
+}
+JNIEXPORT void JNICALL Java_physx_extensions_BatchVehicleUpdateDesc__1delete_1native_1instance(JNIEnv*, jclass, jlong _address) {
+    delete (BatchVehicleUpdateDesc*) _address;
+}
+JNIEXPORT jlong JNICALL Java_physx_extensions_BatchVehicleUpdateDesc__1getFoundation(JNIEnv*, jclass, jlong _address) {
+    BatchVehicleUpdateDesc* _self = (BatchVehicleUpdateDesc*) _address;
+    return (jlong) _self->foundation;
+}
+JNIEXPORT void JNICALL Java_physx_extensions_BatchVehicleUpdateDesc__1setFoundation(JNIEnv*, jclass, jlong _address, jlong value) {
+    BatchVehicleUpdateDesc* _self = (BatchVehicleUpdateDesc*) _address;
+    _self->foundation = (physx::PxFoundation*) value;
+}
+JNIEXPORT jlong JNICALL Java_physx_extensions_BatchVehicleUpdateDesc__1getScene(JNIEnv*, jclass, jlong _address) {
+    BatchVehicleUpdateDesc* _self = (BatchVehicleUpdateDesc*) _address;
+    return (jlong) _self->scene;
+}
+JNIEXPORT void JNICALL Java_physx_extensions_BatchVehicleUpdateDesc__1setScene(JNIEnv*, jclass, jlong _address, jlong value) {
+    BatchVehicleUpdateDesc* _self = (BatchVehicleUpdateDesc*) _address;
+    _self->scene = (physx::PxScene*) value;
+}
+JNIEXPORT jlong JNICALL Java_physx_extensions_BatchVehicleUpdateDesc__1getFrictionPairs(JNIEnv*, jclass, jlong _address) {
+    BatchVehicleUpdateDesc* _self = (BatchVehicleUpdateDesc*) _address;
+    return (jlong) _self->frictionPairs;
+}
+JNIEXPORT void JNICALL Java_physx_extensions_BatchVehicleUpdateDesc__1setFrictionPairs(JNIEnv*, jclass, jlong _address, jlong value) {
+    BatchVehicleUpdateDesc* _self = (BatchVehicleUpdateDesc*) _address;
+    _self->frictionPairs = (physx::PxVehicleDrivableSurfaceToTireFrictionPairs*) value;
+}
+JNIEXPORT jint JNICALL Java_physx_extensions_BatchVehicleUpdateDesc__1getMaxNbVehicles(JNIEnv*, jclass, jlong _address) {
+    BatchVehicleUpdateDesc* _self = (BatchVehicleUpdateDesc*) _address;
+    return (jint) _self->maxNbVehicles;
+}
+JNIEXPORT void JNICALL Java_physx_extensions_BatchVehicleUpdateDesc__1setMaxNbVehicles(JNIEnv*, jclass, jlong _address, jint value) {
+    BatchVehicleUpdateDesc* _self = (BatchVehicleUpdateDesc*) _address;
+    _self->maxNbVehicles = value;
+}
+JNIEXPORT jint JNICALL Java_physx_extensions_BatchVehicleUpdateDesc__1getMaxNbWheelsPerVehicle(JNIEnv*, jclass, jlong _address) {
+    BatchVehicleUpdateDesc* _self = (BatchVehicleUpdateDesc*) _address;
+    return (jint) _self->maxNbWheelsPerVehicle;
+}
+JNIEXPORT void JNICALL Java_physx_extensions_BatchVehicleUpdateDesc__1setMaxNbWheelsPerVehicle(JNIEnv*, jclass, jlong _address, jint value) {
+    BatchVehicleUpdateDesc* _self = (BatchVehicleUpdateDesc*) _address;
+    _self->maxNbWheelsPerVehicle = value;
+}
+JNIEXPORT jint JNICALL Java_physx_extensions_BatchVehicleUpdateDesc__1getMaxNbHitPointsPerWheel(JNIEnv*, jclass, jlong _address) {
+    BatchVehicleUpdateDesc* _self = (BatchVehicleUpdateDesc*) _address;
+    return (jint) _self->maxNbHitPointsPerWheel;
+}
+JNIEXPORT void JNICALL Java_physx_extensions_BatchVehicleUpdateDesc__1setMaxNbHitPointsPerWheel(JNIEnv*, jclass, jlong _address, jint value) {
+    BatchVehicleUpdateDesc* _self = (BatchVehicleUpdateDesc*) _address;
+    _self->maxNbHitPointsPerWheel = value;
+}
+JNIEXPORT jint JNICALL Java_physx_extensions_BatchVehicleUpdateDesc__1getNumWorkers(JNIEnv*, jclass, jlong _address) {
+    BatchVehicleUpdateDesc* _self = (BatchVehicleUpdateDesc*) _address;
+    return (jint) _self->numWorkers;
+}
+JNIEXPORT void JNICALL Java_physx_extensions_BatchVehicleUpdateDesc__1setNumWorkers(JNIEnv*, jclass, jlong _address, jint value) {
+    BatchVehicleUpdateDesc* _self = (BatchVehicleUpdateDesc*) _address;
+    _self->numWorkers = value;
+}
+JNIEXPORT jint JNICALL Java_physx_extensions_BatchVehicleUpdateDesc__1getBatchSize(JNIEnv*, jclass, jlong _address) {
+    BatchVehicleUpdateDesc* _self = (BatchVehicleUpdateDesc*) _address;
+    return (jint) _self->batchSize;
+}
+JNIEXPORT void JNICALL Java_physx_extensions_BatchVehicleUpdateDesc__1setBatchSize(JNIEnv*, jclass, jlong _address, jint value) {
+    BatchVehicleUpdateDesc* _self = (BatchVehicleUpdateDesc*) _address;
+    _self->batchSize = value;
+}
+JNIEXPORT jlong JNICALL Java_physx_extensions_BatchVehicleUpdateDesc__1getPreFilterShader(JNIEnv*, jclass, jlong _address) {
+    BatchVehicleUpdateDesc* _self = (BatchVehicleUpdateDesc*) _address;
+    return (jlong) &_self->preFilterShader;
+}
+JNIEXPORT void JNICALL Java_physx_extensions_BatchVehicleUpdateDesc__1setPreFilterShader(JNIEnv*, jclass, jlong _address, jlong value) {
+    BatchVehicleUpdateDesc* _self = (BatchVehicleUpdateDesc*) _address;
+    _self->preFilterShader = *((physx::PxBatchQueryPreFilterShader*) value);
+}
+JNIEXPORT jlong JNICALL Java_physx_extensions_BatchVehicleUpdateDesc__1getPostFilterShader(JNIEnv*, jclass, jlong _address) {
+    BatchVehicleUpdateDesc* _self = (BatchVehicleUpdateDesc*) _address;
+    return (jlong) &_self->postFilterShader;
+}
+JNIEXPORT void JNICALL Java_physx_extensions_BatchVehicleUpdateDesc__1setPostFilterShader(JNIEnv*, jclass, jlong _address, jlong value) {
+    BatchVehicleUpdateDesc* _self = (BatchVehicleUpdateDesc*) _address;
+    _self->postFilterShader = *((physx::PxBatchQueryPostFilterShader*) value);
+}
+
+// BatchVehicleUpdate
+JNIEXPORT jlong JNICALL Java_physx_extensions_BatchVehicleUpdate__1BatchVehicleUpdate(JNIEnv*, jclass, jlong desc) {
+    return (jlong) new BatchVehicleUpdate(*((BatchVehicleUpdateDesc*) desc));
+}
+JNIEXPORT void JNICALL Java_physx_extensions_BatchVehicleUpdate__1addVehicle(JNIEnv*, jclass, jlong _address, jlong vehicle) {
+    BatchVehicleUpdate* self = (BatchVehicleUpdate*) _address;
+    self->addVehicle((physx::PxVehicleWheels*) vehicle);
+}
+JNIEXPORT void JNICALL Java_physx_extensions_BatchVehicleUpdate__1removeVehicle(JNIEnv*, jclass, jlong _address, jlong vehicle) {
+    BatchVehicleUpdate* self = (BatchVehicleUpdate*) _address;
+    self->removeVehicle((physx::PxVehicleWheels*) vehicle);
+}
+JNIEXPORT void JNICALL Java_physx_extensions_BatchVehicleUpdate__1removeAllVehicles(JNIEnv*, jclass, jlong _address) {
+    BatchVehicleUpdate* self = (BatchVehicleUpdate*) _address;
+    self->removeAllVehicles();
+}
+JNIEXPORT jint JNICALL Java_physx_extensions_BatchVehicleUpdate__1indexOf(JNIEnv*, jclass, jlong _address, jlong vehicle) {
+    BatchVehicleUpdate* self = (BatchVehicleUpdate*) _address;
+    return (jint) self->indexOf((physx::PxVehicleWheels*) vehicle);
+}
+JNIEXPORT void JNICALL Java_physx_extensions_BatchVehicleUpdate__1batchUpdate(JNIEnv*, jclass, jlong _address, jfloat timestep) {
+    BatchVehicleUpdate* self = (BatchVehicleUpdate*) _address;
+    self->batchUpdate(timestep);
+}
+JNIEXPORT jlong JNICALL Java_physx_extensions_BatchVehicleUpdate__1getWheelQueryResult(JNIEnv*, jclass, jlong _address, jint vehicleId, jint wheelId) {
+    BatchVehicleUpdate* self = (BatchVehicleUpdate*) _address;
+    return (jlong) self->getWheelQueryResult(vehicleId, wheelId);
+}
+JNIEXPORT void JNICALL Java_physx_extensions_BatchVehicleUpdate__1delete_1native_1instance(JNIEnv*, jclass, jlong _address) {
+    delete (BatchVehicleUpdate*) _address;
+}
+
 // PxD6AxisEnum
 JNIEXPORT jint JNICALL Java_physx_extensions_PxD6AxisEnum__1geteX(JNIEnv*, jclass) {
     return PxD6AxisEnum::eX;

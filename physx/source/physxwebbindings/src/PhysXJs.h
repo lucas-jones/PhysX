@@ -1,6 +1,8 @@
 #include "PxPhysicsAPI.h"
 #include <vector>
 
+#include "BatchVehicleUpdate.h"
+
 // enums within namespaces are not supported by webidl binder, as a hack we can use typedefs
 typedef physx::PxActorFlag::Enum PxActorFlagEnum;
 typedef physx::PxActorType::Enum PxActorTypeEnum;
@@ -119,7 +121,7 @@ physx::PxFilterFlags defaultFilterShader(physx::PxFilterObjectAttributes attribu
     if (physx::PxFilterObjectIsTrigger(attributes0) || physx::PxFilterObjectIsTrigger(attributes1)) {
         pairFlags = physx::PxPairFlag::eTRIGGER_DEFAULT;
     } else {
-        pairFlags = physx::PxPairFlag::eCONTACT_DEFAULT | physx::PxPairFlag::eDETECT_CCD_CONTACT;
+        pairFlags = physx::PxPairFlag::eCONTACT_DEFAULT;
     }
     pairFlags |= physx::PxPairFlags(physx::PxU16(filterData0.word2 | filterData1.word2));
 
