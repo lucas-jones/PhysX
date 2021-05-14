@@ -178,14 +178,6 @@ class PxTopLevelFunctions {
             return &defaultFilterShader;
         }
 
-        static physx::PxBatchQueryPreFilterShader DefaultWheelSceneQueryPreFilterBlocking() {
-            return &defaultWheelSceneQueryPreFilterBlocking;
-        }
-
-        static physx::PxBatchQueryPostFilterShader DefaultWheelSceneQueryPostFilterBlocking() {
-            return &defaultWheelSceneQueryPostFilterBlocking;
-        }
-
         static physx::PxFoundation* CreateFoundation(physx::PxU32 version, physx::PxDefaultAllocator& allocator, physx::PxErrorCallback& errorCallback) {
             return PxCreateFoundation(version, allocator, errorCallback);
         }
@@ -277,6 +269,14 @@ class PxVehicleTopLevelFunctions {
         static void PxVehicleTireData_setFrictionVsSlipGraph(physx::PxVehicleTireData* tireData, physx::PxU32 m, physx::PxU32 n, float value) {
             tireData->mFrictionVsSlipGraph[m][n] = value;
         }
+
+        static physx::PxBatchQueryPreFilterShader DefaultWheelSceneQueryPreFilterBlocking() {
+            return &defaultWheelSceneQueryPreFilterBlocking;
+        }
+
+        static physx::PxBatchQueryPostFilterShader DefaultWheelSceneQueryPostFilterBlocking() {
+            return &defaultWheelSceneQueryPostFilterBlocking;
+        }
 };
 
 // Various helper functions for pointer access and conversion
@@ -333,5 +333,15 @@ class TypeHelpers {
         // looks a bit ridiculous, but we need this as a work-around to get the native address of an object in js
         static void* voidToAny(void* voidPtr) {
             return voidPtr;
+        }
+};
+
+// Helper functions for accessing functions, which don't map well to JS / Java
+class SupportFunctions {
+    public:
+        static physx::PxShape* PxActor_getShape(physx::PxRigidActor& actor, physx::PxU32 i) {
+            physx::PxShape* shapePtr;
+            actor.getShapes(&shapePtr, 1, i);
+            return shapePtr;
         }
 };

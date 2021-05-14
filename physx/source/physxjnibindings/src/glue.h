@@ -165,16 +165,6 @@ JNIEXPORT jlong JNICALL Java_physx_PxTopLevelFunctions__1DefaultFilterShader(JNI
     _cache = PxTopLevelFunctions::DefaultFilterShader();
     return (jlong) &_cache;
 }
-JNIEXPORT jlong JNICALL Java_physx_PxTopLevelFunctions__1DefaultWheelSceneQueryPreFilterBlocking(JNIEnv*, jclass) {
-    static thread_local physx::PxBatchQueryPreFilterShader _cache;
-    _cache = PxTopLevelFunctions::DefaultWheelSceneQueryPreFilterBlocking();
-    return (jlong) &_cache;
-}
-JNIEXPORT jlong JNICALL Java_physx_PxTopLevelFunctions__1DefaultWheelSceneQueryPostFilterBlocking(JNIEnv*, jclass) {
-    static thread_local physx::PxBatchQueryPostFilterShader _cache;
-    _cache = PxTopLevelFunctions::DefaultWheelSceneQueryPostFilterBlocking();
-    return (jlong) &_cache;
-}
 JNIEXPORT jlong JNICALL Java_physx_PxTopLevelFunctions__1CreateControllerManager__J(JNIEnv*, jclass, jlong scene) {
     return (jlong) PxTopLevelFunctions::CreateControllerManager(*((physx::PxScene*) scene));
 }
@@ -251,6 +241,12 @@ JNIEXPORT void JNICALL Java_physx_character_PxBoxController__1setHalfForwardExte
 }
 
 // PxBoxControllerDesc
+JNIEXPORT jint JNICALL Java_physx_character_PxBoxControllerDesc__1_1sizeOf(JNIEnv*, jclass) {
+    return sizeof(physx::PxBoxControllerDesc);
+}
+JNIEXPORT jlong JNICALL Java_physx_character_PxBoxControllerDesc__1_1placement_1new_1PxBoxControllerDesc(JNIEnv*, jclass, jlong _placement_address) {
+    return (jlong) new((void*)_placement_address) physx::PxBoxControllerDesc();
+}
 JNIEXPORT jlong JNICALL Java_physx_character_PxBoxControllerDesc__1PxBoxControllerDesc(JNIEnv*, jclass) {
     return (jlong) new physx::PxBoxControllerDesc();
 }
@@ -333,6 +329,12 @@ JNIEXPORT jboolean JNICALL Java_physx_character_PxCapsuleController__1setClimbin
 }
 
 // PxCapsuleControllerDesc
+JNIEXPORT jint JNICALL Java_physx_character_PxCapsuleControllerDesc__1_1sizeOf(JNIEnv*, jclass) {
+    return sizeof(physx::PxCapsuleControllerDesc);
+}
+JNIEXPORT jlong JNICALL Java_physx_character_PxCapsuleControllerDesc__1_1placement_1new_1PxCapsuleControllerDesc(JNIEnv*, jclass, jlong _placement_address) {
+    return (jlong) new((void*)_placement_address) physx::PxCapsuleControllerDesc();
+}
 JNIEXPORT jlong JNICALL Java_physx_character_PxCapsuleControllerDesc__1PxCapsuleControllerDesc(JNIEnv*, jclass) {
     return (jlong) new physx::PxCapsuleControllerDesc();
 }
@@ -661,7 +663,10 @@ JNIEXPORT void JNICALL Java_physx_character_PxControllerDesc__1setUserData(JNIEn
 }
 
 // PxControllerFilters
-JNIEXPORT jlong JNICALL Java_physx_character_PxControllerFilters__1PxControllerFilters(JNIEnv*, jclass, jlong filterData) {
+JNIEXPORT jlong JNICALL Java_physx_character_PxControllerFilters__1PxControllerFilters__(JNIEnv*, jclass) {
+    return (jlong) new physx::PxControllerFilters();
+}
+JNIEXPORT jlong JNICALL Java_physx_character_PxControllerFilters__1PxControllerFilters__J(JNIEnv*, jclass, jlong filterData) {
     return (jlong) new physx::PxControllerFilters((physx::PxFilterData*) filterData);
 }
 JNIEXPORT void JNICALL Java_physx_character_PxControllerFilters__1delete_1native_1instance(JNIEnv*, jclass, jlong _address) {
@@ -8335,6 +8340,14 @@ JNIEXPORT jint JNICALL Java_physx_physics_PxTriggerPairFlagEnum__1geteNEXT_1FREE
     return PxTriggerPairFlagEnum::eNEXT_FREE;
 }
 
+// SupportFunctions
+JNIEXPORT jlong JNICALL Java_physx_support_SupportFunctions__1PxActor_1getShape(JNIEnv*, jclass, jlong actor, jint index) {
+    return (jlong) SupportFunctions::PxActor_getShape(*((physx::PxRigidActor*) actor), index);
+}
+JNIEXPORT void JNICALL Java_physx_support_SupportFunctions__1delete_1native_1instance(JNIEnv*, jclass, jlong _address) {
+    delete (SupportFunctions*) _address;
+}
+
 // PxActorPtr
 JNIEXPORT void JNICALL Java_physx_support_PxActorPtr__1delete_1native_1instance(JNIEnv*, jclass, jlong _address) {
     delete (PxActorPtr*) _address;
@@ -8817,6 +8830,16 @@ JNIEXPORT jfloat JNICALL Java_physx_vehicle_PxVehicleTopLevelFunctions__1PxVehic
 }
 JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleTopLevelFunctions__1PxVehicleTireData_1setFrictionVsSlipGraph(JNIEnv*, jclass, jlong tireData, jint m, jint n, jfloat value) {
     PxVehicleTopLevelFunctions::PxVehicleTireData_setFrictionVsSlipGraph((physx::PxVehicleTireData*) tireData, m, n, value);
+}
+JNIEXPORT jlong JNICALL Java_physx_vehicle_PxVehicleTopLevelFunctions__1DefaultWheelSceneQueryPreFilterBlocking(JNIEnv*, jclass) {
+    static thread_local physx::PxBatchQueryPreFilterShader _cache;
+    _cache = PxVehicleTopLevelFunctions::DefaultWheelSceneQueryPreFilterBlocking();
+    return (jlong) &_cache;
+}
+JNIEXPORT jlong JNICALL Java_physx_vehicle_PxVehicleTopLevelFunctions__1DefaultWheelSceneQueryPostFilterBlocking(JNIEnv*, jclass) {
+    static thread_local physx::PxBatchQueryPostFilterShader _cache;
+    _cache = PxVehicleTopLevelFunctions::DefaultWheelSceneQueryPostFilterBlocking();
+    return (jlong) &_cache;
 }
 JNIEXPORT void JNICALL Java_physx_vehicle_PxVehicleTopLevelFunctions__1delete_1native_1instance(JNIEnv*, jclass, jlong _address) {
     delete (PxVehicleTopLevelFunctions*) _address;
