@@ -6173,6 +6173,14 @@ JNIEXPORT void JNICALL Java_physx_physics_PxRigidBodyFlags__1delete_1native_1ins
 }
 
 // PxRigidDynamic
+JNIEXPORT void JNICALL Java_physx_physics_PxRigidDynamic__1setKinematicTarget(JNIEnv*, jclass, jlong _address, jlong destination) {
+    physx::PxRigidDynamic* self = (physx::PxRigidDynamic*) _address;
+    self->setKinematicTarget(*((physx::PxTransform*) destination));
+}
+JNIEXPORT jboolean JNICALL Java_physx_physics_PxRigidDynamic__1getKinematicTarget(JNIEnv*, jclass, jlong _address, jlong target) {
+    physx::PxRigidDynamic* self = (physx::PxRigidDynamic*) _address;
+    return (jboolean) self->getKinematicTarget(*((physx::PxTransform*) target));
+}
 JNIEXPORT jboolean JNICALL Java_physx_physics_PxRigidDynamic__1isSleeping(JNIEnv*, jclass, jlong _address) {
     physx::PxRigidDynamic* self = (physx::PxRigidDynamic*) _address;
     return (jboolean) self->isSleeping();
