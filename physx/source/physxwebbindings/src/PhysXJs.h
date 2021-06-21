@@ -5,6 +5,7 @@
 
 // enums within namespaces are not supported by webidl binder, as a hack we can use typedefs
 typedef physx::PxActorFlag::Enum PxActorFlagEnum;
+typedef physx::PxPvdInstrumentationFlag::Enum PxPvdInstrumentationFlagEnum;
 typedef physx::PxActorType::Enum PxActorTypeEnum;
 typedef physx::PxActorTypeFlag::Enum PxActorTypeFlagEnum;
 typedef physx::PxArticulationAxis::Enum PxArticulationAxisEnum;
@@ -169,6 +170,43 @@ class SimpleSimulationEventCallback : physx::PxSimulationEventCallback {
         virtual void onAdvance(const physx::PxRigidBody *const *, const physx::PxTransform*, const physx::PxU32) { }
 };
 
+class SimplePvdTransport : physx::PxPvdTransport
+{
+   
+public:
+    SimplePvdTransport() { }
+
+    virtual bool connect()
+    {
+        return true;
+    };
+
+    virtual bool isConnected()
+    {
+        return false;
+    };
+
+    virtual void send(int inBytes, int inLength) { }
+
+    virtual void disconnect() { };
+
+    bool write(const uint8_t *inBytes, uint32_t inLength)
+    {
+        send(int(inBytes),  int(inLength));
+        return true;
+    };
+
+    PxPvdTransport &lock()
+    {
+        return *this;
+    };
+
+    void unlock() { }
+    void flush() { }
+    uint64_t getWrittenDataSize() { return 0; }
+    void release() { }
+};
+
 // top-level functions are not supported by webidl binder, we need to wrap them in a class
 class PxTopLevelFunctions {
     public:
@@ -182,8 +220,9 @@ class PxTopLevelFunctions {
             return PxCreateFoundation(version, allocator, errorCallback);
         }
 
-        static physx::PxPhysics* CreatePhysics(physx::PxU32 version, physx::PxFoundation& foundation, const physx::PxTolerancesScale& scale) {
-            return PxCreatePhysics(version, foundation, scale);
+        static physx::PxPhysics *CreatePhysics(physx::PxU32 version, physx::PxFoundation &foundation, const physx::PxTolerancesScale &scale, physx::PxPvd* pvd = NULL)
+        {
+            return PxCreatePhysics(version, foundation, scale, false, pvd);
         }
 
         static physx::PxCooking* CreateCooking(physx::PxU32 version, physx::PxFoundation& foundation, const physx::PxCookingParams& params) {
@@ -192,6 +231,11 @@ class PxTopLevelFunctions {
 
         static physx::PxControllerManager* CreateControllerManager(physx::PxScene& scene, bool lockingEnabled = false) {
             return PxCreateControllerManager(scene, lockingEnabled);
+        }
+
+        static physx::PxPvd *CreatePvd(physx::PxFoundation &foundation)
+        {
+            return PxCreatePvd(foundation);
         }
 
         static physx::PxDefaultCpuDispatcher* DefaultCpuDispatcherCreate(physx::PxU32 numThreads) {
