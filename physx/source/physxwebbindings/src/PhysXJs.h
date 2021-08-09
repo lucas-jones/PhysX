@@ -242,8 +242,8 @@ class PxTopLevelFunctions {
             return physx::PxDefaultCpuDispatcherCreate(numThreads);
         }
 
-        static bool InitExtensions(physx::PxPhysics& physics) {
-            return PxInitExtensions(physics, NULL);
+        static bool InitExtensions(physx::PxPhysics& physics, physx::PxPvd* pvd = NULL) {
+            return PxInitExtensions(physics, pvd);
         }
 
         static physx::PxCudaContextManager* CreateCudaContextManager(physx::PxFoundation& foundation, const physx::PxCudaContextManagerDesc& desc) {
@@ -346,6 +346,18 @@ class TypeHelpers {
             return &base[index];
         }
 
+        static physx::PxContactPairHeader* getContactPairHeaderAt(physx::PxContactPairHeader* base, int index) {
+            return &base[index];
+        }
+
+        static physx::PxShape* getShapeAFromContactPair(physx::PxContactPair* base) {
+            return getContactPairAt(base, 0)->shapes[0];
+        }
+
+        static physx::PxShape* getShapeBFromContactPair(physx::PxContactPair* base) {
+            return getContactPairAt(base, 0)->shapes[1];
+        }
+
         static physx::PxTriggerPair* getTriggerPairAt(physx::PxTriggerPair* base, int index) {
             return &base[index];
         }
@@ -372,6 +384,10 @@ class TypeHelpers {
 
         static physx::PxArticulationJoint* articulationBaseJointToJoint(physx::PxArticulationJointBase* baseJoint) {
             return static_cast<physx::PxArticulationJoint*>(baseJoint);
+        }
+
+        static physx::PxControllerShapeHit* getControllerShapeHitAt(physx::PxControllerShapeHit* base, int index) {
+            return &base[index];
         }
 
         // looks a bit ridiculous, but we need this as a work-around to get the native address of an object in js

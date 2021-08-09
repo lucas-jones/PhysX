@@ -13,7 +13,7 @@ interface PxTopLevelFunctions {
     static PxFoundation CreateFoundation(unsigned long version, [Ref] PxDefaultAllocator allocator, [Ref] PxErrorCallback errorCallback);
     static PxPhysics CreatePhysics(unsigned long version, [Ref] PxFoundation foundation, [Const, Ref] PxTolerancesScale params, optional PxPvd pvd);
     static PxDefaultCpuDispatcher DefaultCpuDispatcherCreate(unsigned long numThreads);
-    static boolean InitExtensions([Ref] PxPhysics physics);
+    static boolean InitExtensions([Ref] PxPhysics physics, optional PxPvd pvd);
     static PxCudaContextManager CreateCudaContextManager([Ref] PxFoundation foundation, [Const, Ref] PxCudaContextManagerDesc desc);
     static PxPvd CreatePvd([Ref] PxFoundation foundation);
 
@@ -3123,6 +3123,13 @@ interface TypeHelpers {
     static float getRealAt([Ref] PxRealPtr base, long index);
     static PxContactPair getContactPairAt(PxContactPair base, long index);
     static PxTriggerPair getTriggerPairAt(PxTriggerPair base, long index);
+    static PxContactPairHeader getContactPairHeaderAt(PxContactPairHeader base, long index);
+    
+    static PxControllerShapeHit getControllerShapeHitAt(PxControllerShapeHit base, long index);
+
+    static PxShape getShapeAFromContactPair(PxContactPair base);
+    static PxShape getShapeBFromContactPair(PxContactPair base);
+    
     static PxVec3 getVec3At(PxVec3 base, long index);
 
     [Value] static PxU8ConstPtr voidToU8ConstPtr(VoidPtr voidPtr);
